@@ -28,7 +28,7 @@ Open the [local gallery](http://127.0.0.1:8090/), then [Studio](http://127.0.0.1
 
 1. Select **New film** and enter a catalogue identifier, such as `NGC_7000`.
 2. Upload the four aligned AstroWizard exports, for example `NGC_7000_final.png`, `NGC_7000_starless.png`, `NGC_7000_stars.png` and `NGC_7000_stars_laid.png`. An optional matching final FITS supplies observation and pointing metadata.
-3. Choose stellar parallax, nebula relief or classic pan/zoom. Select **1–4 zoom targets**. Move and resize each numbered frame to choose its crop, up to 8× per stop. The film visits the stops in order before looping back to the opening view.
+3. Choose stellar parallax, nebula relief or classic pan/zoom. Select **1–8 zoom targets**. Move and resize each numbered frame to choose its crop, up to 8× per stop. The film visits the stops in order before looping back to the opening view.
 4. Render the film. The first successful H.264 export is published automatically. Play later versions with their settings in Studio and choose which one appears in the gallery. Studio can also delete unused versions and rename an object with refreshed bilingual metadata.
 
 Use PNG, JPEG or single-frame TIFF. The four images must have the same dimensions. Limits are 40 megapixels and 100 MiB per image, 512 MiB per FITS and 600 MiB per upload. AstroWeb retains the original files and hashes the four images with SHA-256. For bulk import, stop the server and run `python -m astroweb import --source AstroPhotos --render` with one subdirectory per object.
@@ -66,3 +66,7 @@ node --experimental-vm-modules tools/check-frontend.mjs
 ```
 
 The frontend uses native JavaScript modules without a build step. Application code is [MIT-licensed](LICENSE). Bundled datasets and images retain their [respective licences](THIRD_PARTY.md).
+
+On **Original → Discover objects**, select a catalogue centre and use it as a named Studio zoom target. Markers track the original image during zoom and pan. With eight existing stops, choose the one to replace. See the [roadmap](docs/ROADMAP.md) for the remaining proposals.
+
+**Other wavelengths** compares the original photograph with a registered AllWISE W1/W2/W4 infrared mosaic and shares its zoom and pan. The first visit downloads survey tiles and caches the registered cutout. **Galaxy environment** maps the field, angular separations and documented relationships for recognised galaxies. **Suggest zoom route** previews a route based on catalogue centres and local image contrast. Applying it replaces the current draft route.

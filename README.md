@@ -37,7 +37,7 @@ Open de [lokale galerij](http://127.0.0.1:8090/). Kies [Studio](http://127.0.0.1
    NGC_7000_final.fits    (optioneel)
    ```
 
-3. Kies sterrenparallax, nevelreliëf of klassieke pan/zoom. Stel **Aantal zoompunten** in op 1–4. Selecteer een nummer, versleep het kader en trek aan een hoek om de uitsnede te bepalen. Elk punt heeft een eigen zoomfactor tot 8×. De film bezoekt de punten op volgorde en keert terug naar het begin.
+3. Kies sterrenparallax, nevelreliëf of klassieke pan/zoom. Stel **Aantal zoompunten** in op 1–8. Selecteer een nummer, versleep het kader en trek aan een hoek om de uitsnede te bepalen. Elk punt heeft een eigen zoomfactor tot 8×. De film bezoekt de punten op volgorde en keert terug naar het begin.
 4. Kies **Maak film**. De eerste geslaagde H.264-film verschijnt in de galerij. Volgende versies kun je afspelen, vergelijken en expliciet selecteren. In Studio kun je ook een ongepubliceerde versie verwijderen of de object-ID en bijbehorende objectteksten wijzigen.
 
 PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afmetingen hebben. De limieten zijn 40 megapixels en 100 MiB per beeld, 512 MiB voor FITS en 600 MiB voor de hele upload. De vier originelen krijgen een SHA-256-controlesom. Voor lokale batchimport: stop de server en voer `python -m astroweb import --source AstroPhotos --render` uit, met één submap per object.
@@ -77,3 +77,7 @@ node --experimental-vm-modules tools/check-frontend.mjs
 ```
 
 De frontend bestaat uit native JavaScript-modules en heeft geen buildstap. De applicatiecode valt onder de [MIT-licentie](LICENSE). Voor meegeleverde astronomische data en beeldmateriaal gelden de [afzonderlijke licenties](THIRD_PARTY.md).
+
+Op **Origineel → Ontdek objecten** kun je catalogusobjecten aanklikken en als benoemd zoompunt naar Studio sturen. De markeringen volgen het oorspronkelijke raster bij zoomen en verslepen. Bij acht bestaande punten kies je welk punt je vervangt. De [ontwikkelagenda](docs/ROADMAP.md) bewaart de volgende vier ideeën.
+
+**Ander licht** vergelijkt onder Origineel je opname met een astrometrisch uitgelijnde AllWISE-infraroodkaart (W1, W2 en W4). Zoom en pan blijven gekoppeld. De eerste keer worden surveytegels opgehaald; het samengestelde beeld wordt lokaal bewaard. Het tabblad **Omgeving** toont voor herkende sterrenstelsels een hemelkaart met opnamekader, hoekafstanden, bronlinks en gedocumenteerde relaties. In Studio toont **Automatische zoomroute** een voorstel op basis van cataloguscentra en beeldcontrast. Pas het voorstel toe om de huidige route te vervangen.

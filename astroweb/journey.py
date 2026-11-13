@@ -25,7 +25,7 @@ RENDER_LOCK = threading.Lock()
 WIDTH, HEIGHT, FPS, FRAMES = 1280, 720, 24, 264
 
 
-def fits_footprint(path, poster, width, height):
+def fits_registration(path, poster, width, height):
     """Check raster row order against the actual final export before using WCS."""
     try:
         with fits.open(path, memmap=True, do_not_scale_image_data=True) as hdus:
@@ -56,14 +56,22 @@ def fits_footprint(path, poster, width, height):
             score, flip_x, flip_y = scores[0]
             if score < .45 or score - scores[1][0] < .12:
                 return None
-            x = np.array([-.5, width-.5, width-.5, -.5])
-            y = np.array([-.5, -.5, height-.5, height-.5])
-            sky = pixel_to_skycoord(x if flip_x == 1 else width-1-x,
-                                    y if flip_y == 1 else height-1-y, wcs, origin=0).icrs
-            corners = np.column_stack((sky.ra.deg, sky.dec.deg))
-            return corners.tolist() if np.isfinite(corners).all() else None
+            return wcs, flip_x, flip_y
     except (OSError, TypeError, KeyError, ValueError, IndexError, cv2.error):
         return None
+
+
+def fits_footprint(path, poster, width, height):
+    registration = fits_registration(path, poster, width, height)
+    if registration is None:
+        return None
+    wcs, flip_x, flip_y = registration
+    x = np.array([-.5, width-.5, width-.5, -.5])
+    y = np.array([-.5, -.5, height-.5, height-.5])
+    sky = pixel_to_skycoord(x if flip_x == 1 else width-1-x,
+                            y if flip_y == 1 else height-1-y, wcs, origin=0).icrs
+    corners = np.column_stack((sky.ra.deg, sky.dec.deg))
+    return corners.tolist() if np.isfinite(corners).all() else None
 
 
 def geometry(store, record):

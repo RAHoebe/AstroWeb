@@ -79,7 +79,7 @@ export function drawGalaxy(){
   ctx.fillText(ly.toLocaleString(language)+' '+t('lightYears'),18,h-20);
   $('galaxy-time').value=Math.round(progress*1000);
   $('galaxy-play').textContent=t(playing?'atlasPause':progress>=1?'atlasReplay':'atlasPlay');
-  $('galaxy-distance').textContent=t('solarDistance')+' Ã¢â€°Ë† '+galaxy.ly.toLocaleString(language)+' '+t('lightYears');
+  $('galaxy-distance').textContent=t('solarDistance')+' ≈ '+galaxy.ly.toLocaleString(language)+' '+t('lightYears');
 }
 export function stopGalaxy(){
   playing=false;cancelAnimationFrame(request);drawGalaxy();

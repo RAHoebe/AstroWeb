@@ -95,7 +95,7 @@ def journey_labels(record, field):
     rows, sky = field_catalog()
     sep = SkyCoord(center,frame="icrs").separation(sky).deg
     for index in np.flatnonzero(sep < 12):
-        name,ra,dec = rows[index]
+        name,ra,dec = rows[index][:3]
         candidates.append({"id":name,"nl":name,"en":name,"ra":ra,"dec":dec,"detail":True})
     target = key(record["metadata"].get("target") or record["id"])
     known = target_entry(target)

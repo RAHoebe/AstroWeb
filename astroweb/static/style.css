@@ -112,3 +112,44 @@ body.studio-route > :is(.site-header,main:not(#studio),.skip,.site-footer) { dis
   .card-media { align-self:center; }
   .card-info { display:grid; grid-row:span 4; grid-template-rows:subgrid; row-gap:0; align-items:start; }
 }
+
+#discovery-pins { position:absolute; left:50%; top:50%; pointer-events:none; }
+.discovery-pin { position:absolute; pointer-events:auto; transform:translate(-50%,-50%); height:22px; width:22px; border-radius:50%; border:2px solid #a8e9f4; background:#14263655; box-shadow:0 0 0 1px #18202d; }
+.discovery-pin[aria-pressed=true] { border-color:#ffd27e; background:#ffe2a544; z-index:1; }
+.discovery-pin[aria-pressed=true]::after { content:attr(data-label); position:absolute; left:24px; top:-2px; background:#0c1220e8; padding:1px 6px; color:#ffe2a5; white-space:nowrap; }
+#discovery-card { padding:10px 24px; background:#101623; flex:none; }
+#discovery-card select { width:auto; max-width:100%; }
+#discovery-card p { margin:4px 0; }
+#discovery-source,#find-more { color:var(--cyan); }
+#point-name { margin:6px 0; }
+
+#discovery-pins { z-index:1; }
+#discovery-card { max-height:36svh; overflow:auto; }
+#discovery-card .subtle-button { margin-left:12px; }
+@media(max-width:700px){#discovery-card{max-height:none;padding:10px 16px}}
+
+#ir-window { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+#ir-image { position:absolute; top:50%; left:50%; max-width:none; max-height:none; }
+#ir-line { position:absolute; pointer-events:none; top:0; bottom:0; width:2px; background:#fce0a6; }
+#ir-controls,.environment-tools { flex:none; padding:10px 24px; font-size:13px; color:var(--muted); }
+#ir-controls label { display:inline-flex; flex-wrap:wrap; align-items:center; gap:10px; }
+#ir-controls a,.environment-tools a { color:var(--cyan); margin:0 8px; }
+#environment-panel { display:flex; flex-direction:column; }
+#environment-map { flex:1; min-height:220px; background:radial-gradient(ellipse at center,#15202c,#060912 80%); }
+#environment-map svg { display:block; width:100%; height:100%; min-height:220px; }
+.env-grid { fill:none; stroke:#516478; stroke-dasharray:3 5; }
+.env-footprint { fill:#d9b16c12; stroke:#edc483; stroke-width:1.6; }
+.env-mark { fill:#a0d7e4; stroke:#1c3541; cursor:pointer; }
+.env-mark.active { fill:#ffdca1; stroke:white; }
+.env-label,.env-dir { fill:#d8e6ef; font:14px "Segoe UI",sans-serif; pointer-events:none; }
+.environment-tools select { width:auto;max-width:100%; }
+.environment-tools p { margin:4px 0; }
+.admin-name { display:block; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+.auto-tools { margin:16px 0; }
+.auto-tools select { width:auto; }
+#auto-frames { pointer-events:none; }
+.auto-frame { position:absolute; z-index:2; border:2px dashed #ffd385; padding:2px; color:white; text-shadow:0 1px 3px black; pointer-events:none; }
+#original-level { width:auto; min-width:4ch; white-space:nowrap; }
+
+#ir-line { width:14px; margin-left:-7px; background:linear-gradient(90deg,transparent 6px,#fce0a6 6px,#fce0a6 8px,transparent 8px); cursor:ew-resize; pointer-events:auto; touch-action:none; }
+#ir-line::after { content:"↔"; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); border-radius:50%; background:#101622; color:#fce0a6; border:1px solid #fce0a6; padding:2px 5px; }

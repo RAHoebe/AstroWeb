@@ -17,16 +17,17 @@ def test_map_requires_identified_galactic_distance():
     assert galactic_map(custom)["xy"] == face_position(14,-10,200)
 
 
-def test_four_points_in_order_and_loop():
-    stops = [{"focus_x":i/5, "focus_y":1-i/5, "zoom":i+1} for i in range(1,5)]
+@pytest.mark.parametrize("count",[2,4,8])
+def test_points_in_order_and_loop(count):
+    stops = [{"focus_x":i/(count+1), "focus_y":1-i/(count+1), "zoom":i} for i in range(1,count+1)]
     scene = Scene.__new__(Scene)
     scene.params = Parameters.parse({"zoom_points":stops})
     for i, stop in enumerate(stops, 1):
-        np.testing.assert_allclose(scene.camera_pose(i/5, 0)[:3],
+        np.testing.assert_allclose(scene.camera_pose(i/(count+1), 0)[:3],
                                    [stop["focus_x"]-.5,stop["focus_y"]-.5,stop["zoom"]-1])
     assert scene.camera_pose(0,0) == scene.camera_pose(1,0)
     with pytest.raises(ValueError):
-        Parameters.parse({"zoom_points":stops + stops[:1]})
+        Parameters.parse({"zoom_points":[stops[0]] * 9})
     with pytest.raises(ValueError):
         Parameters.parse({"zoom_points":[{"zoom":9,"focus_x":1,"focus_y":1}]})
     scene.params = Parameters.parse({"focus_x":.2,"focus_y":.6,"zoom":4})

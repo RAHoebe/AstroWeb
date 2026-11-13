@@ -13,7 +13,7 @@ import requests
 from astropy.coordinates import SkyCoord
 from astropy_healpix import HEALPix
 
-SURVEYS = {"DSS2":"https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color",
+SURVEYS = {"AllWISE":"https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1","DSS2":"https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color",
            "PanSTARRS":"https://stpubdata.s3.us-east-1.amazonaws.com/mast/skybackgrounds/PanSTARRS"}
 
 
@@ -60,6 +60,13 @@ def make_plate(store, target, meridian, span, order, survey):
     lon=2*np.arctan2(np.sqrt(2)*z*x,2*z*z-1)+meridian
     lat=np.arcsin(np.clip(np.sqrt(2)*z*y,-1,1))
     icrs=SkyCoord(l=lon[valid]*u.rad,b=lat[valid]*u.rad,frame="galactic").icrs
+    samples = sample_survey(store, icrs, order, survey)
+    output=np.zeros((SIZE,SIZE,3),np.uint8)
+    output[valid]=samples
+    return output
+
+
+def sample_survey(store, icrs, order, survey):
     hp=HEALPix(nside=2**order,order="nested")
     ids,dx,dy=hp.lonlat_to_healpix(icrs.ra,icrs.dec,return_offsets=True)
     indices=np.unique(ids)
@@ -72,9 +79,7 @@ def make_plate(store, target, meridian, span, order, survey):
         for index,image in zip(indices,images):
             selected=ids==index
             samples[selected]=image[rows[selected],cols[selected]]
-    output=np.zeros((SIZE,SIZE,3),np.uint8)
-    output[valid]=samples
-    return output
+    return samples
 
 
 def detail_plates(store, target, meridian, extent, survey="DSS2"):

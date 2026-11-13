@@ -57,18 +57,20 @@ class Parameters:
             except (ValueError, TypeError, OverflowError):
                 raise ValueError("invalid_parameters") from None
         points = values["zoom_points"]
-        if not isinstance(points, list) or len(points) > 4:
+        if not isinstance(points, list) or len(points) > 8:
             raise ValueError("invalid_parameters")
         for point in points:
-            if not isinstance(point, dict) or set(point) != {"focus_x","focus_y","zoom"}:
+            if not isinstance(point, dict) or set(point) - {"focus_x","focus_y","zoom","name"} or not {"focus_x","focus_y","zoom"} <= set(point):
+                raise ValueError("invalid_parameters")
+            if "name" in point and (not isinstance(point["name"],str) or len(point["name"]) > 100):
                 raise ValueError("invalid_parameters")
             for key, low, high in (("focus_x",0,1),("focus_y",0,1),("zoom",1,8)):
                 value = point[key]
                 if isinstance(value,bool) or not isinstance(value,(int,float)) or not low <= value <= high:
                     raise ValueError("invalid_parameters")
         if points:
-            values.update(points[0])
-        values["zoom_points"] = [dict(p) for p in points] if len(points)>1 else []
+            values.update({k:points[0][k] for k in ("zoom","focus_x","focus_y")})
+        values["zoom_points"] = [dict(p) for p in points] if len(points)>1 or (points and points[0].get("name")) else []
         return cls(**values)
 
 
@@ -206,7 +208,7 @@ class Scene:
 
     def camera_pose(self, phase, z):
         p = self.params
-        if not p.zoom_points:
+        if len(p.zoom_points)<=1:
             return ((p.focus_x-.5)*z, (p.focus_y-.5)*z, (p.zoom-1)*z, min(p.zoom-1,.35)*z)
         stops = [(0.,0.,0.,0.)]
         stops.extend((v["focus_x"]-.5,v["focus_y"]-.5,v["zoom"]-1,min(v["zoom"]-1,.35)) for v in p.zoom_points)

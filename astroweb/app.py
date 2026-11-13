@@ -155,7 +155,36 @@ def create_app(data_dir=None, testing=False):
     def object_detail(identifier):
         from .galaxy import galactic_map
         record = get_object(identifier)
-        return jsonify({**present(record), "galaxy":galactic_map(record)})
+        from .environment import target_galaxy
+        return jsonify({**present(record), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record))})
+
+    @app.get("/api/objects/<identifier>/environment")
+    def environment(identifier):
+        from .environment import neighbourhood
+        return jsonify(neighbourhood(store,get_object(identifier)))
+
+    @app.get("/media/<identifier>/allwise")
+    def allwise(identifier):
+        from .comparison import comparison_image
+        record=get_object(identifier)
+        try:
+            path,scale=comparison_image(store,record)
+        except requests.RequestException:
+            return jsonify(error="comparison_unavailable"),503
+        response=send_file(path,mimetype="image/jpeg",conditional=True,max_age=0)
+        response.headers["X-Arcsec-Per-Pixel"]=f"{scale:.3f}"
+        return response
+
+    @app.post("/api/admin/objects/<identifier>/autozoom")
+    @admin_required
+    def autozoom(identifier):
+        from .autozoom import propose
+        return jsonify(points=propose(store,get_object(identifier),json_body().get("count",4)))
+
+    @app.get("/api/objects/<identifier>/discover")
+    def discover_objects(identifier):
+        from .discovery import discover
+        return jsonify(discover(store, get_object(identifier)))
 
     @app.get("/api/objects/<identifier>/journey")
     def journey_info(identifier):

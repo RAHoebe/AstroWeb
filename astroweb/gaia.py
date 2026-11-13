@@ -124,7 +124,7 @@ def fit_field(pixels, catalog, center, width, height, scales):
     vertices = np.column_stack((corners.ra.deg, corners.dec.deg))
     if not np.isfinite(vertices).all():
         return None
-    return {"corners":vertices.tolist(), "matches":len(pix)+len(check), "verified":len(check),
+    return {"wcs_header":wcs.to_header().tostring(sep="\n", endcard=False, padding=False), "corners":vertices.tolist(), "matches":len(pix)+len(check), "verified":len(check),
             "median_arcsec":round(float(np.median(residuals)), 2)}
 
 

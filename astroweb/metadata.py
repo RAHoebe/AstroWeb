@@ -15,6 +15,17 @@ NASA_NGC = "https://science.nasa.gov/mission/hubble/science/explore-the-night-sk
 NASA_IC = "https://science.nasa.gov/photojournal/blowin-in-the-stellar-wind/"
 
 SEEDS = {
+    "M_31": {
+        "target":"M31", "aliases":["M31","M 31","Messier 31","NGC 224","Andromeda Galaxy","Andromedastelsel"],
+        "name":{"nl":"Andromedastelsel","en":"Andromeda Galaxy"},
+        "type":{"nl":"Spiraalstelsel","en":"Spiral galaxy"}, "constellation":{"nl":"Andromeda","en":"Andromeda"},
+        "summary":{"nl":"Op ongeveer 2,5 miljoen lichtjaar ligt M31, het dichtstbijzijnde grote spiraalstelsel bij de Melkweg.",
+                   "en":"About 2.5 million light-years away, M31 is the nearest large spiral galaxy to the Milky Way."},
+        "description":{"nl":"We kijken schuin op de schijf van Andromeda. De heldere kern ligt tussen banen van stof die het licht van achterliggende sterren tegenhouden. M31 en de Melkweg behoren tot de Lokale Groep. M32 en M110 zijn twee kleinere begeleiders van Andromeda.",
+                       "en":"We see Andromeda’s disc at an angle. Dark dust lanes block the light of stars behind them around the bright central bulge. M31 and the Milky Way belong to the Local Group. M32 and M110 are two smaller companions of Andromeda."},
+        "sources":[{"label":"NASA · Messier 31","url":"https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-31/"},
+                   {"label":"ESA · M31, the Andromeda Galaxy","url":"https://www.esa.int/media/m31-the-andromeda-galaxy"}],
+    },
     "NGC_7000": {
         "target": "NGC 7000", "type": {"nl": "Emissienevel", "en": "Emission nebula"},
         "name": {"nl": "Noord-Amerikanevel", "en": "North America Nebula"},
@@ -68,9 +79,16 @@ SEEDS = {
 }
 
 
+def known_target(name):
+    normalize = lambda v: re.sub(r"[\s_-]+", "", v).casefold()
+    return next((seed for seed in SEEDS.values() if any(normalize(name) == normalize(alias)
+                for alias in [seed["target"], *seed["aliases"]])), None)
+
+
 def initial_metadata(identifier):
-    if identifier in SEEDS:
-        result = copy.deepcopy(SEEDS[identifier])
+    seed = SEEDS.get(identifier) or known_target(identifier)
+    if seed:
+        result = copy.deepcopy(seed)
         result["translation"] = "curated"
     else:
         name = identifier.replace("_", " ")
@@ -136,13 +154,20 @@ def clean_text(value):
 def refresh_metadata(metadata, force=False):
     result = copy.deepcopy(metadata)
     external = result.get("external")
-    if external and not force:
+    target = result["target"]
+    known = known_target(target)
+    if known is SEEDS["M_31"] and result.get("translation") != "admin":
+        # Upgrade generated SIMBAD-only or default records while preserving
+        # operator-authored texts and their chosen target.
+        for key in ("name","type","constellation","summary","description"):
+            result[key] = copy.deepcopy(known[key])
+        result.update(aliases=known["aliases"].copy(), translation="curated")
+    if known:
+        result["sources"] = list({s["url"]:s for s in result.get("sources", []) + known["sources"]}.values())
+    if external and not force and not (known and external.get("provider") == "CDS/SIMBAD"):
         age = datetime.now(timezone.utc) - datetime.fromisoformat(external["fetched_at"])
         if age.days < 30:
             return result
-    target = result["target"]
-    known = next((seed for seed in SEEDS.values() if target.casefold() in
-                  [name.casefold() for name in [seed["target"], *seed["aliases"]]]), None)
     aliases = list(dict.fromkeys([target, *result.get("aliases", []), *(known["aliases"] if known else [])]))
     # Query additional designations, but accept a media caption only when it
     # identifies the target. Caldwell 33 is a wider region than NGC 6992.
