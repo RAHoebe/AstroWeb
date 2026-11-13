@@ -1,4 +1,4 @@
-"""Look for a fully contained, named HST observation after a Skymap miss."""
+"""Look for a fully contained, named HST observation for a registered capture."""
 import csv
 import hashlib
 import io
@@ -160,9 +160,6 @@ def discover(store, identifier):
     record = store.get("objects", identifier)
     state = (record or {}).get("skymap") or {}
     if not state or record.get("body") or state.get("target") != skymap.target_key(record):
-        return
-    preferred = skymap.cached_option(store,record)
-    if preferred and skymap.focus_point(store,record,preferred) is not None:
         return
     signature = field_key(store,record)
     if signature is None:

@@ -32,11 +32,17 @@ def test_unproven_footprints_and_other_targets_are_rejected(region,target):
     assert archive_search.ranked_entries(None,rec,[row(region,target)],archive_search.target_names(rec))==[]
 
 
-def test_upload_pipeline_searches_both_catalogues_and_saves_only_full_match(tmp_path,monkeypatch):
+@pytest.mark.parametrize("skymap_hit",[False,True])
+def test_upload_pipeline_searches_both_catalogues_and_saves_only_full_match(tmp_path,monkeypatch,skymap_hit):
     st=Store(tmp_path)
     rec=capture()
     st.put("objects",rec["id"],rec)
-    monkeypatch.setattr(skymap,"catalogue",lambda store: [])
+    photo = {"id":"skymap-b0001","digest":"test","center":[0.,0.]}
+    if skymap_hit:
+        path=skymap.image_file(st,"b0001","test")
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"cached")
+    monkeypatch.setattr(skymap,"lookup",lambda store,record: photo if skymap_hit else None)
     calls=[]
     def nasa(terms):
         calls.append("NASA")
@@ -56,24 +62,43 @@ def test_upload_pipeline_searches_both_catalogues_and_saves_only_full_match(tmp_
         queue.shutdown()
     saved=st.get("objects",rec["id"])
     assert sorted(calls)==["ESA","NASA",row()["obs_id"]]
-    option,=hubble.fields(st,saved)
+    destinations=hubble.fields(st,saved)
+    if skymap_hit:
+        preferred,option=destinations
+        assert preferred==photo
+    else:
+        option,=destinations
     assert option["id"]==row()["obs_id"] and option["full_footprint"] and option["relation"]=="target"
     saved["gaia"]["corners"]=[[179.8,1],[180.2,1],[180.2,0],[179.8,0]]
     assert not hubble.fields(st,saved)
 
 
-def test_no_archive_network_for_skymap_hit_or_missing_registration(tmp_path,monkeypatch):
+def test_no_archive_network_without_registration(tmp_path,monkeypatch):
     st=Store(tmp_path)
     rec=capture()
-    rec["skymap"]={"target":"NGC_1300","option":{"id":"skymap-b0001","digest":"test"}}
-    path=skymap.image_file(st,"b0001","test")
-    path.parent.mkdir(parents=True);path.write_bytes(b"cached")
+    rec["gaia"]={}
+    rec["skymap"]={"target":"NGC_1300","option":None}
+    st.put("objects",rec["id"],rec)
     monkeypatch.setattr(archive_search,"lookup",lambda *a: pytest.fail("unexpected archive lookup"))
-    for option,gaia in [(rec["skymap"]["option"],rec["gaia"]),(None,{})]:
-        rec["skymap"]["option"]=option;rec["gaia"]=gaia
-        st.put("objects",rec["id"],rec)
-        archive_search.discover(st,rec["id"])
-        assert "hst_search" not in st.get("objects",rec["id"])
+    archive_search.discover(st,rec["id"])
+    assert "hst_search" not in st.get("objects",rec["id"])
+
+
+def test_partial_archive_match_leaves_skymap_first_and_only(tmp_path,monkeypatch):
+    st=Store(tmp_path)
+    rec=capture()
+    photo={"id":"skymap-b0001","digest":"test","center":[0.,0.]}
+    rec["skymap"]={"target":"NGC_1300","option":photo}
+    path=skymap.image_file(st,"b0001","test")
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"cached")
+    st.put("objects",rec["id"],rec)
+    monkeypatch.setattr(archive_search,"nasa_rows",lambda terms:[row(region="POLYGON 359.9 .1 .1 .1 .31 -.1 359.9 -.1")])
+    monkeypatch.setattr(archive_search,"esa_rows",lambda terms:[])
+    archive_search.discover(st,rec["id"])
+    saved=st.get("objects",rec["id"])
+    assert saved["hst_search"]["option"] is None
+    assert hubble.fields(st,saved)==[photo]
 
 
 def test_actual_fits_pixel_edges_must_fit_even_when_catalogue_polygon_fits(tmp_path,monkeypatch):
