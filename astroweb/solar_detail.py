@@ -1,0 +1,112 @@
+"""Flights from a user's capture into credited spacecraft observations."""
+import hashlib
+import threading
+import uuid
+
+import cv2
+import numpy as np
+import requests
+
+from .hubble import HEIGHT, WIDTH, encode
+from .journey import smooth
+
+LOCK = threading.Lock()
+LRO = "NASA/GSFC/Arizona State University"
+CASSINI = "NASA/JPL/Space Science Institute"
+
+# The focus is measured on the published mission image, never on the upload.
+FEATURES = {
+    "SUN": [
+        ("GSFC_20171208_Archive_e001164","orig.jpg","Zonnevlam van 29 maart 2014","Solar flare of 29 March 2014","SDO/AIA · NASA",.51,.43)],
+    "MOON": [
+        ("PIA12909","orig.jpg","Landingsplaats Apollo 11","Apollo 11 landing site",LRO,.42,.43),
+        ("PIA12922","orig.jpg","Landingsplaats Apollo 12","Apollo 12 landing site",LRO,.50,.50),
+        ("PIA12897","medium.jpg","Apollo 14 bij de Cone-krater","Apollo 14 near Cone crater",LRO,.55,.40),
+        ("GSFC_20171208_Archive_e001828","orig.png","Centrale berg van de Tycho-krater","Central peak of Tycho crater",LRO,.40,.39)],
+    "MERCURY":[("PIA12034","orig.jpg","Drie inslagkraters in Caloris","Three impact craters in Caloris","NASA/JHUAPL/Carnegie Institution of Washington",.55,.52)],
+    "VENUS":[("PIA23791","orig.jpg","Wolkenbanden in ultraviolet","Cloud bands in ultraviolet","Mariner 10 · NASA/JPL-Caltech",.73,.50)],
+    "MARS":[("PIA01167","large.jpg","Gesteentelagen in Valles Marineris","Rock layers in Valles Marineris","NASA/JPL/Malin Space Science Systems",.83,.52)],
+    "JUPITER":[("PIA21395","medium.jpg","De Grote Rode Vlek","The Great Red Spot","NASA/JPL-Caltech/SwRI/MSSS · Kevin M. Gill (CC BY)",.62,.5),
+               ("PIA00294","orig.jpg","Het gebarsten ijs van Europa","The fractured ice of Europa","Galileo · NASA/JPL",.52,.51)],
+    "SATURN":[("PIA11657","orig.jpg","De Cassinischeiding en de schaduw van Mimas","Cassini Division and the shadow of Mimas",CASSINI,.51,.50),
+              ("PIA11688","orig.jpg","IJsfonteinen op Enceladus","Ice plumes on Enceladus",CASSINI,.53,.65)],
+    "URANUS":[("PIA18185","orig.jpg","Het ijslandschap van Miranda","The icy terrain of Miranda","Voyager 2 · NASA/JPL-Caltech",.54,.62)],
+    "NEPTUNE":[("PIA00052","orig.jpg","De Grote Donkere Vlek in 1989","The Great Dark Spot in 1989","Voyager 2 · NASA/JPL",.50,.49)],
+}
+
+
+def options(body):
+    return [{"id":ident,"name":{"nl":nl,"en":en},"credit":credit,
+             "source":"https://images.nasa.gov/details/"+ident}
+            for ident, _, nl, en, credit, _, _ in FEATURES.get(body, [])]
+
+
+def mission_image(store, ident, file):
+    path = store.path(f"survey-cache/solar-system/{ident}-{file}")
+    if path.is_file():
+        cached = cv2.imread(str(path))
+        if cached is not None:
+            return cached
+    url = f"https://images-assets.nasa.gov/image/{ident}/{ident}~{file}"
+    reply = requests.get(url, timeout=(5, 25))
+    reply.raise_for_status()
+    image = cv2.imdecode(np.frombuffer(reply.content, np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError("solarDetailUnavailable")
+    path.parent.mkdir(parents=True,exist_ok=True)
+    tmp = path.with_suffix(".part")
+    try:
+        tmp.write_bytes(reply.content)
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return image
+
+
+def view(image, focus, amount):
+    h,w=image.shape[:2]
+    scale=min(WIDTH/w,HEIGHT/h)*(1+amount)
+    cx=(.5+(focus[0]-.5)*min(1,amount/.6))*w
+    cy=(.5+(focus[1]-.5)*min(1,amount/.6))*h
+    matrix=np.float32([[scale,0,WIDTH/2-scale*cx],[0,scale,HEIGHT/2-scale*cy]])
+    return cv2.warpAffine(image,matrix,(WIDTH,HEIGHT),flags=cv2.INTER_LINEAR)
+
+
+def frames(photo, image, focus):
+    for i in range(288):
+        t=i/287
+        fade=smooth((t-.22)/.23)
+        if fade<1:
+            source=view(photo,(.5,.5),.16*smooth(t/.45))
+        if fade>0:
+            destination=view(image,focus,.6*smooth((t-.40)/.52))
+        if fade<=0:
+            yield source
+        elif fade>=1:
+            yield destination
+        else:
+            yield cv2.addWeighted(source,1-fade,destination,fade,0)
+
+
+def movie(store,record,ident):
+    item=next((f for f in FEATURES.get(record.get("body"),[]) if f[0]==ident),None)
+    if not item:
+        raise ValueError("solarDetailMissing")
+    _,file,_,_,credit,x,y=item
+    key=hashlib.sha256(str(("solar-tour-v1",item,record["sha256"]["final"])).encode()).hexdigest()[:20]
+    folder=store.path(f"objects/{record.get('storage_id',record['id'])}/solar-system")
+    output=folder/(key+".mp4")
+    with LOCK:
+        if not output.is_file():
+            image=mission_image(store,ident,file)
+            photo=cv2.imread(str(store.path(record["poster"])))
+            if photo is None:
+                raise ValueError("invalid_image")
+            folder.mkdir(parents=True,exist_ok=True)
+            tmp=folder/(uuid.uuid4().hex+".part.mp4")
+            try:
+                encode(frames(photo,image,(x,y)),credit.replace(" · "," / "),tmp)
+                tmp.replace(output)
+            finally:
+                tmp.unlink(missing_ok=True)
+    return output

@@ -68,7 +68,7 @@ export function drawGalaxy(){
   ring(ctx,tx,ty);
   if($('galaxy-labels').checked){
     const points=galaxy.points.map(p=>({x:left+p.xy[0]*side,y:top+p.xy[1]*side,text:local(p)}));
-    labels(ctx,[{x:tx,y:ty,text:local(title),active:true},...points],w,h);
+    labels(ctx,[{x:tx,y:ty,text:galaxy.solar?t('solarSystemPlace'):local(title),active:true},...points],w,h);
   }
   const maxLy=Math.min(130,w*.22)*galaxy.ly_per_image/side;
   const step=Math.pow(10,Math.floor(Math.log10(maxLy)));
@@ -79,7 +79,7 @@ export function drawGalaxy(){
   ctx.fillText(ly.toLocaleString(language)+' '+t('lightYears'),18,h-20);
   $('galaxy-time').value=Math.round(progress*1000);
   $('galaxy-play').textContent=t(playing?'atlasPause':progress>=1?'atlasReplay':'atlasPlay');
-  $('galaxy-distance').textContent=t('solarDistance')+' ≈ '+galaxy.ly.toLocaleString(language)+' '+t('lightYears');
+  $('galaxy-distance').textContent=galaxy.solar?t('solarGalacticLocation'):t('solarDistance')+' ≈ '+galaxy.ly.toLocaleString(language)+' '+t('lightYears');
 }
 export function stopGalaxy(){
   playing=false;cancelAnimationFrame(request);drawGalaxy();

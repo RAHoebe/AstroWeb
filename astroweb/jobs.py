@@ -51,7 +51,7 @@ class JobQueue:
 
             for record in store.all("objects"):
                 if (record.get("gaia") or {}).get("status") in (None, "pending", "running"):
-                    self.executor.submit(self.align, record["id"])
+                    self.executor.submit(self.prepare_capture, record["id"])
                 if record.get("video"):
                     self.executor.submit(self.ensure_preview, record["video"])
 
@@ -132,7 +132,19 @@ class JobQueue:
             if record.get("body") or (record.get("gaia") or {}).get("status") == "solved":
                 return
             self.store.update("objects", identifier, gaia={"status":"pending", "request":uuid.uuid4().hex})
-            self.executor.submit(self.align, identifier)
+            self.executor.submit(self.prepare_capture, identifier)
+
+    def prepare_capture(self, identifier):
+        self.align(identifier)
+        self.discover_skymap(identifier)
+
+    def discover_skymap(self, identifier):
+        from .skymap import discover
+        try:
+            discover(self.store, identifier)
+        except Exception:
+            # Optional external data must not prevent publishing the user's film.
+            logging.exception("Could not select a Skymap destination for %s", identifier)
 
     def align(self, identifier):
         with self.store.lock:
@@ -247,7 +259,7 @@ class JobQueue:
                 except Exception:
                     logging.info("Object metadata unavailable for %s; keeping local descriptions", record["id"])
             self.checkpoint(job_id)
-            self.align(record["id"])
+            self.prepare_capture(record["id"])
             self.checkpoint(job_id)
             relative = f"objects/{record.get('storage_id', record['id'])}/movies/{job_id}.mp4"
             params = Parameters.parse(job["params"])

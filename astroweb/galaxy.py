@@ -68,18 +68,20 @@ def galactic_map(record):
     known = target_entry(target)
     chosen = known
     custom = meta.get("galactic_distance_ly")
-    if custom is not None:
+    if custom is not None and not record.get("body"):
         obs = record.get("observation") or {}
         if obs.get("ra") is None or obs.get("dec") is None:
             return None
         chosen = {"id":meta["target"], "ly":custom, "source":None,
                   "xy":face_position(obs["ra"], obs["dec"], custom)}
+    if record.get("body"):
+        chosen = {"xy":list(SUN),"ly":0,"source":None}
     if not chosen or "xy" not in chosen:
         return None
     points = [{"id":"Sun", "nl":"Zon", "en":"Sun", "xy":SUN},
               {"id":"Sgr A*", "nl":"Galactisch centrum", "en":"Galactic centre", "xy":[.5,.5]}]
     points.extend({k:r[k] for k in ("id","nl","en","xy")} for r in landmarks() if "xy" in r and r is not known)
-    return {"xy":chosen["xy"], "ly":chosen["ly"], "source":chosen["source"], "points":points,
+    return {"solar":bool(record.get("body")),"xy":chosen["xy"], "ly":chosen["ly"], "source":chosen["source"], "points":points,
             "ly_per_image":LY_PER_IMAGE}
 
 
@@ -127,5 +129,6 @@ def journey_labels(record, field):
             if mirrored and t >= .89+.055/2:
                 pose=pose[[3,2,1,0]]
             matrix = cv2.getPerspectiveTransform(quad,pose) @ matrix
-        frames.append([*matrix.ravel().round(7).tolist(),1.0])
+        opacity = 1-journey.smooth((t-.69)/.22) if field.get("solar") else 1.0
+        frames.append([*matrix.ravel().round(7).tolist(),opacity])
     return {"points":labels,"frames":frames,"fps":journey.FPS,"width":journey.WIDTH,"height":journey.HEIGHT}

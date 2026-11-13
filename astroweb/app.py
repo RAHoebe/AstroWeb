@@ -125,7 +125,9 @@ def create_app(data_dir=None, testing=False):
         value.update(capture_date=capture_date(record),body=record.get("body"),catalog_id=group_id(record),session_name=record.get("session_name",""))
         value.update(poster=f"/media/{record['id']}/poster", video=f"/media/{record['id']}/movie" if record["video"] else None, final=f"/media/{record['id']}/final", observation=record.get("observation") if private else public_observation(record.get("observation", {})), sky_available=all(record.get("observation", {}).get(k) is not None for k in ["ra", "dec", "latitude", "longitude", "date_obs"]))
         if record.get("body"):
-            value["sky_available"] = False
+            from .solar import displayed_metadata, observing_time
+            value["metadata"] = displayed_metadata(record["body"], record["metadata"])
+            value["sky_available"] = bool(observing_time(record)[0])
         if Path(record["assets"]["final"]).suffix.lower() in {".tif", ".tiff"}:
             value["original_view"] = f"/media/{record['id']}/original-view"
         if record["video"]:
@@ -200,6 +202,21 @@ def create_app(data_dir=None, testing=False):
         from .autozoom import propose
         return jsonify(points=propose(store,get_object(identifier),json_body().get("count",4)))
 
+    @app.get("/api/objects/<identifier>/solar-system")
+    def solar_destinations(identifier):
+        from .solar_detail import options
+        fields = options(get_object(identifier).get("body"))
+        return jsonify(fields=[f["id"] for f in fields], observations=fields)
+
+    @app.get("/media/<identifier>/solar-system/<name>")
+    def solar_detail_movie(identifier, name):
+        from .solar_detail import movie
+        try:
+            path = movie(store, get_object(identifier), name)
+        except requests.RequestException:
+            return jsonify(error="solarDetailUnavailable"), 503
+        return send_file(path, mimetype="video/mp4", conditional=True, max_age=0)
+
     @app.get("/api/objects/<identifier>/hubble")
     def hubble_fields(identifier):
         from .hubble import fields
@@ -237,7 +254,7 @@ def create_app(data_dir=None, testing=False):
         from .galaxy import journey_labels
         record = get_object(identifier)
         field = geometry(store, record)
-        return jsonify(labels=journey_labels(record, field), survey=survey_for(field) if field["kind"] != "missing" else None, kind=field["kind"], url=f"/media/{identifier}/journey" if field["kind"] != "missing" else None)
+        return jsonify(solar=bool(record.get("body")),default_site=field.get("default_site"),day_only=field.get("day_only"),labels=journey_labels(record, field), survey=survey_for(field) if not record.get("body") and field["kind"] != "missing" else None, kind=field["kind"], url=f"/media/{identifier}/journey" if field["kind"] != "missing" else None)
 
     @app.get("/media/<identifier>/journey")
     def journey_movie(identifier):
@@ -508,6 +525,7 @@ def create_app(data_dir=None, testing=False):
             metadata=known["metadata"] if known else renamed_metadata(new)
             with queue.lock:
                 record=store.rename_object(identifier,new,metadata)
+                queue.executor.submit(queue.discover_skymap, record["id"])
         return jsonify(object=present(record, True))
 
     @app.put("/api/admin/objects/<identifier>/metadata")
@@ -526,6 +544,8 @@ def create_app(data_dir=None, testing=False):
             if "external" in previous:
                 value["external"] = previous["external"]
         store.update("objects", identifier, metadata=value)
+        if not same_target:
+            queue.executor.submit(queue.discover_skymap, identifier)
         return jsonify(ok=True)
 
     @app.post("/api/admin/objects/<identifier>/metadata/refresh")
@@ -544,7 +564,17 @@ def create_app(data_dir=None, testing=False):
     def edit_observation(identifier):
         from .observation import observation_overrides
         record = get_object(identifier)
-        value = observation_overrides(record.get("observation", {}), json_body())
+        raw = json_body()
+        observation = dict(record.get("observation") or {})
+        if record.get("body") and any(k in raw for k in ("latitude","longitude")):
+            coords = [raw.get(k) for k in ("latitude","longitude")]
+            if coords == [None, None]:
+                for k in ("latitude","longitude"):
+                    raw.pop(k,None)
+                    observation.pop(k,None)
+            elif None in coords:
+                raise ValueError("invalid_observation")
+        value = observation_overrides(observation, raw)
         store.update("objects", identifier, observation=value)
         if any(value.get(k) != (record.get("observation") or {}).get(k) for k in ("ra","dec")):
             queue.request_alignment(identifier)
@@ -576,7 +606,6 @@ def create_app(data_dir=None, testing=False):
     def sky(identifier):
         from .sky import build_sky
         record = get_object(identifier)
-        if record.get("body"):raise ValueError("sky_metadata_missing")
         return jsonify(build_sky(record))
 
     @app.get("/media/<identifier>/<kind>")

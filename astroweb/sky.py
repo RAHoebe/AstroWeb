@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import astropy.units as u
 import numpy as np
-from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun, get_body
 from astropy.time import Time
 from astropy.utils import iers
 
@@ -37,6 +37,16 @@ def star_catalog():
 
 def build_sky(record):
     obs = record.get("observation", {})
+    body = record.get("body")
+    if body:
+        from .solar import observing_site, observing_time
+        stamp, day_only = observing_time(record)
+        if not stamp:
+            raise ValueError("solarDateMissing")
+        lat, lon, height, assumed = observing_site(obs)
+        payload = _build(stamp, lat, lon, None, None, obs.get("timezone") or "Europe/Amsterdam", height, body)
+        return {**payload, "id":body, "body":body, "day_only":day_only, "default_site":assumed,
+                "location":{"latitude":lat,"longitude":lon} if assumed or obs.get("publish_location") else None}
     required = ["date_obs", "latitude", "longitude", "ra", "dec"]
     if any(obs.get(key) is None for key in required):
         raise ValueError("sky_metadata_missing")
@@ -46,25 +56,30 @@ def build_sky(record):
 
 
 @lru_cache(maxsize=32)
-def _build(stamp, latitude, longitude, ra, dec, zone, elevation):
+def _build(stamp, latitude, longitude, ra, dec, zone, elevation, body=None):
     observed = datetime.fromisoformat(stamp).astimezone(timezone.utc)
     if not 1950 <= observed.year <= 2100:
         raise ValueError("sky_date_range")
     tz = ZoneInfo(zone)
     local = observed.astimezone(tz)
-    evening = (local - timedelta(hours=12)).date()
-    noon = datetime.combine(evening, time(12), tz)
+    evening = local.date() if body else (local - timedelta(hours=12)).date()
+    noon = datetime.combine(evening, time(0 if body else 12), tz)
     end_noon = noon + timedelta(days=1)
     start_utc, end_utc = noon.astimezone(timezone.utc), end_noon.astimezone(timezone.utc)
     grid = [start_utc + timedelta(minutes=10 * index) for index in range(int((end_utc - start_utc).total_seconds() / 600) + 1)]
+    if body and observed not in grid:
+        grid = sorted([*grid, observed])
     times = Time(grid)
     location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg, height=elevation * u.m)
     frame = AltAz(obstime=times, location=location, pressure=0 * u.hPa)
-    target = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame="icrs").transform_to(frame)
+    direction = get_body(body.lower(), times, location=location, ephemeris="builtin") if body else SkyCoord(ra=ra*u.deg, dec=dec*u.deg, frame="icrs")
+    target = direction.transform_to(frame)
     sun = get_sun(times).transform_to(frame)
     dark = np.flatnonzero(sun.alt.deg < -.833)
     # A polar night/day retains the full noon-to-noon interval and labels its Sun altitude.
-    first, last = (max(0, int(dark[0]) - 1), min(len(grid) - 1, int(dark[-1]) + 1)) if len(dark) else (0, len(grid) - 1)
+    first, last = (0, len(grid)-1)
+    if not body and len(dark):
+        first, last = max(0,int(dark[0])-1), min(last,int(dark[-1])+1)
     rows = [{"time": d.timestamp(), "altitude": round(float(a), 4), "azimuth": round(float(z), 4), "sun": round(float(s), 3)} for d, a, z, s in zip(grid, target.alt.deg, target.az.deg, sun.alt.deg)][first:last + 1]
     ref = Time(observed)
     constellations = json.loads((CATALOG / "western.json").read_text(encoding="utf-8"))["constellations"]
@@ -80,4 +95,4 @@ def _build(stamp, latitude, longitude, ra, dec, zone, elevation):
     positions = SkyCoord(ra=ras * u.deg, dec=decs * u.deg).transform_to(AltAz(obstime=Time([r["time"] for r in rows], format="unix")[:, None], location=location, pressure=0 * u.hPa))
     star_rows = [{"hip": s["hip"], "magnitude": s["magnitude"], "name": s["name"]} for s in catalog]
     horizontal = [np.round(np.stack((a, z), axis=-1), 2).tolist() for a, z in zip(positions.alt.deg, positions.az.deg)]
-    return {"evening": evening.isoformat(), "timezone": zone, "samples": rows, "stars": star_rows, "positions": horizontal, "lines": lines, "observed_at": observed.timestamp(), "polar": not len(dark) or len(dark) == len(grid), "coordinate_source": "Astropy / ERFA · ICRS → AltAz · no refraction", "star_source": "ESA Hipparcos / CDS I/239; proper motion from J1991.25", "line_source": "Stellarium western sky culture · CC BY-SA 4.0"}
+    return {"evening": evening.isoformat(), "timezone": zone, "samples": rows, "stars": star_rows, "positions": horizontal, "lines": lines, "observed_at": observed.timestamp(), "polar": not len(dark) or len(dark) == len(grid), "coordinate_source": ("Astropy / ERFA · topocentric ephemeris → AltAz" if body else "Astropy / ERFA · ICRS → AltAz") + " · no refraction", "star_source": "ESA Hipparcos / CDS I/239; proper motion from J1991.25", "line_source": "Stellarium western sky culture · CC BY-SA 4.0"}

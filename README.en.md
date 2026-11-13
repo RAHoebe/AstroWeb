@@ -88,7 +88,7 @@ For other registered captures, Hubble searches the ESA Hubble Science Archive fo
 
 The collection atlas and polar chart draw the original-orientation poster inside the measured corners. Toggle the photo layer or compare two capture thumbnails. Original displays the estimated distance and visible projected width and height in light-years at the target distance.
 
-Choose **Solar System** to upload the Sun, Moon or a planet as a single PNG, JPEG or TIFF with optional FITS. Film and Original are available; rendering uses pan/zoom. Moving targets have no fixed star-chart footprint. A recorded capture time allows an approximate geocentric distance. Surface dimensions require additional image calibration.
+Choose **Solar System** to upload the Sun, Moon or a planet as a single PNG, JPEG or TIFF with optional FITS. Sky journey approaches the calculated sky direction and ends on your photograph. The Milky Way map marks the Solar System. Skykaart tracks the body through its local calendar day. With only a date, the reference time is local noon. When the observing location is missing, the maps use central Netherlands (52.15° N, 5.38° E). Detail flight offers credited mission imagery from SDO, LRO, Juno, Cassini and other missions. A recorded capture time allows an approximate geocentric distance. Surface dimensions require additional image calibration.
 
 ### Multiple captures of one target
 
@@ -97,3 +97,7 @@ Upload again with the same catalogue ID. Each capture retains its own originals,
 The date picker counts available captures. For NGC 7000, a Palomar/DSS2 colour image by Davide De Martin shows the Cygnus Wall and its bordering dark cloud. For IC 1396, a Pan-STARRS colour view shows the Elephant’s Trunk. The Hubble tab also links to the NASA Hubble Skymap. Hubble fields distinguish the target itself, documented regions and other pointings in the same capture. Partial overlaps are considered, and the flight ends on exposed detector pixels inside your own field.
 
 Renaming a capture to an existing object groups the captures in one date selector. Confirmed catalogue cross-identifications (e.g. Caldwell 20 / NGC 7000 and M31 / NGC 224) share a gallery card. Each capture keeps its own files, film versions and historic viewer URL.
+
+### Automatic Hubble destination on upload
+
+Studio searches the [NASA Hubble Skymap](https://science.nasa.gov/mission/hubble/multimedia/online-activities/hubble-skymap/) by target and catalogue aliases for new deep-sky captures. A matching photograph becomes the first Hubble destination. The film approaches the Skymap position when it lies inside the measured footprint, then dissolves into the complete NASA image. Without a measured footprint the transition starts from the whole capture. Skymap provides an object position but does not specify a reliable orientation and scale for every published photograph. Existing archive destinations remain available when there is no match. The index and selected images are cached locally.

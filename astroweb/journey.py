@@ -76,7 +76,8 @@ def fits_footprint(path, poster, width, height):
 
 def geometry(store, record):
     if record.get("body"):
-        return {"kind":"missing"}
+        from .solar import pointing
+        return pointing(record)
     digest = record.get("sha256", {}).get("final")
     solved = record.get("gaia") or {}
     if solved.get("status") != "solved" or solved.get("digest") != digest:
@@ -199,6 +200,11 @@ def render_journey(store, record, field, output, plates, progress=None):
     overview = cv2.resize(atlas,(1280,640),interpolation=cv2.INTER_AREA)
     photo = cv2.imread(str(store.path(record["poster"])))
     ph,pw = photo.shape[:2]
+    if field.get("solar"):
+        scale = min(WIDTH*.88/pw, HEIGHT*.88/ph)
+        inset = cv2.resize(photo, (max(1,round(pw*scale)), max(1,round(ph*scale))))
+        ih, iw = inset.shape[:2]
+        iy, ix = (HEIGHT-ih)//2, (WIDTH-iw)//2
     src = np.float32([[0,0],[pw-1,0],[pw-1,ph-1],[0,ph-1]])
     start_scale = WIDTH*.46
     extent = np.ptp(points,axis=0)
@@ -273,6 +279,11 @@ def render_journey(store, record, field, output, plates, progress=None):
                     draw_label(labelled,credit,(32,HEIGHT-25),.5)
                 draw_label(labelled,"ESO/S. Brunier",(WIDTH-163,HEIGHT-25),.5)
                 scene = cv2.addWeighted(labelled,opacity,scene,1-opacity,0)
+            if field.get("solar") and t>.69:
+                # The disk has no measured orientation relative to the star field.
+                region = scene[iy:iy+ih,ix:ix+iw]
+                alpha = smooth((t-.69)/.22)
+                region[:] = cv2.addWeighted(region,1-alpha,inset,alpha,0)
             process.stdin.write(scene.tobytes())
         process.stdin.close()
         if process.wait(timeout=60):
@@ -306,12 +317,12 @@ def movie(store, record, field, progress=None):
             progress(0)
         from .survey import detail_plates
         meridian, points, _, _ = field_projection(field)
-        plates = detail_plates(store, points.mean(axis=0), meridian, np.ptp(points,axis=0), survey)
+        plates = [] if field.get("solar") else detail_plates(store, points.mean(axis=0), meridian, np.ptp(points,axis=0), survey)
         folder.mkdir(parents=True,exist_ok=True)
         temp = folder / f"{uuid.uuid4().hex}.part.mp4"
         try:
             render_journey(store,record,field,temp,plates,progress)
-            output = target if len(plates)==2 else fallback
+            output = target if field.get("solar") or len(plates)==2 else fallback
             os.replace(temp,output)
             return output
         finally:

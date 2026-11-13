@@ -12,6 +12,7 @@ import numpy as np
 import requests
 from astropy.wcs import WCS
 
+from . import skymap
 from .catalogue import canonical
 from .discovery import project
 from .galaxy import key
@@ -54,11 +55,14 @@ def is_andromeda(record):
 
 
 def eligible(record):
-    return is_andromeda(record) or bool(record.get("fits") or (record.get("gaia") or {}).get("corners"))
+    state = record.get("skymap") or {}
+    has_destination = state.get("option") and state.get("target") == skymap.target_key(record)
+    return bool(has_destination or is_andromeda(record) or record.get("fits") or (record.get("gaia") or {}).get("corners"))
 
 
 def fields(store,record):
     options=[]
+    preferred = skymap.cached_option(store, record)
     if is_andromeda(record):
         options.extend({"id":name,"relation":"region"} for name in WINDOWS if window_geometry(store,record,name) is not None)
     for name, plate in PLATES.items():
@@ -66,10 +70,16 @@ def fields(store,record):
             if window_geometry(store,record,name) is not None:
                 options.append({"id":name,"relation":"region","credit":plate["credit"],
                                 "source":plate.get("source",f"https://esahubble.org/images/{name}/")})
-    if options:
-        return options
-    from .hst_archive import find_fields
-    return find_fields(store,record)
+    if not options:
+        from .hst_archive import find_fields
+        try:
+            options = find_fields(store,record)
+        except (requests.RequestException, ValueError, OSError):
+            if not preferred or skymap.focus_point(store, record, preferred) is None:
+                raise
+    if preferred and skymap.focus_point(store, record, preferred) is not None:
+        return [preferred, *options]
+    return options
 
 
 def plate_wcs(plate):
@@ -202,11 +212,7 @@ def render(store,record,name,registration_matrix,path,archive=None):
         valid=(image.max(axis=2)>3).astype(np.uint8)
         interior=cv2.distanceTransform(valid,cv2.DIST_L2,3)
         masks[level]=np.uint8(255*np.clip(np.minimum(edge,interior)/min(64,min(h,w)*.05),0,1))
-    cmd=[ffmpeg_executable(),"-hide_banner","-loglevel","error","-y","-f","rawvideo","-pix_fmt","bgr24","-s","1280x720",
-         "-r","24","-i","pipe:0","-an","-c:v","libx264","-threads","2","-preset","veryfast","-crf","18",
-         "-pix_fmt","yuv420p","-movflags","+faststart",str(path)]
-    process=subprocess.Popen(cmd,stdin=subprocess.PIPE,stderr=subprocess.DEVNULL)
-    try:
+    def frames():
         for i in range(288):
             t=min(1,max(0,(i/287-.05)/.87))
             ease=t*t*(3-2*t)
@@ -225,6 +231,17 @@ def render(store,record,name,registration_matrix,path,archive=None):
                 mask=cv2.warpPerspective(masks[level],matrix,(WIDTH,HEIGHT))
                 alpha=mask.astype(np.float32)*np.float32(fade/255)
                 scene=cv2.blendLinear(scene,overlay,1-alpha,alpha)
+            yield scene
+    encode(frames(), credit, path)
+
+
+def encode(frames, credit, path):
+    cmd=[ffmpeg_executable(),"-hide_banner","-loglevel","error","-y","-f","rawvideo","-pix_fmt","bgr24","-s","1280x720",
+         "-r","24","-i","pipe:0","-an","-c:v","libx264","-threads","2","-preset","veryfast","-crf","18",
+         "-pix_fmt","yuv420p","-movflags","+faststart",str(path)]
+    process=subprocess.Popen(cmd,stdin=subprocess.PIPE,stderr=subprocess.DEVNULL)
+    try:
+        for scene in frames:
             cv2.putText(scene,credit,(20,HEIGHT-18),
                         cv2.FONT_HERSHEY_SIMPLEX,.46,(12,12,12),3,cv2.LINE_AA)
             cv2.putText(scene,credit,(20,HEIGHT-18),
@@ -239,7 +256,16 @@ def render(store,record,name,registration_matrix,path,archive=None):
 
 def movie(store,record,name):
     archive=None
-    if (name in WINDOWS and is_andromeda(record)) or (name in PLATES and any(v["id"]==name for v in fields(store,record))):
+    preferred = None
+    if name.startswith("skymap-"):
+        preferred = skymap.cached_option(store, record)
+        if not preferred or preferred["id"] != name:
+            raise ValueError("hubble_no_field")
+        focus = skymap.focus_point(store, record, preferred)
+        if focus is None:
+            raise ValueError("hubble_no_field")
+        signature = ["nasa-skymap-v1", record["sha256"]["final"], name, preferred["digest"], focus]
+    elif (name in WINDOWS and is_andromeda(record)) or (name in PLATES and any(v["id"]==name for v in fields(store,record))):
         matrix=window_geometry(store,record,name)
         if matrix is None:raise ValueError("hubble_no_field")
         signature=["registered-feature-v3",record["sha256"]["final"],matrix.tolist(),name]
@@ -257,7 +283,16 @@ def movie(store,record,name):
             folder.mkdir(parents=True,exist_ok=True)
             tmp=folder/f"{uuid.uuid4().hex}.part.mp4"
             try:
-                render(store,record,name,matrix,tmp,archive);tmp.replace(output)
+                if preferred:
+                    image = cv2.imread(str(skymap.image_file(store, name[7:], preferred["digest"])))
+                    photo = cv2.imdecode(np.fromfile(store.path(record["assets"]["final"]), np.uint8), cv2.IMREAD_COLOR)
+                    if image is None or photo is None:
+                        raise ValueError("hubble_unavailable")
+                    frames = skymap.render_frames(photo, image, focus, WIDTH, HEIGHT)
+                    encode(frames, preferred["credit"] + " | " + name[7:].upper(), tmp)
+                else:
+                    render(store,record,name,matrix,tmp,archive)
+                tmp.replace(output)
             finally:
                 tmp.unlink(missing_ok=True)
     return output

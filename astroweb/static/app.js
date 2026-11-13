@@ -108,7 +108,14 @@ async function loadViewer(){
   state.current=object;
   $('hubble-tab').hidden=!object.hubble_available;
   if(object.body){
-    for(const tab of document.querySelectorAll('[data-view]'))tab.hidden=!['film','original'].includes(tab.dataset.view);
+    document.querySelector('[data-view="polar"]').hidden=true;
+    const setLabel=(el,key)=>{el.dataset.i18n=key;el.textContent=t(key);};
+    const tab=$('hubble-tab');
+    tab.hidden=false;tab.dataset.view='solar-system';setLabel(tab,'solarTour');
+    setLabel($('hubble-panel').querySelector('strong'),'solarTour');
+    $('hubble-video').dataset.i18nAria='solarTour';$('hubble-video').setAttribute('aria-label',t('solarTour'));
+    $('skymap-link').hidden=true;
+    setLabel($('sky-panel').querySelector('.eyebrow'),'solarSkyDay');
     for(const id of ['ir-toggle','discover-toggle'])$(id).closest('label').hidden=true;
   }
   setComparisonObject(object.id);
@@ -119,9 +126,10 @@ async function loadViewer(){
   $('download-original').href=object.final+'?download=1';
   renderViewerText();
   const tab=location.hash.slice(1);
-  selectTab(object.body?(tab==='original'?'original':'film'):['original','sky','journey','polar'].includes(tab)||(tab==='galaxy'&&object.galaxy)||(tab==='environment'&&object.environment_available)||(tab==='hubble'&&object.hubble_available)?tab:'film');
+  const requested=object.body&&tab==='hubble'?'solar-system':tab;
+  selectTab([...document.querySelectorAll('[data-view]:not([hidden])')].some(el=>el.dataset.view===requested)?requested:'film');
   if(object.video&&!$('film-panel').hidden&&!reducedMotion.matches)$('viewer-video').play().catch(()=>{});}
-function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','hubble','sky','polar'])$(panel+'-panel').hidden=panel!==name;history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
+function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','hubble','sky','polar'])$(panel+'-panel').hidden=panel!==(name==='solar-system'?'hubble':name);history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
   const object=state.current;
   if(name==='original'&&!$('viewer-original').hasAttribute('src')){
     $('viewer-original').src=object.original_view||object.final;
@@ -136,7 +144,7 @@ function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{
   }
   if(name==='polar')openPolar(state.current.id);else closePolar();
   renderNeighbours();
-  if(name==='hubble')openHubble();else $('hubble-video').pause();
+  if(name==='hubble'||name==='solar-system')openHubble();else $('hubble-video').pause();
   if(name==='environment')openEnvironment(state.current.id);
   if(name==='galaxy')openGalaxy();else stopGalaxy();
   if(name==='journey')loadJourney();else $('journey-video').pause();
@@ -256,15 +264,17 @@ function hubbleCaption(){
   const select=$('hubble-field');
   for(const opt of select.options){
     const obs=hubbleObservations.find(o=>o.id===opt.value);
-    const label=obs?.filter?(obs.target==='ANY'?t('archiveField'):obs.target)+' · '+obs.filter:t('hubble_'+opt.value);
+    if(obs?.name){opt.textContent=local(obs.name);continue;}
+    const label=obs?.id.startsWith('skymap-')?'NASA Hubble Skymap · '+obs.title:obs?.filter?(obs.target==='ANY'?t('archiveField'):obs.target)+' · '+obs.filter:t('hubble_'+opt.value);
     opt.textContent=t('hubble_'+(obs?.relation||'field'))+' · '+label;
   }
   const active=hubbleObservations.find(o=>o.id===select.value);
   const source=$('hubble-source');
   source.href=active?.source||(active?.filter?'https://hla.stsci.edu/hlaview.html#Images|'+encodeURIComponent(active.id):'https://esahubble.org/images/heic2501a/');
   source.textContent=active?.credit?active.credit+' ↗':active?.filter?'NASA/ESA Hubble · '+active.id+' ↗':'NASA, ESA, B. Williams (University of Washington) ↗';
-  $('hubble-description').textContent=active?t('hubble_'+active.relation)+' · '+t(active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
-  $('hubble-status').textContent=hubbleState?t(hubbleState):'';
+  $('hubble-description').textContent=active?.name?t('solarMissionNote'):active?t('hubble_'+active.relation)+' · '+t(active.id.startsWith('skymap-')?'skymapNote':active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
+  const status=state.current?.body?({hubbleLoading:'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
+  $('hubble-status').textContent=status?t(status):'';
   $('hubble-retry').hidden=hubbleState!=='hubble_unavailable';
 }
 function loadHubbleField(){
@@ -272,7 +282,7 @@ function loadHubbleField(){
   video.hidden=!field;
   if(!field)return;
   hubbleState='hubbleLoading';hubbleCaption();
-  video.src='/media/'+encodeURIComponent(state.current.id)+'/hubble/'+encodeURIComponent(field);
+  video.src='/media/'+encodeURIComponent(state.current.id)+(state.current.body?'/solar-system/':'/hubble/')+encodeURIComponent(field);
   video.load();
   if(!reducedMotion.matches&&!$('hubble-panel').hidden)video.play().catch(()=>{});
 }
@@ -280,7 +290,7 @@ async function openHubble(){
   try{
     if(!hubbleFields){
       hubbleState='hubbleLoading';hubbleCaption();
-      hubblePending??=api('/api/objects/'+encodeURIComponent(state.current.id)+'/hubble');
+      hubblePending??=api('/api/objects/'+encodeURIComponent(state.current.id)+(state.current.body?'/solar-system':'/hubble'));
       const {fields,observations}=await hubblePending;
       hubbleObservations=observations||[];
       if(!hubbleFields){
@@ -299,7 +309,7 @@ $('hubble-video').addEventListener('error',()=>{hubbleState='hubble_unavailable'
 $('hubble-video').addEventListener('loadeddata',()=>{hubbleState='';hubbleCaption();});
 function journeyCaption(){
   if(!journeyInfo)return;
-  $('journey-note').textContent=t('journey_'+journeyInfo.kind);
+  $('journey-note').textContent=journeyInfo.solar?[t(journeyInfo.url?'solarJourneyNote':'solarDateMissing'),journeyInfo.default_site?t('centralNL'):'',journeyInfo.day_only?t('solarNoon'):''].filter(Boolean).join(' '):t('journey_'+journeyInfo.kind);
   const survey=$('journey-survey');
   survey.hidden=!journeyInfo.survey;
   if(journeyInfo.survey==='PanSTARRS'){
@@ -477,7 +487,11 @@ async function receiveDiscovery(){
 $('replace-point').addEventListener('click',()=>{if(pendingLandmark)applyLandmark(Number($('replace-index').value));});
 
 function fillMetadata(object){$('rename-form').elements.identifier.value=(object.catalog_id||object.id).replace('_',' ');$('metadata-form').elements.galactic_distance_ly.value=object.metadata.galactic_distance_ly??'';const fields=$('metadata-fields');fields.replaceChildren();$('metadata-form').elements.namedItem('target').value=object.metadata.target;for(const key of ['name','type','constellation','summary','description'])for(const lang of ['nl','en']){const label=node('label');const title=node('span','',t(key)+' · '+lang.toUpperCase());title.dataset.editKey=key;title.dataset.editLanguage=lang;const input=node(['summary','description'].includes(key)?'textarea':'input');input.name=key+'_'+lang;input.maxLength=key==='description'?5000:350;input.value=object.metadata[key]?.[lang]||'';label.append(title,input);fields.append(label);}}
-function fillObservation(object){const observation=object.observation||{};for(const key of ['date_obs','latitude','longitude','ra','dec','timezone'])$('observation-form').elements.namedItem(key).value=observation[key]??(key==='timezone'?'Europe/Amsterdam':'');$('observation-form').elements.namedItem('publish_location').checked=!!observation.publish_location;const details=$('fits-details');details.replaceChildren();fact(details,t('integration'),duration(observation.integration));fact(details,t('frames'),observation.frames);fact(details,t('telescope'),observation.telescope);fact(details,'FITS',observation.filename);fact(details,'DATE-OBS',observation.time_comment);fact(details,'UTC',observation.time_scale_assumed?(language==='nl'?'Aangenomen volgens FITS-conventie':'Assumed by FITS convention'):observation.time_scale);}
+function fillObservation(object){
+  const fields=$('observation-form').elements;
+  for(const k of ['latitude','longitude','ra','dec'])fields[k].required=!object.body;
+  for(const k of ['ra','dec']){fields[k].disabled=!!object.body;fields[k].closest('label').hidden=!!object.body;}
+  const observation=object.observation||{};for(const key of ['date_obs','latitude','longitude','ra','dec','timezone'])$('observation-form').elements.namedItem(key).value=observation[key]??(key==='timezone'?'Europe/Amsterdam':'');$('observation-form').elements.namedItem('publish_location').checked=!!observation.publish_location;const details=$('fits-details');details.replaceChildren();fact(details,t('integration'),duration(observation.integration));fact(details,t('frames'),observation.frames);fact(details,t('telescope'),observation.telescope);fact(details,'FITS',observation.filename);fact(details,'DATE-OBS',observation.time_comment);fact(details,'UTC',observation.time_scale_assumed?(language==='nl'?'Aangenomen volgens FITS-conventie':'Assumed by FITS convention'):observation.time_scale);}
 let pendingIdentity = Promise.resolve();
 async function fitsObject(file){
   if(!file)return '';
@@ -543,7 +557,7 @@ $('rename-form').addEventListener('submit',async event=>{
 });
 $('metadata-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body={target:form.get('target'),galactic_distance_ly:form.get('galactic_distance_ly')?Number(form.get('galactic_distance_ly')):null};for(const key of ['name','type','constellation','summary','description'])body[key]={nl:form.get(key+'_nl'),en:form.get(key+'_en')};try{await api(`/api/admin/objects/${state.selected.id}/metadata`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
 $('fetch-nasa').addEventListener('click',async()=>{if(!state.selected||state.busy)return;setBusy(true);message('studio-message',t('working'));try{await api(`/api/admin/objects/${state.selected.id}/metadata/refresh`,{method:'POST',body:{}});message('studio-message',t('saved'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
-$('observation-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body=Object.fromEntries(form);body.publish_location=form.has('publish_location');for(const key of ['latitude','longitude','ra','dec'])body[key]=+body[key];try{await api(`/api/admin/objects/${state.selected.id}/observation`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
+$('observation-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body=Object.fromEntries(form);body.publish_location=form.has('publish_location');for(const key of ['latitude','longitude','ra','dec'])if(key in body)body[key]=body[key]===''?null:+body[key];try{await api(`/api/admin/objects/${state.selected.id}/observation`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
 let focusGeneration=0;
 async function setFocusImage(source){
   const generation=++focusGeneration;

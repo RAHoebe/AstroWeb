@@ -171,12 +171,14 @@ def test_journey_prepared_after_alignment_before_publication(tmp_path, images, m
     record = import_object(store, "NGC_7000", images.values())
     jobs = JobQueue(store,resume=False)
     calls = []
+    monkeypatch.setattr("astroweb.skymap.catalogue",lambda store: [])
     def fake_render(paths, target, params, progress):
         target.parent.mkdir(parents=True,exist_ok=True)
         target.write_bytes(b"capture")
         return {"frames":96}
     def fake_journey(current, capture, field, progress):
         assert not capture["published"]
+        assert capture["skymap"]["target"] == "NGC_7000"
         calls.append(field)
         progress(.5)
         if failure:
@@ -196,6 +198,7 @@ def test_journey_prepared_after_alignment_before_publication(tmp_path, images, m
 
 
 def test_jobs_publish_only_success_and_preserve_previous(tmp_path, images, monkeypatch):
+    monkeypatch.setattr("astroweb.skymap.catalogue",lambda store: [])
     store = Store(tmp_path / "jobs-data")
     import_object(store, "NGC_7000", list(images.values()))
     queue = JobQueue(store)
@@ -257,6 +260,7 @@ def test_original_detail_at_zoom_target():
 
 
 def test_latest_version_is_published_and_can_be_reselected(app, images, monkeypatch):
+    monkeypatch.setattr("astroweb.skymap.catalogue",lambda store: [])
     store, queue = app.extensions["store"], app.extensions["jobs"]
     import_object(store, "NGC_7000", list(images.values()))
     def render(paths, target, params, progress):

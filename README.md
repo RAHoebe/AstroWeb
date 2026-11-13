@@ -99,7 +99,7 @@ Bij andere geregistreerde opnamen zoekt **Hubble** naar openbare optische beeldv
 
 De hemelatlas en Poolkaart tekenen de ongedraaide poster tussen de gemeten fotohoeken. Je kunt deze laag uitschakelen. Selecteer één of twee opnamen in de hemelatlas om de bijbehorende thumbnails te bekijken. Het tabblad Origineel toont de geschatte afstand en de zichtbare breedte en hoogte in lichtjaren op de afstand van het doel.
 
-Kies bij upload **Zonnestelsel** voor de zon, maan of een planeet. Eén PNG, JPEG of TIFF is voldoende; een FITS met opnamedatum is optioneel. De beschikbare weergaven zijn Film en Origineel; de film gebruikt pan/zoom. Er wordt geen vaste sterpositie aan het bewegende doel toegekend. Met een bekende opnametijd kan de viewer de geocentrische afstand schatten. Een oppervlaktemaat vraagt aanvullende beeldkalibratie.
+Kies bij upload **Zonnestelsel** voor de zon, maan of een planeet. Eén PNG, JPEG of TIFF is voldoende; een FITS met opnamedatum is optioneel. De Hemelreis zoomt naar de berekende richting en eindigt op je eigen opname. De Melkwegkaart wijst het zonnestelsel aan. De Skykaart volgt het hemellichaam van middernacht tot middernacht. Met alleen een datum gebruikt AstroWeb 12.00 uur lokale tijd. Ontbreekt de waarneemlocatie, dan geldt Midden-Nederland (52,15° N, 5,38° O). Bij **Detailreis** kies je missiebeelden van onder meer SDO, LRO, Juno en Cassini, met de bron bij de film. Met een bekende opnametijd kan de viewer de geocentrische afstand schatten. Een oppervlaktemaat vraagt aanvullende beeldkalibratie.
 
 ### Meerdere opnamen per object
 
@@ -108,3 +108,7 @@ Upload een volgende nacht met dezelfde catalogus-ID. Een nieuwe opname heeft eig
 Voor NGC 7000 toont de reis de Cygnusmuur en de donkere stofwolk in het Palomar/DSS2-kleurenmozaïek van Davide De Martin. Voor IC 1396 is de Olifantenslurf beschikbaar in Pan-STARRS-kleur. De NASA Hubble Skymap is vanuit dit tabblad te openen. De Hubble-keuzelijst onderscheidt opnamen van het doel, gedocumenteerde deelgebieden en andere archiefvelden in dezelfde kijkrichting. De zoekactie neemt ook gedeeltelijk overlappende beelden mee; alleen werkelijk belichte pixels binnen je eigen foto kunnen de bestemming van de vlucht vormen.
 
 Bij **Object-ID wijzigen** voegt een bestaande ID de opname toe aan de betreffende datumlijst. Bevestigde catalogusaliassen worden gegroepeerd, bijvoorbeeld C 20 / Caldwell 20 / NGC 7000 en M31 / NGC 224. Je bestanden, filmversies en de oude viewerlink blijven bij de oorspronkelijke opname horen.
+
+### Automatische Hubble-bestemming bij upload
+
+Studio doorzoekt voor nieuwe deep-skyopnamen de [NASA Hubble Skymap](https://science.nasa.gov/mission/hubble/multimedia/online-activities/hubble-skymap/) op object-ID en catalogusaliassen. Een passende NASA-foto staat als eerste bij **Hubble → Bestemming**. De film nadert de Skymap-positie wanneer die binnen het gemeten opnamekader ligt en gaat over in de volledige NASA-foto. Zonder gemeten kader begint de overgang vanuit de hele eigen opname. De Skymap geeft de objectpositie, maar geen betrouwbare oriëntatie en schaal voor iedere gepubliceerde foto. Bij een ontbrekende treffer blijven de beschikbare archiefbestemmingen bruikbaar. De catalogus en geselecteerde beelden worden lokaal bewaard.
