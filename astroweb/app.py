@@ -181,6 +181,11 @@ def create_app(data_dir=None, testing=False):
         from .autozoom import propose
         return jsonify(points=propose(store,get_object(identifier),json_body().get("count",4)))
 
+    @app.get("/api/objects/<identifier>/polar")
+    def polar_chart(identifier):
+        from .polar import chart
+        return jsonify(chart(store,get_object(identifier)))
+
     @app.get("/api/objects/<identifier>/discover")
     def discover_objects(identifier):
         from .discovery import discover
@@ -333,6 +338,11 @@ def create_app(data_dir=None, testing=False):
     def align(identifier):
         queue.request_alignment(identifier)
         return jsonify(ok=True), 202
+
+    @app.post("/api/admin/jobs/<job_id>/cancel")
+    @admin_required
+    def cancel_render(job_id):
+        return jsonify(job=queue.cancel(job_id))
 
     @app.post("/api/admin/objects/<identifier>/render")
     @admin_required

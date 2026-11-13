@@ -75,7 +75,7 @@ class Store:
             if occupied:
                 raise ValueError("object_exists")
             jobs = [json.loads(r[0]) for r in db.execute("SELECT record FROM jobs WHERE json_extract(record,'$.object_id')=?", (old,))]
-            if any(j["status"] in ("running","queued") for j in jobs) or (record.get("gaia") or {}).get("status") in ("pending","running"):
+            if any(j["status"] in ("running","queued","cancelling") for j in jobs) or (record.get("gaia") or {}).get("status") in ("pending","running"):
                 raise ValueError("rename_busy")
             record.setdefault("storage_id", old)
             record.update(id=new,metadata=metadata)

@@ -97,6 +97,21 @@ def hammer(lon, lat):
     return np.stack((.5 - .5*np.cos(lat)*np.sin(lon/2)/den, .5 - .5*np.sin(lat)/den), axis=-1)
 
 
+# Galactic Cartesian directions -> photographic plate axes of ESO/S. Brunier
+# eso0932a. Rigid rotation fitted to Hipparcos peaks on the bundled 6000x3000 plate.
+ATLAS_ROTATION = np.array([[.997977,.056263,-.029617],
+                           [-.055707,.998262,.019251],
+                           [.030649,-.017562,.999376]], dtype=np.float32)
+
+
+def panorama_pixels(lon, lat, w, h):
+    cl = np.cos(lat)
+    x, y, z = cl*np.cos(lon), cl*np.sin(lon), np.sin(lat)
+    rx, ry, rz = (a*x+b*y+c*z for a,b,c in ATLAS_ROTATION)
+    return ((.5-np.arctan2(ry,rx)/(2*np.pi))*w-.5).astype(np.float32), (
+        (.5-np.arctan2(rz,np.hypot(rx,ry))/np.pi)*h-.5).astype(np.float32)
+
+
 def project_atlas(meridian):
     image = cv2.imread(str(CATALOG / "milky-way.jpg"))
     h, w = image.shape[:2]
@@ -108,8 +123,8 @@ def project_atlas(meridian):
         z = np.sqrt(np.maximum(0, 1-radius/2))
         lon = 2*np.arctan2(np.sqrt(2)*z*x, 2*z*z-1) + meridian
         lat = np.arcsin(np.clip(np.sqrt(2)*z*y, -1, 1))
-        mx = ((.5-lon/(2*np.pi))*w-.5).astype(np.float32)
-        my = np.clip((.5-lat/np.pi)*h-.5, 0, h-1).astype(np.float32)
+        mx, my = panorama_pixels(lon,lat,w,h)
+        my = np.clip(my,0,h-1)
         band = cv2.remap(image, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_WRAP)
         band[radius>1] = (12, 8, 6)
         out[row:row+len(band)] = band
@@ -269,7 +284,7 @@ def render_journey(store, record, field, output, plates):
 def movie(store, record, field):
     from .survey import survey_for
     survey = survey_for(field)
-    digest = hashlib.sha256(json.dumps(["atlas-v6-landing",survey,record.get("sha256",{}).get("final"),field],
+    digest = hashlib.sha256(json.dumps(["atlas-v7-registered",survey,record.get("sha256",{}).get("final"),field],
                                        sort_keys=True).encode()).hexdigest()[:20]
     folder = store.path(f"objects/{record.get('storage_id', record['id'])}/journeys")
     if record.get("storage_id", record["id"]) != record["id"]:

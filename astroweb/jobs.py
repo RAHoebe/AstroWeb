@@ -10,6 +10,10 @@ from .render import Parameters, build_gallery_preview, gallery_preview_path, ren
 from .store import now
 
 
+class RenderCancelled(Exception):
+    pass
+
+
 class JobQueue:
     def __init__(self, store, resume=True):
         self.store = store
@@ -38,7 +42,9 @@ class JobQueue:
                 self.clean_deleted_movies(record["id"])
         if resume:
             for job in reversed(store.all("jobs")):
-                if job["status"] == "running":
+                if job["status"] == "cancelling":
+                    self.finish_cancel(job)
+                elif job["status"] == "running":
                     store.update("jobs", job["id"], status="failed", error="render_interrupted", finished_at=now())
                 elif job["status"] == "queued":
                     self.futures[job["id"]] = self.executor.submit(self.run, job["id"])
@@ -155,9 +161,9 @@ class JobQueue:
             if not self.store.get("objects", identifier):
                 raise ValueError("object_not_found")
             jobs = self.store.all("jobs")
-            if any(job["object_id"] == identifier and job["status"] in {"queued", "running"} for job in jobs):
+            if any(job["object_id"] == identifier and job["status"] in {"queued", "running", "cancelling"} for job in jobs):
                 raise ValueError("render_active")
-            if sum(job["status"] in {"queued", "running"} for job in jobs) >= 8:
+            if sum(job["status"] in {"queued", "running", "cancelling"} for job in jobs) >= 8:
                 raise ValueError("queue_full")
             job_id = uuid.uuid4().hex
             job = {"id": job_id, "object_id": identifier, "status": "queued", "progress": 0, "params": params.__dict__, "created_at": now(), "error": None}
@@ -165,8 +171,43 @@ class JobQueue:
             self.futures[job_id] = self.executor.submit(self.run, job_id)
             return job
 
+    def cancel(self, job_id):
+        with self.store.lock:
+            job = self.store.get("jobs", job_id)
+            if not job:
+                raise ValueError("job_missing")
+            if job["status"] in ("cancelled","cancelling"):
+                return job
+            if job["status"] not in ("running","queued"):
+                raise ValueError("job_finished")
+            if job["status"] == "queued":
+                future = self.futures.get(job_id)
+                if future:
+                    future.cancel()
+                return self.store.update("jobs",job_id,status="cancelled",finished_at=now())
+            return self.store.update("jobs",job_id,status="cancelling")
+
+    def finish_cancel(self, job):
+        record = self.store.get("objects",job["object_id"])
+        folder = self.store.path(f"objects/{record.get('storage_id',record['id'])}/movies")
+        movie = folder / (job["id"]+".mp4")
+        for path in (movie,gallery_preview_path(movie),movie.with_suffix(".part.mp4"),
+                     movie.with_suffix(".preview.part.mp4"),movie.with_suffix(".encode.log")):
+            path.unlink(missing_ok=True)
+        self.store.update("jobs",job["id"],status="cancelled",error=None,finished_at=now())
+
+    def checkpoint(self, job_id, progress=None):
+        with self.store.lock:
+            if self.store.get("jobs",job_id)["status"] == "cancelling":
+                raise RenderCancelled()
+            if progress is not None:
+                self.store.update("jobs",job_id,progress=progress)
+
     def run(self, job_id):
-        job = self.store.update("jobs", job_id, status="running", started_at=now(), progress=2)
+        with self.store.lock:
+            if self.store.get("jobs",job_id)["status"] != "queued":
+                return
+            job = self.store.update("jobs", job_id, status="running", started_at=now(), progress=2)
         try:
             record = self.store.get("objects", job["object_id"])
             if record["metadata"].get("translation") == "pending" and not record["metadata"].get("external"):
@@ -185,24 +226,31 @@ class JobQueue:
                         self.store.update("objects", record["id"], metadata=metadata)
                 except Exception:
                     logging.info("Object metadata unavailable for %s; keeping local descriptions", record["id"])
+            self.checkpoint(job_id)
             self.align(record["id"])
+            self.checkpoint(job_id)
             relative = f"objects/{record.get('storage_id', record['id'])}/movies/{job_id}.mp4"
             params = Parameters.parse(job["params"])
-            stats = render_video({key: self.store.path(value) for key, value in record["assets"].items()}, self.store.path(relative), params, progress=lambda p: self.store.update("jobs", job_id, progress=p))
+            stats = render_video({key: self.store.path(value) for key, value in record["assets"].items()}, self.store.path(relative), params, progress=lambda p: self.checkpoint(job_id,p))
+            self.checkpoint(job_id)
             self.ensure_preview(relative)
             with self.store.lock:
+                self.checkpoint(job_id)
                 record = self.store.get("objects", record["id"])
                 finished = now()
                 version = {"id": job_id, "video": relative, "params": params.__dict__, "render": stats, "created_at": finished}
                 record.setdefault("versions", []).append(version)
-                if not record["video"]:
-                    record.update(video=relative, params=params.__dict__, render=stats, published=True)
+                record.update(video=relative, params=params.__dict__, render=stats, published=True)
                 job.update(status="completed", progress=100, error=None, finished_at=finished)
                 self.store.finish_render(record, job)
         except Exception as exc:
-            logging.exception("Render failed: %s", job_id)
-            known = str(exc) if str(exc) in {"ffmpeg_missing", "encode_failed", "invalid_image"} else "render_failed"
-            self.store.update("jobs", job_id, status="failed", error=known, finished_at=now())
+            with self.store.lock:
+                if isinstance(exc,RenderCancelled) or self.store.get("jobs",job_id)["status"]=="cancelling":
+                    self.finish_cancel(job)
+                else:
+                    logging.exception("Render failed: %s", job_id)
+                    known = str(exc) if str(exc) in {"ffmpeg_missing", "encode_failed", "invalid_image"} else "render_failed"
+                    self.store.update("jobs", job_id, status="failed", error=known, finished_at=now())
 
     def shutdown(self):
         self.executor.shutdown(wait=True)

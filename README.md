@@ -38,7 +38,7 @@ Open de [lokale galerij](http://127.0.0.1:8090/). Kies [Studio](http://127.0.0.1
    ```
 
 3. Kies sterrenparallax, nevelreliëf of klassieke pan/zoom. Stel **Aantal zoompunten** in op 1–8. Selecteer een nummer, versleep het kader en trek aan een hoek om de uitsnede te bepalen. Elk punt heeft een eigen zoomfactor tot 8×. De film bezoekt de punten op volgorde en keert terug naar het begin.
-4. Kies **Maak film**. De eerste geslaagde H.264-film verschijnt in de galerij. Volgende versies kun je afspelen, vergelijken en expliciet selecteren. In Studio kun je ook een ongepubliceerde versie verwijderen of de object-ID en bijbehorende objectteksten wijzigen.
+4. Kies **Maak film**. Elke geslaagde H.264-film wordt automatisch de galerijversie. Tijdens het renderen blijft de huidige film beschikbaar. Met **Render annuleren** stop je een wachtende of lopende taak. Je kunt een eerdere versie opnieuw selecteren. In Studio kun je ook een ongepubliceerde versie verwijderen of de object-ID en bijbehorende objectteksten wijzigen.
 
 PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afmetingen hebben. De limieten zijn 40 megapixels en 100 MiB per beeld, 512 MiB voor FITS en 600 MiB voor de hele upload. De vier originelen krijgen een SHA-256-controlesom. Voor lokale batchimport: stop de server en voer `python -m astroweb import --source AstroPhotos --render` uit, met één submap per object.
 
@@ -50,6 +50,7 @@ PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afme
 | Origineel | De volledige foto. Zoom met het muiswiel of de schuifregelaar tot 10× de ingepaste weergave, versleep de foto of download het origineel. |
 | Hemelreis | Een vlucht van het hemelpanorama via fijnere hemelmozaïeken naar je foto. Gaia-matching of een bevestigde FITS-WCS levert het kader. Bij alleen een richtpunt zie je een markering. Objectnamen zijn apart inschakelbaar. |
 | Melkweg | Een geanimeerd bovenaanzicht voor herkende Melkwegobjecten met een afstand. Toon objectnamen, pauzeer of verplaats de tijdschuif. Voor andere bevestigde Melkwegobjecten kun je de afstand in Studio invullen. De kaart projecteert de posities op het galactische vlak. |
+| Poolkaart | Cirkelvormige sterrenkaart rond de noordelijke of zuidelijke hemelpool, met sterrenbeeldlijnen, uurverdeling en een instelbare zoom naar het doel. |
 | Skykaart | Een kaart van de echte opnamenacht op basis van tijd, positie en locatie, met sterren, sterrenbeeldlijnen en de baan van het doel. |
 
 De parallaxdiepte is een artistieke instelling. Voor het kader van de Hemelreis vergelijkt AstroWeb de sterrenlaag lokaal met Gaia DR3. Nieuwe catalogusvelden, broninformatie en surveytegels vragen internet. Opnamen blijven lokaal. De exacte waarnemingslocatie is standaard privé. Zie [bronnen en licenties](THIRD_PARTY.md) voor de kaarten, catalogi en illustraties.

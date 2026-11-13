@@ -107,8 +107,13 @@ def journey_labels(record, field):
     extent = np.ptp(footprint,axis=0)
     end = min(journey.WIDTH*.77/max(extent[0],1e-6),journey.HEIGHT*.73/max(extent[1],1e-6)) if "corners" in field else journey.WIDTH*.46*9
     labels = [{"nl":r["nl"], "en":r["en"], "xy":np.round(xy,7).tolist(), "detail":r.get("detail",False)} for r,xy in zip(candidates,projected)]
+    # The pointing or mosaic centre need not coincide with the catalogue object.
+    marker = footprint.mean(axis=0)
+    if known:
+        obj = SkyCoord(known["ra"]*u.deg,known["dec"]*u.deg).galactic
+        marker = journey.hammer((obj.l.radian-meridian+np.pi)%(2*np.pi)-np.pi,obj.b.radian)*[2,1]
     labels.insert(0, {"nl":record["metadata"]["name"]["nl"], "en":record["metadata"]["name"]["en"],
-                      "xy":footprint.mean(axis=0).tolist()})
+                      "xy":marker.tolist()})
     frames = []
     # Reuse the movie renderer's actual per-frame camera, including the landing roll.
     for i in range(journey.FRAMES):

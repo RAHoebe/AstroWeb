@@ -1,3 +1,4 @@
+import {openPolar,closePolar,drawPolar} from './polar.js';
 import {layoutComparison,setComparisonObject,openEnvironment,comparisonText} from './compare.js';
 import {configureGalaxy,openGalaxy,stopGalaxy,setJourneyLabels,atlasLanguage} from './atlas.js';
 import {t,local,language,setLanguage,formatDate,duration} from './i18n.js';
@@ -28,7 +29,7 @@ async function api(url,options={}){
 function message(id,text,error=false){const target=$(id);target.textContent=text;target.classList.toggle('error',error);}
 let toastTimer;function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function setBusy(value){state.busy=value;for(const id of ['render-button','preview-button','fetch-nasa'])$(id).disabled=value;}
-function applyLanguage(value){setLanguage(value);drawPicker();buildGallery();if(state.current){renderViewerText();journeyCaption();layoutOriginal();atlasLanguage();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();}if(studioRoute)document.title='AstroWeb · Studio';sky.draw();}
+function applyLanguage(value){setLanguage(value);drawPicker();buildGallery();if(state.current){renderViewerText();journeyCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();}if(studioRoute)document.title='AstroWeb · Studio';sky.draw();}
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
 
 async function loadGallery(){try{state.objects=(await api('/api/objects')).objects;buildGallery();}catch(e){$('gallery-grid').replaceChildren(node('div','empty-state',errorText(e)));}}
@@ -70,13 +71,14 @@ async function loadViewer(){
   try{object=await api('/api/objects/'+location.pathname.split('/').pop());}
   catch(e){$('viewer-title').textContent=errorText(e);return;}
   setComparisonObject(object.id);$('environment-tab').hidden=!object.environment_available;configureGalaxy(object.galaxy,object.metadata.name);state.current=object;$('viewer').classList.toggle('portrait',object.height>object.width);$('viewer').style.setProperty('--film-ratio',String(object.width/object.height));$('viewer-video').src=object.video;$('viewer-video').poster=object.poster;$('viewer-original').src=object.original_view||object.final;$('download-movie').href=object.video+(object.video.includes('?')?'&':'?')+'download=1';$('download-original').href=object.final+'?download=1';renderViewerText();const tab=location.hash.slice(1);
-  selectTab(['original','sky','journey'].includes(tab)||(tab==='galaxy'&&object.galaxy)||(tab==='environment'&&object.environment_available)?tab:'film');
+  selectTab(['original','sky','journey','polar'].includes(tab)||(tab==='galaxy'&&object.galaxy)||(tab==='environment'&&object.environment_available)?tab:'film');
   if(!$('film-panel').hidden&&!reducedMotion.matches)$('viewer-video').play().catch(()=>{});}
-function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','sky'])$(panel+'-panel').hidden=panel!==name;history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
+function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','sky','polar'])$(panel+'-panel').hidden=panel!==name;history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
   if(name==='original'&&new URLSearchParams(location.search).has('discover')){
     $('discover-toggle').checked=true;
     loadDiscovery();
   }
+  if(name==='polar')openPolar(state.current.id);else closePolar();
   if(name==='environment')openEnvironment(state.current.id);
   if(name==='galaxy')openGalaxy();else stopGalaxy();
   if(name==='journey')loadJourney();else $('journey-video').pause();
@@ -234,7 +236,11 @@ async function refreshAdmin(){const response=await api('/api/admin/objects');sta
   }
 }
 function renderAdminList(){const list=$('admin-object-list');list.replaceChildren();for(const object of state.adminObjects){const button=node('button','admin-object'+(state.selected?.id===object.id?' selected':''),object.id.replace('_',' '));const name=local(object.metadata.name);if(name&&name!==object.id.replace('_',' '))button.append(node('span','admin-name',name));button.addEventListener('click',()=>selectObject(object.id));list.append(button);}}
-function renderJobs(){const list=$('job-list');list.replaceChildren();if(!state.jobs.length){list.append(node('p','small muted',t('noJobs')));return;}for(const job of state.jobs.slice(0,8)){const row=node('div','job-item');row.append(node('strong','',job.object_id.replace('_',' ')),node('span','',t(job.status)+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));if(['running','queued'].includes(job.status)){const p=node('progress');p.max=100;p.value=job.progress;row.append(p);}if(job.status==='failed'){row.append(node('p','small muted',t(job.error)));const retry=node('button','retry-button',t('retry'));retry.addEventListener('click',async()=>{try{await api(`/api/admin/objects/${job.object_id}/render`,{method:'POST',body:job.params});await refreshAdmin();}catch(e){toast(errorText(e));}});row.append(retry);}list.append(row);}}
+function renderJobs(){const list=$('job-list');list.replaceChildren();if(!state.jobs.length){list.append(node('p','small muted',t('noJobs')));return;}const active=j=>['running','queued','cancelling'].includes(j.status);for(const job of [...state.jobs.filter(active),...state.jobs.filter(j=>!active(j)).slice(0,8)]){const row=node('div','job-item');row.append(node('strong','',job.object_id.replace('_',' ')),node('span','',t(job.status)+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));if(['running','queued'].includes(job.status)){const p=node('progress');p.max=100;p.value=job.progress;row.append(p);
+    const cancel=node('button','button secondary cancel-render',t('cancelRender'));
+    cancel.addEventListener('click',async()=>{cancel.disabled=true;try{await api('/api/admin/jobs/'+job.id+'/cancel',{method:'POST'});await refreshAdmin();}catch(e){toast(errorText(e));cancel.disabled=false;}});
+    row.append(cancel);
+  }if(job.status==='failed'){row.append(node('p','small muted',t(job.error)));const retry=node('button','retry-button',t('retry'));retry.addEventListener('click',async()=>{try{await api(`/api/admin/objects/${job.object_id}/render`,{method:'POST',body:job.params});await refreshAdmin();}catch(e){toast(errorText(e));}});row.append(retry);}list.append(row);}}
 let points=[{zoom:1.08,focus_x:.5,focus_y:.5}],pointIndex=0;
 function savePoint(){
   const {zoom,focus_x,focus_y}=activeParams();

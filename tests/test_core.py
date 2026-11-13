@@ -193,7 +193,7 @@ def test_original_detail_at_zoom_target():
     np.testing.assert_allclose(scene.frame(0), scene.frame(1))
 
 
-def test_versions_remain_private_until_selected(app, images, monkeypatch):
+def test_latest_version_is_published_and_can_be_reselected(app, images, monkeypatch):
     store, queue = app.extensions["store"], app.extensions["jobs"]
     import_object(store, "NGC_7000", list(images.values()))
     def render(paths, target, params, progress):
@@ -212,11 +212,13 @@ def test_versions_remain_private_until_selected(app, images, monkeypatch):
     headers = sign_in(admin)
     prefix = "/api/admin/objects/NGC_7000/versions/"
     assert guest.get(prefix + ids[1] + "/movie").status_code == 401
-    assert guest.get("/media/NGC_7000/movie").data == b"1.08"
+    assert guest.get("/media/NGC_7000/movie").data == b"6.0"
     versions = admin.get("/api/admin/objects").json["objects"][0]["versions"]
-    assert [v["selected"] for v in versions] == [False, True]
+    assert [v["selected"] for v in versions] == [True, False]
     assert versions[0]["params"]["zoom"] == 6
     assert admin.get(versions[0]["url"]).data == b"6.0"
+    assert admin.put(prefix + ids[0] + "/select", headers=headers).status_code == 200
+    assert guest.get("/media/NGC_7000/movie").data == b"1.08"
     assert admin.put(prefix + ids[1] + "/select", headers=headers).status_code == 200
     assert guest.get("/media/NGC_7000/movie").data == b"6.0"
     assert "versions" not in guest.get("/api/objects").json["objects"][0]
