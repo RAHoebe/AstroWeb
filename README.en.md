@@ -41,6 +41,8 @@ Use PNG, JPEG or single-frame TIFF. The four images must have the same dimension
 | Original | The full photo, smooth zoom to 10× fitted size, drag-to-pan and original download. |
 | Sky journey | A flight through the sky panorama and detailed survey mosaics into the photograph. Gaia registration or verified FITS WCS determines its footprint. A known pointing alone gives a marker. Object labels are optional. |
 | Milky Way | An animated face-on map for recognised Galactic targets with a distance. Toggle object names, pause or scrub the zoom. For other confirmed Galactic objects, enter a distance in Studio. Positions are projected onto the Galactic plane. |
+| Hubble | Fly into a named structure in a registered optical image with a link to its source. |
+| Galaxy environment | Explore nearby galaxies and their documented relationships. |
 | Polar sky chart | A circular equatorial chart centred on the northern or southern celestial pole, with constellation lines, hour divisions and a zoom to the target. |
 | Skykaart | A reconstruction of the observing night using the time, coordinates and site, with stars, constellation lines and the target track. |
 
@@ -56,7 +58,7 @@ docker compose run --rm astroweb python -m astroweb admin
 docker compose up -d
 ```
 
-Make the `./data` bind mount writable by UID/GID `10001:10001`. For Synology, configure the host and volume in [compose.synology.yaml](compose.synology.yaml), use it alongside [compose.yaml](compose.yaml), and point the HTTPS reverse proxy to `127.0.0.1:8090`. The overlay enables secure session cookies. Deployment on physical Synology hardware remains unverified.
+Make the `./data` bind mount writable by UID/GID `10001:10001`. For Synology, configure the host and volume in [compose.synology.yaml](compose.synology.yaml), use it alongside [compose.yaml](compose.yaml), and point the HTTPS reverse proxy to `127.0.0.1:8090`. The overlay enables secure session cookies. Use a valid certificate for the public hostname. For an empty NAS installation, set the Studio password in the container before enabling the reverse proxy.
 
 ## Development
 
@@ -70,6 +72,28 @@ The frontend uses native JavaScript modules without a build step. Application co
 
 On **Original → Discover objects**, select a catalogue centre and use it as a named Studio zoom target. Markers track the original image during zoom and pan. With eight existing stops, choose the one to replace. See the [roadmap](docs/ROADMAP.md) for the remaining proposals.
 
-**Other wavelengths** compares the original photograph with a registered AllWISE W1/W2/W4 infrared mosaic and shares its zoom and pan. The first visit downloads survey tiles and caches the registered cutout. **Galaxy environment** maps the field, angular separations and documented relationships for recognised galaxies. **Suggest zoom route** previews a route based on catalogue centres and local image contrast. Applying it replaces the current draft route.
+**Other wavelengths** compares the original photograph with a registered AllWISE W1/W2/W4 infrared mosaic and shares its zoom and pan. The first visit downloads survey tiles and caches the registered cutout. **Galaxy environment** maps the field, angular separations and documented relationships for recognised galaxies. **Suggest zoom route** previews a route based on catalogue centres and local image contrast. Applying it replaces the current draft route. As soon as the upload preview appears, you can apply a contrast-based route to the first movie. Studio prefers the FITS `OBJECT` identifier and falls back to the filename prefix for empty or unrecognised values. When a position is available, the render queue prepares the sky journey before the new movie appears in the gallery.
 
-**[Personal sky atlas](http://127.0.0.1:8090/atlas)** maps published captures, plus unpublished captures when signed in. Select a footprint, open the original, or compare two outlines and posters. A pointing-only capture is shown as a cross. Upload another night or mosaic panel with the same catalogue ID and a unique session name in Studio. Previous and Next browse the gallery from the viewer. The sky surroundings and optional object labels remain visible through the final frame of the sky journey.
+**[Personal sky atlas](http://127.0.0.1:8090/atlas)** maps published captures, plus unpublished captures when signed in. Select a footprint, open the original, or compare two outlines and posters. A pointing-only capture is shown as a cross. Upload another night or mosaic panel with the same catalogue ID and an optional session name in Studio. Previous and Next browse the gallery from the viewer. The sky surroundings and optional object labels remain visible through the final frame of the sky journey.
+
+### M31 and stellar motion
+
+For a registered M31 capture, the **Hubble** tab offers the NGC 206 star cloud, M32 satellite galaxy and Andromeda nucleus when their target areas lie within the capture. Each 12-second flight moves from the original raster into the same stars in the PHAT/PHAST mosaic. A separate ground-based wide-field image by Robert Gendler shows the dust lanes. First use fetches the necessary zoom tiles and caches both tiles and film locally.
+
+The **Stellar time machine** on the polar chart spans 50,000 years on either side of the capture date (the present if unavailable). Try the Big Dipper or Southern Cross, move the time slider or play it automatically. The simulation uses constant HYG 4.1 Cartesian space velocities in fixed ICRS axes with constant magnitudes. Stars lacking a valid distance stay at their catalogue positions.
+
+### Other Hubble fields, atlas photos and Solar System captures
+
+For other registered captures, Hubble searches the ESA Hubble Science Archive for optical imaging products. AstroWeb validates each FITS cutout against the actual footprint and offers up to two overlapping fields. Each flight identifies the archive target and filter; a single-filter exposure is shown in grayscale. Availability depends on usable archive products and coverage. Results, cutouts and films are cached locally.
+
+The collection atlas and polar chart draw the original-orientation poster inside the measured corners. Toggle the photo layer or compare two capture thumbnails. Original displays the estimated distance and visible projected width and height in light-years at the target distance.
+
+Choose **Solar System** to upload the Sun, Moon or a planet as a single PNG, JPEG or TIFF with optional FITS. Film and Original are available; rendering uses pan/zoom. Moving targets have no fixed star-chart footprint. A recorded capture time allows an approximate geocentric distance. Surface dimensions require additional image calibration.
+
+### Multiple captures of one target
+
+Upload again with the same catalogue ID. Each capture retains its own originals, FITS, registration and movies. Use the FITS observation timestamp or enter the actual observing date at upload. The gallery and Previous/Next use one published capture per object, selected by observation date. Undated captures follow dated ones. Use the date selector in the viewer sidebar for another capture; it preserves the active tab where available. The collection atlas continues to list individual sessions.
+
+The date picker counts available captures. For NGC 7000, a Palomar/DSS2 colour image by Davide De Martin shows the Cygnus Wall and its bordering dark cloud. For IC 1396, a Pan-STARRS colour view shows the Elephant’s Trunk. The Hubble tab also links to the NASA Hubble Skymap. Hubble fields distinguish the target itself, documented regions and other pointings in the same capture. Partial overlaps are considered, and the flight ends on exposed detector pixels inside your own field.
+
+Renaming a capture to an existing object groups the captures in one date selector. Confirmed catalogue cross-identifications (e.g. Caldwell 20 / NGC 7000 and M31 / NGC 224) share a gallery card. Each capture keeps its own files, film versions and historic viewer URL.

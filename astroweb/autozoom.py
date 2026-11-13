@@ -5,11 +5,16 @@ from .discovery import discover
 
 
 def propose(store,record,count):
+    image=cv2.imread(str(store.path(record["poster"])),cv2.IMREAD_GRAYSCALE)
+    return propose_image(image, count, discover(store, record)["objects"])
+
+
+def propose_image(image, count, objects=()):
     if type(count) is not int or not 1<=count<=8:
         raise ValueError("invalid_parameters")
-    image=cv2.imread(str(store.path(record["poster"])),cv2.IMREAD_GRAYSCALE)
     scale=640/max(image.shape)
-    small=cv2.resize(image,None,fx=scale,fy=scale,interpolation=cv2.INTER_AREA).astype(np.float32)
+    size = tuple(max(1, round(n*scale)) for n in reversed(image.shape))
+    small=cv2.resize(image,size,interpolation=cv2.INTER_AREA).astype(np.float32)
     h,w=small.shape
     # Smooth point sources before ranking extended bright ridges, dust edges
     # and star concentrations. Separation is measured in the original aspect.
@@ -18,7 +23,7 @@ def propose(store,record,count):
     contrast=cv2.GaussianBlur(np.abs(blur-bg),(0,0),max(2,min(h,w)/35))
     spread=float(np.percentile(contrast,99))
     candidates=[]
-    for obj in discover(store,record)["objects"]:
+    for obj in objects:
         x,y=obj["x"],obj["y"]
         strength=contrast[min(h-1,int(y*h)),min(w-1,int(x*w))]
         candidates.append((float(strength)+spread,x,y,obj["id"],"catalog"))

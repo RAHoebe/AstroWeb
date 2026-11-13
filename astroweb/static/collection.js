@@ -1,3 +1,4 @@
+import {drawFootprintImage,posterURL} from './footprint.js';
 import {t,language,local,setLanguage} from './i18n.js';
 const $=id=>document.getElementById(id);
 const canvas=$('collection-sky'),c=canvas.getContext('2d');
@@ -25,6 +26,8 @@ function select(v){
   if(!pt){ra=180;dec=0;zoom=1;}
   render();
 }
+let imageFrame=0;
+function imageLoaded(){if(!imageFrame)imageFrame=requestAnimationFrame(()=>{imageFrame=0;draw();});}
 function draw(){
   const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;
   const dpr=Math.min(devicePixelRatio||1,2);
@@ -49,6 +52,14 @@ function draw(){
   for(let d=-90;d<=90;d+=step){const [,y]=xy([0,d]);if(y<0||y>h)continue;c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();c.fillText(d+'°',4,y-3);}
   c.strokeStyle='#708da245';for(const line of lines)path(line.map(id=>stars.get(id)).filter(Boolean),false);
   c.fillStyle='#e0e7f8';for(const star of stars.values()){const [x,y]=xy(star);if(x<0||x>w||y<0||y>h)continue;c.beginPath();c.arc(x,y,Math.max(.55,1.8-star[2]*.27),0,2*Math.PI);c.fill();}
+  if($('atlas-photos').checked){
+    for(const v of [...items].reverse().sort((a,b)=>Number(a===selected)-Number(b===selected))){
+      if(!v.field.corners)continue;
+      const [x]=xy(center(v));
+      const verts=v.field.corners.map(q=>{const [a,b]=xy(q);return [a+Math.round((x-a)/period)*period,b];});
+      for(const shift of [-period,0,period])drawFootprintImage(c,v.id,verts.map(([a,b])=>[a+shift,b]),imageLoaded);
+    }
+  }
   hit=[];const boxes=[];
   for(const v of [...items].sort((a,b)=>Number(b===selected)-Number(a===selected))){
     const pt=center(v);if(!pt)continue;
@@ -97,10 +108,8 @@ function render(){
     const choices=$('atlas-peer');choices.replaceChildren(new Option(t('chooseCapture'),''));
     for(const v of items.filter(v=>v!==selected))choices.add(new Option(label(v),v.id));
     choices.value=peer?.id||'';$('atlas-pair').replaceChildren();
-    if(peer){
-      for(const v of [selected,peer]){
-        const a=document.createElement('a');a.href='/viewer/'+encodeURIComponent(v.id)+'#original';const im=new Image();im.src='/media/'+encodeURIComponent(v.id)+'/poster';im.alt=label(v);const txt=document.createElement('span');txt.textContent=label(v);a.append(im,txt);$('atlas-pair').append(a);
-      }
+    for(const v of [selected,peer].filter(Boolean)){
+        const a=document.createElement('a');a.href='/viewer/'+encodeURIComponent(v.id)+'#original';const im=new Image();im.src=posterURL(v.id);im.alt=label(v);const txt=document.createElement('span');txt.textContent=label(v);a.append(im,txt);$('atlas-pair').append(a);
     }
   }
   draw();
@@ -116,6 +125,7 @@ $('atlas-peer').onchange=e=>{
   render();
 };
 function overview(){ra=180;dec=0;zoom=1;draw();}
+$('atlas-photos').onchange=draw;
 $('atlas-reset').onclick=overview;$('atlas-labels').onchange=draw;
 function setZoom(value,x=0,y=0){
   const next=clamp(value,1,64);
@@ -157,6 +167,7 @@ async function load(){
     const data=await resp.json();items=data.captures;stars=new Map(data.stars.map(([id,...values])=>[id,values]));lines=data.lines;
     const id=new URLSearchParams(location.search).get('capture');const initial=items.find(v=>v.id===id);
     if(initial){select(initial);return;}
+    selected=items[0]||null; // Show the first thumbnail without zooming away from the all-sky overview.
   }catch{failed=true;}
   render();
 }

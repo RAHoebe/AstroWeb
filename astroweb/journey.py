@@ -75,6 +75,8 @@ def fits_footprint(path, poster, width, height):
 
 
 def geometry(store, record):
+    if record.get("body"):
+        return {"kind":"missing"}
     digest = record.get("sha256", {}).get("final")
     solved = record.get("gaia") or {}
     if solved.get("status") != "solved" or solved.get("digest") != digest:
@@ -187,7 +189,7 @@ def landing(quad, width, height, progress):
                       + (1-progress)*center + progress*np.array([(WIDTH-1)/2,(HEIGHT-1)/2])), mirrored
 
 
-def render_journey(store, record, field, output, plates):
+def render_journey(store, record, field, output, plates, progress=None):
     from .survey import blend_details, survey_for
     credit = "Pan-STARRS1 / CDS" if survey_for(field) == "PanSTARRS" else "DSS2 / STScI / CDS"
     has_frame = "corners" in field
@@ -208,6 +210,8 @@ def render_journey(store, record, field, output, plates):
                                creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
     try:
         for frame in range(FRAMES):
+            if progress and frame % 12 == 0:
+                progress(frame / FRAMES)
             t = frame/(FRAMES-1)
             scale, offset = camera_at(t, points, start_scale, end_scale)
             texture = overview if scale<800 else atlas
@@ -277,10 +281,11 @@ def render_journey(store, record, field, output, plates):
         if process.poll() is None:
             process.kill()
             process.wait()
+        process.stdin.close()
         process.stderr.close()
 
 
-def movie(store, record, field):
+def movie(store, record, field, progress=None):
     from .survey import survey_for
     survey = survey_for(field)
     digest = hashlib.sha256(json.dumps(["atlas-v8-surroundings",survey,record.get("sha256",{}).get("final"),field],
@@ -297,13 +302,15 @@ def movie(store, record, field):
         fallback = target.with_suffix(".overview.mp4")
         if fallback.is_file() and time.time()-fallback.stat().st_mtime < 3600:
             return fallback
+        if progress:
+            progress(0)
         from .survey import detail_plates
         meridian, points, _, _ = field_projection(field)
         plates = detail_plates(store, points.mean(axis=0), meridian, np.ptp(points,axis=0), survey)
         folder.mkdir(parents=True,exist_ok=True)
         temp = folder / f"{uuid.uuid4().hex}.part.mp4"
         try:
-            render_journey(store,record,field,temp,plates)
+            render_journey(store,record,field,temp,plates,progress)
             output = target if len(plates)==2 else fallback
             os.replace(temp,output)
             return output

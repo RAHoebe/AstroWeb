@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import requests
 
 from .store import now
+from .solar import BODIES,body_metadata
 
 NASA_NGC = "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-20/"
 NASA_IC = "https://science.nasa.gov/photojournal/blowin-in-the-stellar-wind/"
@@ -86,6 +87,8 @@ def known_target(name):
 
 
 def initial_metadata(identifier):
+    if identifier in BODIES:
+        return {**body_metadata(identifier), "updated_at":now()}
     seed = SEEDS.get(identifier) or known_target(identifier)
     if seed:
         result = copy.deepcopy(seed)
@@ -105,7 +108,7 @@ def initial_metadata(identifier):
 
 def renamed_metadata(identifier):
     result = initial_metadata(identifier)
-    if identifier in SEEDS:
+    if identifier in SEEDS or identifier in BODIES:
         return result
     try:
         result = refresh_metadata(result)

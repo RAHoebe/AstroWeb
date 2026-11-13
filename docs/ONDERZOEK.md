@@ -15,7 +15,7 @@ Onderzocht op 13 november 2026. Doel: een zelfstandige lokale/NAS-app die de bes
 | [Parallax Designer](https://github.com/robert-hoffmann/parallax-designer) | MIT | Visueel bewerken van meerdere lagen en HTML-export; relevant voor een latere tijdlijn of handmatige dieptelagen. |
 | [Three.js](https://github.com/mrdoob/three.js) | MIT | Mogelijke live WebGL-preview. Voor opgeslagen NAS-video's is de huidige CPU-renderer eenvoudiger te beheren. |
 | [RaspAstroDisplay](https://github.com/RAHoebe/RaspAstroDisplay) | MIT voor code; aparte cataloguslicenties | Concrete hergebruikte catalogusdata, cataloguslezer, sterrennamen en het principe van een vastgelegde opnamenacht. De oorspronkelijke dashboard-/Skyfield-app wordt niet als geheel overgenomen. |
-| LeefRadar, lokale checkout | Python/Flask, Docker en Synology-configuratie geïnspecteerd | Zelfde soort zelfstandige service met duurzame datamap, loopback-poort en NAS-reverseproxy. De GitHub-connector gaf voor de opgegeven repository geen toegang; er zijn geen privésleutels of lokale configuratiegeheimen ingelezen. |
+| LeefRadar, lokale checkout | Python/Flask, Docker en Synology-configuratie geïnspecteerd | Zelfde soort zelfstandige service met duurzame datamap, loopback-poort en NAS-reverseproxy. |
 
 ## Gekozen eerste renderer
 

@@ -26,7 +26,7 @@ Open de [lokale galerij](http://127.0.0.1:8090/). Kies [Studio](http://127.0.0.1
 
 ## Je eerste film
 
-1. Kies **Nieuwe film** en geef de opname een catalogus-ID, bijvoorbeeld `NGC_7000`.
+1. Kies **Nieuwe film** en selecteer je bestanden. Controleer de voorgestelde object-ID uit FITS of de bestandsnaam.
 2. Voeg de vier uitgelijnde AstroWizard-exports toe. Een bijpassende final-FITS levert onder meer het richtpunt en de opnametijd.
 
    ```text
@@ -50,6 +50,8 @@ PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afme
 | Origineel | De volledige foto. Zoom met het muiswiel of de schuifregelaar tot 10× de ingepaste weergave, versleep de foto of download het origineel. |
 | Hemelreis | Een vlucht van het hemelpanorama via fijnere hemelmozaïeken naar je foto. Gaia-matching of een bevestigde FITS-WCS levert het kader. Bij alleen een richtpunt zie je een markering. Objectnamen zijn apart inschakelbaar. |
 | Melkweg | Een geanimeerd bovenaanzicht voor herkende Melkwegobjecten met een afstand. Toon objectnamen, pauzeer of verplaats de tijdschuif. Voor andere bevestigde Melkwegobjecten kun je de afstand in Studio invullen. De kaart projecteert de posities op het galactische vlak. |
+| Hubble | Vlieg vanuit je foto naar een benoemde structuur in een uitgelijnd optisch archiefbeeld. Bij elke bestemming staan de beeldbron en het instrument of archief. |
+| Omgeving | Verken naburige sterrenstelsels en hun bekende relaties. |
 | Poolkaart | Cirkelvormige sterrenkaart rond de noordelijke of zuidelijke hemelpool, met sterrenbeeldlijnen, uurverdeling en een instelbare zoom naar het doel. |
 | Skykaart | Een kaart van de echte opnamenacht op basis van tijd, positie en locatie, met sterren, sterrenbeeldlijnen en de baan van het doel. |
 
@@ -67,7 +69,7 @@ docker compose run --rm astroweb python -m astroweb admin
 docker compose up -d
 ```
 
-De bindmount `./data` moet schrijfbaar zijn voor UID/GID `10001:10001`. Voor Synology bevat [compose.synology.yaml](compose.synology.yaml) een overlay met HTTPS-cookies. Pas hostnaam en datamap aan en laat de HTTPS-reverseproxy doorsturen naar `127.0.0.1:8090`. Gebruik beide composebestanden samen. De installatie op een fysieke Synology NAS is nog niet geverifieerd.
+De bindmount `./data` moet schrijfbaar zijn voor UID/GID `10001:10001`. Voor Synology bevat [compose.synology.yaml](compose.synology.yaml) een overlay met HTTPS-cookies. Pas hostnaam en datamap aan en laat de HTTPS-reverseproxy doorsturen naar `127.0.0.1:8090`. Gebruik beide composebestanden samen. Gebruik een geldig certificaat voor de publieke hostnaam. Stel bij een lege NAS-installatie het Studio-wachtwoord via de container in voordat je de proxy opent.
 
 ## Ontwikkelen
 
@@ -79,8 +81,30 @@ node --experimental-vm-modules tools/check-frontend.mjs
 
 De frontend bestaat uit native JavaScript-modules en heeft geen buildstap. De applicatiecode valt onder de [MIT-licentie](LICENSE). Voor meegeleverde astronomische data en beeldmateriaal gelden de [afzonderlijke licenties](THIRD_PARTY.md).
 
-Op **Origineel → Ontdek objecten** kun je catalogusobjecten aanklikken en als benoemd zoompunt naar Studio sturen. De markeringen volgen het oorspronkelijke raster bij zoomen en verslepen. Bij acht bestaande punten kies je welk punt je vervangt. De [ontwikkelagenda](docs/ROADMAP.md) bewaart de volgende vier ideeën.
+Op **Origineel → Ontdek objecten** kun je catalogusobjecten aanklikken en als benoemd zoompunt naar Studio sturen. De markeringen volgen het oorspronkelijke raster bij zoomen en verslepen. Bij acht bestaande punten kies je welk punt je vervangt. De [ontwikkelagenda](docs/ROADMAP.md) toont de beschikbare functies en de geplande rondleiding met ondertiteling.
 
-**Ander licht** vergelijkt onder Origineel je opname met een astrometrisch uitgelijnde AllWISE-infraroodkaart (W1, W2 en W4). Zoom en pan blijven gekoppeld. De eerste keer worden surveytegels opgehaald; het samengestelde beeld wordt lokaal bewaard. Het tabblad **Omgeving** toont voor herkende sterrenstelsels een hemelkaart met opnamekader, hoekafstanden, bronlinks en gedocumenteerde relaties. In Studio toont **Automatische zoomroute** een voorstel op basis van cataloguscentra en beeldcontrast. Pas het voorstel toe om de huidige route te vervangen.
+**Ander licht** vergelijkt onder Origineel je opname met een astrometrisch uitgelijnde AllWISE-infraroodkaart (W1, W2 en W4). Zoom en pan blijven gekoppeld. De eerste keer worden surveytegels opgehaald; het samengestelde beeld wordt lokaal bewaard. Het tabblad **Omgeving** toont voor herkende sterrenstelsels een hemelkaart met opnamekader, hoekafstanden, bronlinks en gedocumenteerde relaties. In Studio toont **Automatische zoomroute** een voorstel op basis van cataloguscentra en beeldcontrast. Pas het voorstel toe om de huidige route te vervangen. Zodra het uploadvoorbeeld zichtbaar is, kun je al een route op basis van beeldcontrast toepassen op de eerste film. Studio neemt de object-ID bij voorkeur uit het FITS-veld `OBJECT`. Bij een lege of onbekende waarde gebruikt Studio de bestandsnaamprefix. De renderwachtrij bereidt de Hemelreis voor zodra de positie bekend is, vóór de nieuwe film in de galerij verschijnt.
 
-**[Persoonlijke hemelatlas](http://127.0.0.1:8090/atlas)** toont alle gepubliceerde opnamen op één sterrenkaart. Na inloggen zie je ook onuitgegeven opnamen. Kies een opname om in te zoomen, open het origineel of vergelijk twee kaders en posters. Zonder gemeten kader verschijnt een richtpunt als dat bekend is. Voor een tweede nacht of mozaïekpaneel vul je in Studio bij upload dezelfde catalogus-ID en een unieke sessienaam in. In de viewer blader je met Vorige en Volgende door de galerij. De hemelomgeving en optionele objectlabels blijven zichtbaar aan het einde van de Hemelreis.
+**[Persoonlijke hemelatlas](http://127.0.0.1:8090/atlas)** toont alle gepubliceerde opnamen op één sterrenkaart. Na inloggen zie je ook onuitgegeven opnamen. Kies een opname om in te zoomen, open het origineel of vergelijk twee kaders en posters. Zonder gemeten kader verschijnt een richtpunt als dat bekend is. Voor een tweede nacht of mozaïekpaneel vul je in Studio bij upload dezelfde catalogus-ID in, eventueel met een sessienaam. In de viewer blader je met Vorige en Volgende door de galerij. De hemelomgeving en optionele objectlabels blijven zichtbaar aan het einde van de Hemelreis.
+
+### M31 en de sterren door de tijd
+
+Bij een geregistreerde opname van M31 kun je via **Hubble** de blauwe sterwolk NGC 206, satellietstelsel M32 of de kern van Andromeda kiezen. De vlucht begint op het eigen origineel en zoomt in op dezelfde positie in het PHAT/PHAST-mozaïek. Een keuze verschijnt wanneer het doelgebied in je opname valt. Voor de stofbanden is er ook een grondopname van Robert Gendler. AstroWeb haalt de benodigde zoomtegels bij de eerste weergave op en bewaart ze samen met de 12-secondenfilm lokaal.
+
+De **Sterrentijdmachine** op de Poolkaart toont maximaal 50.000 jaar vóór en na de opnamedatum (of vandaag als de datum ontbreekt). Kies bijvoorbeeld Grote Beer of Zuiderkruis en schuif door de tijd of kies Tijd afspelen. De sporen volgen een model met constante cartesische snelheid uit HYG 4.1. Het coördinatenraster en de helderheden blijven vast; sterren zonder geldige afstand blijven op hun cataloguspositie.
+
+### Nevelvelden, de atlas en zonnestelselopnamen
+
+Bij andere geregistreerde opnamen zoekt **Hubble** naar openbare optische beeldvelden in het ESA Hubble Science Archive. AstroWeb controleert de hemelcoördinaten van de FITS-uitsnede en biedt maximaal twee overlappende velden aan. Archiefdoel en filter staan bij de film. Een opname in één filter wordt in grijstinten getoond. Beschikbaarheid hangt af van de dekking en van geschikte, uitleesbare archiefproducten. Catalogusresultaten, beeldvelden en films worden lokaal gecachet.
+
+De hemelatlas en Poolkaart tekenen de ongedraaide poster tussen de gemeten fotohoeken. Je kunt deze laag uitschakelen. Selecteer één of twee opnamen in de hemelatlas om de bijbehorende thumbnails te bekijken. Het tabblad Origineel toont de geschatte afstand en de zichtbare breedte en hoogte in lichtjaren op de afstand van het doel.
+
+Kies bij upload **Zonnestelsel** voor de zon, maan of een planeet. Eén PNG, JPEG of TIFF is voldoende; een FITS met opnamedatum is optioneel. De beschikbare weergaven zijn Film en Origineel; de film gebruikt pan/zoom. Er wordt geen vaste sterpositie aan het bewegende doel toegekend. Met een bekende opnametijd kan de viewer de geocentrische afstand schatten. Een oppervlaktemaat vraagt aanvullende beeldkalibratie.
+
+### Meerdere opnamen per object
+
+Upload een volgende nacht met dezelfde catalogus-ID. Een nieuwe opname heeft eigen originelen, FITS, uitlijning en filmversies. Gebruik de FITS-datum of vul bij upload een opnamedatum in (bijvoorbeeld de echte opnamenacht van een samengestelde stack). De galerij en de knoppen Vorige/Volgende gebruiken één gepubliceerde opname per object: de recentste opnamedatum. Een onbekende datum komt achter bekende datums. Bij Opnamedatum zie je het aantal beschikbare opnamen en kun je een eerdere opname kiezen; het actieve tabblad blijft waar mogelijk behouden. Alle sessies blijven afzonderlijk zichtbaar in de hemelatlas.
+
+Voor NGC 7000 toont de reis de Cygnusmuur en de donkere stofwolk in het Palomar/DSS2-kleurenmozaïek van Davide De Martin. Voor IC 1396 is de Olifantenslurf beschikbaar in Pan-STARRS-kleur. De NASA Hubble Skymap is vanuit dit tabblad te openen. De Hubble-keuzelijst onderscheidt opnamen van het doel, gedocumenteerde deelgebieden en andere archiefvelden in dezelfde kijkrichting. De zoekactie neemt ook gedeeltelijk overlappende beelden mee; alleen werkelijk belichte pixels binnen je eigen foto kunnen de bestemming van de vlucht vormen.
+
+Bij **Object-ID wijzigen** voegt een bestaande ID de opname toe aan de betreffende datumlijst. Bevestigde catalogusaliassen worden gegroepeerd, bijvoorbeeld C 20 / Caldwell 20 / NGC 7000 en M31 / NGC 224. Je bestanden, filmversies en de oude viewerlink blijven bij de oorspronkelijke opname horen.

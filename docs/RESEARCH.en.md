@@ -15,7 +15,7 @@ Reviewed 13 November 2026. Goal: a standalone local/NAS application using existi
 | [Parallax Designer](https://github.com/robert-hoffmann/parallax-designer) | MIT | A visual multilayer editor, relevant for future manual depth layers or camera editing. |
 | [Three.js](https://github.com/mrdoob/three.js) | MIT | Possible future WebGL preview; the current stored-film workflow uses a CPU renderer for portability. |
 | [RaspAstroDisplay](https://github.com/RAHoebe/RaspAstroDisplay) | MIT code, separate data rights | Actual reuse of catalog data, adapted reader, star names and the fixed observation-night principle. The original dashboard/Skyfield application is not imported wholesale. |
-| LeefRadar local checkout | Flask/Docker/Synology files inspected | Portable service with durable state, loopback port and NAS HTTPS reverse proxy. The connector could not access the supplied GitHub repository; no local secret configuration was read. |
+| LeefRadar local checkout | Flask/Docker/Synology files inspected | Portable service with durable state, loopback port and NAS HTTPS reverse proxy. |
 
 ## Initial renderer decision
 

@@ -2,9 +2,11 @@
 import json
 from contextlib import contextmanager
 import sqlite3
+import uuid
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from .catalogue import canonical, group_id
 
 
 def now():
@@ -69,24 +71,48 @@ class Store:
         return row[0] if row else identifier
 
     def rename_object(self, old, new, metadata, catalog_id=None):
+        """Move one capture to a catalogue group without overwriting another capture."""
         with self.lock, self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT record FROM objects WHERE id=?", (old,)).fetchone()
             if not row:
                 raise ValueError("object_not_found")
             record = json.loads(row[0])
-            if old == new:
+            target = canonical(catalog_id or new)
+            if group_id(record) == target:
                 return record
-            occupied = db.execute("SELECT 1 FROM objects WHERE id=? UNION ALL SELECT 1 FROM object_aliases WHERE alias=? AND current_id!=?", (new,new,old)).fetchone()
-            if occupied:
-                raise ValueError("object_exists")
+            # A historic URL for another capture leads to its current group.
+            alias = db.execute("SELECT current_id FROM object_aliases WHERE alias=?", (target,)).fetchone()
+            if alias and alias[0] != old:
+                owner = db.execute("SELECT record FROM objects WHERE id=?", (alias[0],)).fetchone()
+                if owner:
+                    destination = json.loads(owner[0])
+                    target = group_id(destination)
+            for (raw,) in db.execute("SELECT record FROM objects WHERE id!=? ORDER BY (id=?) DESC,rowid",(old,target)):
+                destination=json.loads(raw)
+                if group_id(destination)==target:
+                    metadata=destination.get("metadata",metadata)
+                    break
+            occupied = db.execute("SELECT 1 FROM objects WHERE id=? AND id!=?",(target,old)).fetchone()
+            # Suffix is internal. The catalogue ID shown to the user stays identical.
+            if occupied or record.get("catalog_id") or catalog_id:
+                suffix=old.partition("~")[2] or uuid.uuid4().hex[:12]
+                new=target+"~"+suffix
+                while db.execute("SELECT id FROM objects WHERE id=? UNION ALL SELECT alias FROM object_aliases WHERE alias=? AND current_id!=?",(new,new,old)).fetchone():
+                    new=target+"~"+uuid.uuid4().hex[:12]
+            else:
+                new=target
             jobs = [json.loads(r[0]) for r in db.execute("SELECT record FROM jobs WHERE json_extract(record,'$.object_id')=?", (old,))]
             if any(j["status"] in ("running","queued","cancelling") for j in jobs) or (record.get("gaia") or {}).get("status") in ("pending","running"):
                 raise ValueError("rename_busy")
             record.setdefault("storage_id", old)
             record.update(id=new,metadata=metadata)
-            if catalog_id:
-                record["catalog_id"] = catalog_id
+            if record.get("body"):
+                record["body"]=target
+            if new != target:
+                record["catalog_id"] = target
+            else:
+                record.pop("catalog_id",None)
             db.execute("UPDATE objects SET id=?,record=? WHERE id=?", (new,json.dumps(record),old))
             for job in jobs:
                 job["object_id"] = new

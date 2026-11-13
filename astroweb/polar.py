@@ -1,6 +1,7 @@
 """Equatorial pole chart in ICRS, independent of observing site and date."""
 import json
 from functools import lru_cache
+from datetime import datetime, timezone
 
 import numpy as np
 from astropy.coordinates import SkyCoord
@@ -25,7 +26,8 @@ def chart_catalog():
            if s["magnitude"]<=5 or s["hip"] in endpoints or s["hip"]==104382]
     objects=[{k:o[k] for k in ("ra","dec","nl","en","id")} for o in landmarks()
              if o["id"].startswith("M") and o["id"][1:].isdigit()]
-    return {"stars":stars,"groups":groups,"objects":objects}
+    motion=json.loads((CATALOG/"stellar-motion.json").read_text(encoding="utf8"))
+    return {"stars":stars,"groups":groups,"objects":objects,"motion":motion}
 
 
 def chart(store, record):
@@ -40,4 +42,9 @@ def chart(store, record):
     else:
         center=field.get("center")
     target={"ra":center[0],"dec":center[1],"name":record["metadata"]["name"]} if center else None
-    return {**chart_catalog(),"target":target,"corners":corners}
+    stamp=(record.get("observation") or {}).get("date_obs")
+    when=datetime.fromisoformat(stamp.replace("Z","+00:00")) if stamp else datetime.now(timezone.utc)
+    start=datetime(when.year,1,1,tzinfo=when.tzinfo)
+    end=datetime(when.year+1,1,1,tzinfo=when.tzinfo)
+    epoch=when.year+(when-start)/(end-start)
+    return {**chart_catalog(),"capture":record["id"],"target":target,"corners":corners,"epoch":epoch,"capture_epoch":bool(stamp)}

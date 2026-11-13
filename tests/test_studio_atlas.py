@@ -34,7 +34,7 @@ def test_points_in_order_and_loop(count):
     np.testing.assert_allclose(scene.camera_pose(.5,1),[-.3,.1,3,.35])
 
 
-def test_rename_keeps_storage_jobs_aliases_and_rejects_collisions(tmp_path):
+def test_rename_keeps_storage_jobs_and_aliases(tmp_path):
     store = Store(tmp_path)
     old, new = "HIP_106890", "IC_1396"
     store.put("objects",old,{"id":old,"metadata":initial_metadata(old),"video":"objects/HIP_106890/movies/a.mp4"})
@@ -46,9 +46,6 @@ def test_rename_keeps_storage_jobs_aliases_and_rejects_collisions(tmp_path):
     assert result["storage_id"] == old and result["video"].startswith("objects/HIP_106890/")
     assert result["metadata"]["target"] == "IC 1396" and "HIP" not in result["metadata"]["description"]["en"]
     assert store.current_id(old) == new and store.get("jobs","a")["object_id"] == new
-    store.put("objects","M_42",{"id":"M_42"})
-    with pytest.raises(ValueError,match="object_exists"):
-        store.rename_object(new,"M_42",{})
     store.rename_object(new,old,initial_metadata(old))
     assert store.current_id(new) == old and store.current_id(old) == old
 

@@ -14,13 +14,13 @@
     <section class="collection-chart"><div id="atlas-stage"><canvas id="collection-sky" role="img" data-i18n-aria="collectionAtlas"></canvas></div>
       <div class="atlas-controls"><button id="atlas-reset" type="button" class="button secondary" data-i18n="allSky">Hele hemel</button>
         <label><span data-i18n="atlasZoom">Kaartzoom</span> <input id="atlas-scale" type="range" min="0" max="6" step=".025" value="0"></label>
-        <label class="atlas-toggle"><input id="atlas-labels" type="checkbox" checked><span data-i18n="objectNames">Objectnamen</span></label></div>
+        <label class="atlas-toggle"><input id="atlas-photos" type="checkbox" checked><span data-i18n="mapPhotos">Foto’s</span></label><label class="atlas-toggle"><input id="atlas-labels" type="checkbox" checked><span data-i18n="objectNames">Objectnamen</span></label></div>
       <p class="atlas-notes" data-i18n="collectionLegend">Omtrek: gemeten beeldveld. Kruis: alleen richtpunt. Zoom met het muiswiel of selecteer een opname.</p>
     </section>
     <aside class="collection-index"><h2 data-i18n="captures">Opnamen</h2><p id="atlas-status" role="status"></p>
       <div id="atlas-list"></div><section id="atlas-detail" hidden>
       <h3 id="atlas-title"></h3><p id="atlas-meta"></p><a id="atlas-open" class="button primary" data-i18n="viewCapture">Bekijk opname</a>
-      <div id="atlas-compare" hidden><label for="atlas-peer" data-i18n="compareField">Vergelijk met een andere opname</label><select id="atlas-peer"></select><div id="atlas-pair"></div></div>
+      <div id="atlas-compare" hidden><label for="atlas-peer" data-i18n="compareField">Vergelijk met een andere opname</label><select id="atlas-peer"></select></div><div id="atlas-pair"></div>
       </section>
     </aside>
   </main>

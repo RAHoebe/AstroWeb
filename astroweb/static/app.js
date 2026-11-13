@@ -29,7 +29,7 @@ async function api(url,options={}){
 function message(id,text,error=false){const target=$(id);target.textContent=text;target.classList.toggle('error',error);}
 let toastTimer;function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function setBusy(value){state.busy=value;for(const id of ['render-button','preview-button','fetch-nasa'])$(id).disabled=value;}
-function applyLanguage(value){setLanguage(value);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
+function applyLanguage(value){setLanguage(value);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
 
 async function loadGallery(){try{state.objects=(await api('/api/objects')).objects;buildGallery();}catch(e){$('gallery-grid').replaceChildren(node('div','empty-state',errorText(e)));}}
@@ -46,7 +46,7 @@ function buildGallery(){
     const top=node('div','card-topline');top.append(node('span','media-badge',t('cinematic')+' · '+object.params.duration+'s'),node('span','card-number',String(index+1).padStart(2,'0')));
     const bottom=node('div','card-bottomline');bottom.append(node('span','',t('hoverPreview')),node('span','card-open','↗'));media.append(image,video,top,node('span','card-play','▶'),bottom);
     const info=node('div','card-info');const category=node('div','card-type');category.append(node('span','',captureLabel(object)),node('span','',local(object.metadata.type)));info.append(category,node('h3','',local(object.metadata.name)),node('p','',local(object.metadata.summary)));
-    const tags=node('div','card-tags');const details=[local(object.metadata.constellation),object.observation?.telescope,duration(object.observation?.integration)].filter(Boolean);details.forEach(text=>{const tag=node('span');tag.append(node('i'),document.createTextNode(text));tags.append(tag);});info.append(tags);card.append(media,info);
+    const tags=node('div','card-tags');const details=[object.capture_date?object.capture_date.slice(0,10):'',local(object.metadata.constellation),object.observation?.telescope,duration(object.observation?.integration)].filter(Boolean);details.forEach(text=>{const tag=node('span');tag.append(node('i'),document.createTextNode(text));tags.append(tag);});info.append(tags);card.append(media,info);
     async function play(){if(reducedMotion.matches||document.hidden)return;if(!video.src)video.src=object.preview||object.video;try{await video.play();if(card.matches(':hover')||document.activeElement===card)card.classList.add('playing');else video.pause();}catch{card.classList.remove('playing');}}
     function pause(){video.pause();card.classList.remove('playing');}
     card.addEventListener('pointerenter',event=>{if(event.pointerType!=='touch')play();});card.addEventListener('pointerleave',pause);card.addEventListener('focus',play);card.addEventListener('blur',pause);card.addEventListener('click',pause);card.addEventListener('keydown',event=>{if(event.key===' '){event.preventDefault();card.click();}});grid.append(card);observer.observe(card);
@@ -71,8 +71,29 @@ function renderNeighbours(){
     a.replaceChildren(node('small','',t(caption)),node('strong','',captureLabel(obj)),node('span','',local(obj.name)));
   }
 }
+function renderCaptureDates(object){
+  const select=$('capture-date-picker'),captures=object.captures||[];
+  $('capture-total').textContent=' ('+captures.length+' '+t(captures.length===1?'oneCapture':'manyCaptures')+')';
+  select.replaceChildren();
+  for(const [i,v] of captures.entries()){
+    let text=t('unknownDate');
+    if(v.date){
+      const dayOnly=v.date.length===10;
+      const opts=dayOnly?{dateStyle:'long'}:{dateStyle:'medium',timeStyle:'short'};
+      const date=new Date(dayOnly?v.date+'T00:00:00Z':v.date);
+      if(Number.isFinite(date.getTime()))text=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{...opts,timeZone:'UTC'}).format(date)+(dayOnly?'':' UTC');
+    }
+    const duplicate=captures.filter(o=>o.date===v.date&&o.session_name===v.session_name).length>1;
+    const session=[v.session_name,duplicate?t('captureNumber')+' '+(i+1):''].filter(Boolean).join(' · ');
+    select.add(new Option([text,session,v.published?'':t('unpublished')].filter(Boolean).join(' · '),v.id));
+  }
+  select.value=object.id;select.disabled=captures.length<2;
+}
+$('capture-date-picker').addEventListener('change',e=>{
+  location.assign('/viewer/'+encodeURIComponent(e.target.value)+location.hash);
+});
 function renderViewerText(){
-  renderNeighbours();
+  renderNeighbours();renderCaptureDates(state.current);
   const object=state.current,m=object.metadata,obs=object.observation||{};document.title=local(m.name)+' · AstroWeb';$('viewer-id').textContent=captureLabel(object)+' · '+local(m.type);$('viewer-title').textContent=local(m.name);$('viewer-description').textContent=local(m.description);$('viewer-original').alt=local(m.name);$('viewer-facts').replaceChildren();
   fact($('viewer-facts'),t('constellation'),local(m.constellation));fact($('viewer-facts'),t('catalogTarget'),m.target);fact($('viewer-facts'),t('integration'),duration(obs.integration));fact($('viewer-facts'),t('telescope'),obs.telescope);fact($('viewer-facts'),t('frames'),obs.frames);fact($('viewer-facts'),t('singleExposure'),obs.exposure?obs.exposure+' s':'');fact($('viewer-facts'),t('filter'),obs.filter);
   if(obs.date_obs){const stamp=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{dateStyle:'medium',timeStyle:'short',timeZone:obs.timezone||'UTC'}).format(new Date(obs.date_obs));fact($('viewer-facts'),t('observedAt'),stamp+' · '+(obs.timezone||'UTC'));}
@@ -85,6 +106,11 @@ async function loadViewer(){
   try{object=await api('/api/objects/'+location.pathname.split('/').pop());}
   catch(e){$('viewer-title').textContent=errorText(e);return;}
   state.current=object;
+  $('hubble-tab').hidden=!object.hubble_available;
+  if(object.body){
+    for(const tab of document.querySelectorAll('[data-view]'))tab.hidden=!['film','original'].includes(tab.dataset.view);
+    for(const id of ['ir-toggle','discover-toggle'])$(id).closest('label').hidden=true;
+  }
   setComparisonObject(object.id);
   $('environment-tab').hidden=!object.environment_available;
   configureGalaxy(object.galaxy,object.metadata.name);
@@ -93,9 +119,9 @@ async function loadViewer(){
   $('download-original').href=object.final+'?download=1';
   renderViewerText();
   const tab=location.hash.slice(1);
-  selectTab(['original','sky','journey','polar'].includes(tab)||(tab==='galaxy'&&object.galaxy)||(tab==='environment'&&object.environment_available)?tab:'film');
+  selectTab(object.body?(tab==='original'?'original':'film'):['original','sky','journey','polar'].includes(tab)||(tab==='galaxy'&&object.galaxy)||(tab==='environment'&&object.environment_available)||(tab==='hubble'&&object.hubble_available)?tab:'film');
   if(object.video&&!$('film-panel').hidden&&!reducedMotion.matches)$('viewer-video').play().catch(()=>{});}
-function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','sky','polar'])$(panel+'-panel').hidden=panel!==name;history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
+function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','hubble','sky','polar'])$(panel+'-panel').hidden=panel!==name;history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
   const object=state.current;
   if(name==='original'&&!$('viewer-original').hasAttribute('src')){
     $('viewer-original').src=object.original_view||object.final;
@@ -104,12 +130,13 @@ function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{
     $('viewer-video').poster=object.poster;
     $('viewer-video').src=object.video;
   }
-  if(name==='original'&&new URLSearchParams(location.search).has('discover')){
+  if(name==='original'&&!object.body&&new URLSearchParams(location.search).has('discover')){
     $('discover-toggle').checked=true;
     loadDiscovery();
   }
   if(name==='polar')openPolar(state.current.id);else closePolar();
   renderNeighbours();
+  if(name==='hubble')openHubble();else $('hubble-video').pause();
   if(name==='environment')openEnvironment(state.current.id);
   if(name==='galaxy')openGalaxy();else stopGalaxy();
   if(name==='journey')loadJourney();else $('journey-video').pause();
@@ -122,11 +149,20 @@ window.addEventListener('hashchange',()=>{
 document.querySelectorAll('[data-view]').forEach(tab=>{tab.addEventListener('click',()=>selectTab(tab.dataset.view));tab.addEventListener('keydown',event=>{if(!['ArrowRight','ArrowLeft','Home','End'].includes(event.key))return;event.preventDefault();const tabs=[...document.querySelectorAll('[data-view]:not([hidden])')],index=tabs.indexOf(tab);const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].focus();selectTab(tabs[next].dataset.view);});});
 const originalStage=$('original-stage'),originalImage=$('viewer-original');
 let photoZoom=1, photoX=0, photoY=0, photoDrag=null;
+function showPhysicalScale(w,h,width,height){
+  const measure=state.current?.physical,source=$('physical-source');
+  if(!measure)return;
+  const fmt=n=>n.toLocaleString(language,{maximumSignificantDigits:3})+' '+t('lightYears');
+  source.hidden=!measure.source;if(measure.source)source.href=measure.source;
+  $('physical-distance').textContent=measure.distance_ly?t('envDistance')+' ≈ '+fmt(measure.distance_ly)+(measure.distance_km?' ('+measure.distance_km.toLocaleString(language,{maximumSignificantDigits:4})+' km)':''):t('scaleUnknown');
+  $('physical-size').textContent=measure.width_ly&&measure.height_ly?t('visibleScale')+' · '+t('fieldWidth')+' ≈ '+fmt(measure.width_ly*Math.min(1,w/width))+' · '+t('fieldHeight')+' ≈ '+fmt(measure.height_ly*Math.min(1,h/height)):measure.distance_ly?t('scaleUnmeasured'):'';
+}
 function layoutOriginal(){
   const w=originalStage.clientWidth, h=originalStage.clientHeight;
   if(!w||!h||!originalImage.naturalWidth)return;
   const fit=Math.min(w/originalImage.naturalWidth,h/originalImage.naturalHeight);
   const width=originalImage.naturalWidth*fit*photoZoom,height=originalImage.naturalHeight*fit*photoZoom;
+  showPhysicalScale(w,h,width,height);
   const limitX=Math.max(0,(width-w)/2),limitY=Math.max(0,(height-h)/2);
   photoX=clamp(photoX,-limitX,limitX);photoY=clamp(photoY,-limitY,limitY);
   originalImage.style.width=width+'px';originalImage.style.height=height+'px';
@@ -215,6 +251,52 @@ function renderDiscovery(){
 $('discover-toggle').addEventListener('change',loadDiscovery);
 $('discovery-list').addEventListener('change',e=>{discoveryId=e.target.value;renderDiscovery();});
 
+let hubbleFields=null,hubblePending=null,hubbleState='',hubbleObservations=[];
+function hubbleCaption(){
+  const select=$('hubble-field');
+  for(const opt of select.options){
+    const obs=hubbleObservations.find(o=>o.id===opt.value);
+    const label=obs?.filter?(obs.target==='ANY'?t('archiveField'):obs.target)+' · '+obs.filter:t('hubble_'+opt.value);
+    opt.textContent=t('hubble_'+(obs?.relation||'field'))+' · '+label;
+  }
+  const active=hubbleObservations.find(o=>o.id===select.value);
+  const source=$('hubble-source');
+  source.href=active?.source||(active?.filter?'https://hla.stsci.edu/hlaview.html#Images|'+encodeURIComponent(active.id):'https://esahubble.org/images/heic2501a/');
+  source.textContent=active?.credit?active.credit+' ↗':active?.filter?'NASA/ESA Hubble · '+active.id+' ↗':'NASA, ESA, B. Williams (University of Washington) ↗';
+  $('hubble-description').textContent=active?t('hubble_'+active.relation)+' · '+t(active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
+  $('hubble-status').textContent=hubbleState?t(hubbleState):'';
+  $('hubble-retry').hidden=hubbleState!=='hubble_unavailable';
+}
+function loadHubbleField(){
+  const field=$('hubble-field').value,video=$('hubble-video');
+  video.hidden=!field;
+  if(!field)return;
+  hubbleState='hubbleLoading';hubbleCaption();
+  video.src='/media/'+encodeURIComponent(state.current.id)+'/hubble/'+encodeURIComponent(field);
+  video.load();
+  if(!reducedMotion.matches&&!$('hubble-panel').hidden)video.play().catch(()=>{});
+}
+async function openHubble(){
+  try{
+    if(!hubbleFields){
+      hubbleState='hubbleLoading';hubbleCaption();
+      hubblePending??=api('/api/objects/'+encodeURIComponent(state.current.id)+'/hubble');
+      const {fields,observations}=await hubblePending;
+      hubbleObservations=observations||[];
+      if(!hubbleFields){
+        hubbleFields=fields;
+        $('hubble-field').replaceChildren(...fields.map(k=>new Option(t('hubble_'+k),k)));
+      }
+    }
+    $('hubble-field').disabled=!hubbleFields.length;
+    if(!hubbleFields.length){hubbleState='hubble_no_field';$('hubble-video').hidden=true;hubbleCaption();return;}
+    if(!$('hubble-panel').hidden&&!$('hubble-video').hasAttribute('src'))loadHubbleField();
+  }catch{hubblePending=null;hubbleState='hubble_unavailable';hubbleCaption();}
+}
+$('hubble-field').addEventListener('change',loadHubbleField);
+$('hubble-retry').addEventListener('click',()=>hubbleFields?.length?loadHubbleField():openHubble());
+$('hubble-video').addEventListener('error',()=>{hubbleState='hubble_unavailable';hubbleCaption();});
+$('hubble-video').addEventListener('loadeddata',()=>{hubbleState='';hubbleCaption();});
 function journeyCaption(){
   if(!journeyInfo)return;
   $('journey-note').textContent=t('journey_'+journeyInfo.kind);
@@ -228,7 +310,12 @@ function journeyCaption(){
 async function loadJourney(){
   const video=$('journey-video'), status=$('journey-status');
   try{
-    if(!journeyInfo)journeyInfo=await api('/api/objects/'+state.current.id+'/journey');
+    if(!journeyInfo){
+      status.textContent=t('journeyLoading');
+      const id=state.current.id, info=await api('/api/objects/'+id+'/journey');
+      if(state.current?.id!==id)return;
+      journeyInfo=info;
+    }
     journeyCaption();setJourneyLabels(journeyInfo.labels);
     if(!journeyInfo.url){video.hidden=true;status.textContent='';return;}
     if($('journey-panel').hidden)return;
@@ -266,8 +353,8 @@ async function refreshAdmin(){const response=await api('/api/admin/objects');sta
     if(updated){state.selected=updated;showVersions();renderChoice();}
   }
 }
-function renderAdminList(){const list=$('admin-object-list');list.replaceChildren();for(const object of state.adminObjects){const button=node('button','admin-object'+(state.selected?.id===object.id?' selected':''),captureLabel(object));const name=local(object.metadata.name);if(name&&name!==captureLabel(object))button.append(node('span','admin-name',name));button.addEventListener('click',()=>selectObject(object.id));list.append(button);}}
-function renderJobs(){const list=$('job-list');list.replaceChildren();if(!state.jobs.length){list.append(node('p','small muted',t('noJobs')));return;}const active=j=>['running','queued','cancelling'].includes(j.status);for(const job of [...state.jobs.filter(active),...state.jobs.filter(j=>!active(j)).slice(0,8)]){const row=node('div','job-item');row.append(node('strong','',job.object_id.replace('_',' ')),node('span','',t(job.status)+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));if(['running','queued'].includes(job.status)){const p=node('progress');p.max=100;p.value=job.progress;row.append(p);
+function renderAdminList(){const list=$('admin-object-list');list.replaceChildren();for(const object of state.adminObjects){const button=node('button','admin-object'+(state.selected?.id===object.id?' selected':''),captureLabel(object));const name=local(object.metadata.name);if(name&&name!==captureLabel(object))button.append(node('span','admin-name',name));if(object.capture_date)button.append(node('small','admin-name',object.capture_date.slice(0,10)));button.addEventListener('click',()=>selectObject(object.id));list.append(button);}}
+function renderJobs(){const list=$('job-list');list.replaceChildren();if(!state.jobs.length){list.append(node('p','small muted',t('noJobs')));return;}const active=j=>['running','queued','cancelling'].includes(j.status);for(const job of [...state.jobs.filter(active),...state.jobs.filter(j=>!active(j)).slice(0,8)]){const row=node('div','job-item');row.append(node('strong','',job.object_id.replace('_',' ')),node('span','',t(job.status==='running'&&job.stage==='journey'?'journeyPreparing':job.status)+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));if(['running','queued'].includes(job.status)){const p=node('progress');p.max=100;p.value=job.progress;row.append(p);
     const cancel=node('button','button secondary cancel-render',t('cancelRender'));
     cancel.addEventListener('click',async()=>{cancel.disabled=true;try{await api('/api/admin/jobs/'+job.id+'/cancel',{method:'POST'});await refreshAdmin();}catch(e){toast(errorText(e));cancel.disabled=false;}});
     row.append(cancel);
@@ -313,22 +400,45 @@ function fillParams(value={}){
   pointIndex=0;$('point-name').value=points[0].name||'';$('point-count').value=points.length;drawPicker();const defaults={orientation:'portrait',method:'layered',motion:'orbit',zoom:1.08,focus_x:.5,focus_y:.5,pan_x:.018,pan_y:.010,depth:.65,duration:10,resolution:1280,fps:24,star_source:'auto',blend:'auto'};for(const [key,item] of Object.entries({...defaults,...value,...points[0]})){const input=$('parameters-form').elements.namedItem(key);if(input?.tagName==='SELECT'&&key==='duration'&&![...input.options].some(o=>o.value===String(item)))input.add(new Option(item+' s',String(item)));if(input)input.value=key.startsWith('focus_')?+(item*100).toFixed(1):item;}updateOutputs();}
 function updateOutputs(){updateFocusMarker();for(const output of document.querySelectorAll('[data-output]')){const key=output.dataset.output,value=+$('parameters-form').elements.namedItem(key).value;output.textContent=key.startsWith('pan')?(value*100).toFixed(1)+'%':key==='zoom'?value.toFixed(2)+'×':value.toFixed(2);}}
 $('parameters-form').addEventListener('input',updateOutputs);$('parameters-form').addEventListener('submit',event=>event.preventDefault());
-function newObject(){clearImportControls();state.selected=null;setFocusImage(null);showVersions();state.files=[];$('upload-form').reset();$('upload-section').hidden=false;$('edit-section').hidden=true;$('metadata-section').hidden=true;$('preview-button').hidden=true;$('preview-image').hidden=true;$('render-button').querySelector('[data-i18n]').dataset.i18n='createFilm';$('render-button').querySelector('[data-i18n]').textContent=t('createFilm');fillParams();renderFileList();renderAdminList();message('studio-message','');}
+function solarMode(){return state.selected?!!state.selected.body:$('capture-kind').value==='solar';}
+function updateCaptureKind(){
+  const solar=solarMode(),fields=$('parameters-form').elements;
+  const body=$('solar-body'),identifier=$('identifier');
+  body.hidden=document.querySelector('label[for="solar-body"]').hidden=!solar;
+  identifier.hidden=document.querySelector('label[for="identifier"]').hidden=solar;
+  identifier.required=!solar;
+  if(solar&&!state.selected)identifier.value=body.value;
+  fields.method.querySelectorAll('option').forEach(o=>o.disabled=solar&&o.value!=='kenburns');
+  if(solar){fields.method.value='kenburns';fields.depth.value=0;}
+  for(const k of ['depth','star_source','blend'])fields[k].closest('label').hidden=solar;
+  if(state.selected&&solar)$('find-more').hidden=true;
+  const texts=[['uploadIntro','solarIntro'],['chooseFiles','solarChoose'],['filenameHint','solarHint'],['dropHint','solarFiles']];
+  for(const [deep,bodyKey] of texts){
+    const el=document.querySelector('#upload-section [data-i18n="'+deep+'"],#upload-section [data-i18n="'+bodyKey+'"]');
+    el.dataset.i18n=solar?bodyKey:deep;el.textContent=t(el.dataset.i18n);
+  }
+}
+$('capture-kind').addEventListener('change',()=>{
+  $('identifier').value='';fillParams(solarMode()?{method:'kenburns',orientation:'original'}:{});
+  updateCaptureKind();assignFiles(state.files);
+});
+$('solar-body').addEventListener('change',updateCaptureKind);
+function newObject(){clearImportControls();state.selected=null;setFocusImage(null);showVersions();state.files=[];$('upload-form').reset();$('upload-section').hidden=false;$('edit-section').hidden=true;$('metadata-section').hidden=true;$('preview-button').hidden=true;$('preview-image').hidden=true;$('render-button').querySelector('[data-i18n]').dataset.i18n='createFilm';$('render-button').querySelector('[data-i18n]').textContent=t('createFilm');fillParams();updateCaptureKind();renderFileList();renderAdminList();message('studio-message','');}
 $('new-object').addEventListener('click',newObject);
 function renderChoice(){
   const g=state.selected?.gaia||{};
   $('gaia-status').textContent=g.status?t('gaia_'+g.status)+(g.matches?' · '+g.matches+' '+t('gaiaStars')+' · '+g.median_arcsec+'″':''):'';
-  $('gaia-retry').hidden=['pending','running','solved'].includes(g.status);
+  $('gaia-retry').hidden=['pending','running','solved','not_applicable'].includes(g.status);
   const choice=state.selected?.render?.choice;$('render-choice').textContent=choice?`${t('starLayer')}: ${choice.source} · ${t('blending')}: ${choice.blend} · MAE ${(choice.mae*100).toFixed(2)}%`:'';}
 $('gaia-retry').addEventListener('click',async()=>{
   try{await api('/api/admin/objects/'+state.selected.id+'/align',{method:'POST'});await refreshAdmin();}
   catch(e){toast(errorText(e));}
 });
-function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'?discover=1#original';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;$('edit-object-title').textContent=captureLabel(object)+' · '+local(object.metadata.name);setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
+function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'?discover=1#original';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;$('edit-object-title').textContent=captureLabel(object)+' · '+local(object.metadata.name);setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);updateCaptureKind();const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
 let pendingLandmark=null;
 const draftKey=id=>'astroweb-discovery-draft-'+id;
 function clearImportControls(){
-  resetAutoRoute();$('auto-tools').hidden=true;
+  resetAutoRoute();$('auto-tools').hidden=true;delete $('identifier').dataset.override;$('identifier-source').textContent='';
   pendingLandmark=null;$('point-replace').hidden=true;$('find-more').hidden=true;
 }
 $('point-name').addEventListener('input',()=>{savePoint();drawPicker();});
@@ -368,12 +478,57 @@ $('replace-point').addEventListener('click',()=>{if(pendingLandmark)applyLandmar
 
 function fillMetadata(object){$('rename-form').elements.identifier.value=(object.catalog_id||object.id).replace('_',' ');$('metadata-form').elements.galactic_distance_ly.value=object.metadata.galactic_distance_ly??'';const fields=$('metadata-fields');fields.replaceChildren();$('metadata-form').elements.namedItem('target').value=object.metadata.target;for(const key of ['name','type','constellation','summary','description'])for(const lang of ['nl','en']){const label=node('label');const title=node('span','',t(key)+' · '+lang.toUpperCase());title.dataset.editKey=key;title.dataset.editLanguage=lang;const input=node(['summary','description'].includes(key)?'textarea':'input');input.name=key+'_'+lang;input.maxLength=key==='description'?5000:350;input.value=object.metadata[key]?.[lang]||'';label.append(title,input);fields.append(label);}}
 function fillObservation(object){const observation=object.observation||{};for(const key of ['date_obs','latitude','longitude','ra','dec','timezone'])$('observation-form').elements.namedItem(key).value=observation[key]??(key==='timezone'?'Europe/Amsterdam':'');$('observation-form').elements.namedItem('publish_location').checked=!!observation.publish_location;const details=$('fits-details');details.replaceChildren();fact(details,t('integration'),duration(observation.integration));fact(details,t('frames'),observation.frames);fact(details,t('telescope'),observation.telescope);fact(details,'FITS',observation.filename);fact(details,'DATE-OBS',observation.time_comment);fact(details,'UTC',observation.time_scale_assumed?(language==='nl'?'Aangenomen volgens FITS-conventie':'Assumed by FITS convention'):observation.time_scale);}
-function assignFiles(files){state.files=[...files];
-  const final=state.files.find(file=>/_final\.(png|jpe?g|tiff?)$/i.test(file.name));
-  setFocusImage(final);const first=state.files.find(file=>/_(?:final|stars|starless|stars_laid)\./i.test(file.name));if(first){const match=first.name.match(/^([A-Za-z][A-Za-z0-9]*[_ -]\d+[A-Za-z]?)(?:_)/);if(match)$('identifier').value=match[1].toUpperCase().replace(/[ -]/g,'_');}renderFileList();}
-function renderFileList(){const list=$('file-checklist');list.replaceChildren();for(const role of ['final','starless','stars','stars_laid','FITS']){const matches=state.files.filter(file=>role==='FITS'?/\.(fits|fit|fts)$/i.test(file.name):new RegExp('_'+role+'\\.(png|jpe?g|tiff?)$','i').test(file.name));const chip=node('span','file-chip'+(matches.length===1?' ready':matches.length>1?' invalid':''),(matches.length===1?'✓ ':'')+role+(role==='FITS'?' · '+(language==='nl'?'optioneel':'optional'):''));chip.title=matches.map(file=>file.name).join('\n');list.append(chip);}}
+let pendingIdentity = Promise.resolve();
+async function fitsObject(file){
+  if(!file)return '';
+  const block=28800;
+  for(let offset=0;offset<file.size;offset+=block){
+    const text=await file.slice(offset,offset+block).text();
+    if(!offset&&!text.startsWith('SIMPLE  ='))return '';
+    for(let pos=0;pos+80<=text.length;pos+=80){
+      const card=text.slice(pos,pos+80),key=card.slice(0,8).trim();
+      if(key==='END')return '';
+      if(key==='OBJECT'){
+        const value=card.slice(10).trimStart().match(/^'((?:[^']|'')*)'/);
+        return value?value[1].replaceAll("''","'").trim():'';
+      }
+    }
+  }
+  return '';
+}
+async function identifyDraft(files){
+  const input=$('identifier'), hint=$('identifier-source');
+  hint.textContent='';
+  delete input.dataset.override;
+  if(solarMode()||!files.length)return;
+  const photos=files.filter(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name));
+  const fits=files.find(f=>/\.(fits|fit|fts)$/i.test(f.name));
+  try{
+    const object=await fitsObject(fits);
+    if(files!==state.files||state.selected)return;
+    const result=await api('/api/admin/upload-identity',{method:'POST',body:{names:photos.slice(0,4).map(f=>f.name),object}});
+    if(files!==state.files||state.selected)return;
+    if(result.identifier&&!input.dataset.override){
+      input.value=result.identifier;
+      hint.textContent=result.source==='fits'?'FITS · OBJECT':t('filenamePrefix');
+    }
+  }catch(e){if(files===state.files&&!state.selected)message('studio-message',errorText(e),true);}
+}
+$('identifier').addEventListener('input',()=>{
+  $('identifier').dataset.override=$('identifier').value?'1':'';
+  $('identifier-source').textContent='';
+});
+function assignFiles(files){
+  state.files=[...files];
+  const final=solarMode()?state.files.find(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name)):state.files.find(file=>/_final\.(png|jpe?g|tiff?)$/i.test(file.name));
+  setFocusImage(final);
+  if(!solarMode()&&!$('identifier').dataset.override)$('identifier').value='';
+  pendingIdentity=identifyDraft(state.files);
+  renderFileList();
+}
+function renderFileList(){const list=$('file-checklist');list.replaceChildren();for(const role of (solarMode()?['final','FITS']:['final','starless','stars','stars_laid','FITS'])){const matches=state.files.filter(file=>solarMode()&&role==='final'?/\.(png|jpe?g|tiff?)$/i.test(file.name):role==='FITS'?/\.(fits|fit|fts)$/i.test(file.name):new RegExp('_'+role+'\\.(png|jpe?g|tiff?)$','i').test(file.name));const chip=node('span','file-chip'+(matches.length===1?' ready':matches.length>1?' invalid':''),(matches.length===1?'✓ ':'')+role+(role==='FITS'?' · '+(language==='nl'?'optioneel':'optional'):''));chip.title=matches.map(file=>file.name).join('\n');list.append(chip);}}
 $('image-files').addEventListener('change',event=>assignFiles(event.target.files));const drop=document.querySelector('.dropzone');drop.addEventListener('dragover',event=>{event.preventDefault();drop.classList.add('dragging');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragging'));drop.addEventListener('drop',event=>{event.preventDefault();drop.classList.remove('dragging');assignFiles(event.dataTransfer.files);});
-$('render-button').addEventListener('click',async()=>{if(state.busy||!$('parameters-form').reportValidity())return;setBusy(true);try{if(state.selected){await api(`/api/admin/objects/${state.selected.id}/render`,{method:'POST',body:params()});}else{if(!$('upload-form').reportValidity())return;const images=state.files.filter(file=>/\.(png|jpe?g|tiff?)$/i.test(file.name)),fits=state.files.filter(file=>/\.(fits|fit|fts)$/i.test(file.name));if(images.length!==4||fits.length>1||images.length+fits.length!==state.files.length)throw Error('four_images_required');const form=new FormData();form.set('identifier',$('identifier').value);form.set('session_name',$('session-name').value);form.set('params',JSON.stringify(params()));images.forEach(file=>form.append('images',file));if(fits[0])form.set('fits',fits[0]);message('studio-message',t('uploading'));const result=await api('/api/admin/objects',{method:'POST',body:form});await refreshAdmin();selectObject(result.object.id);}message('studio-message',t('queuedMessage'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
+$('render-button').addEventListener('click',async()=>{if(state.busy||!$('parameters-form').reportValidity())return;setBusy(true);try{if(state.selected){await api(`/api/admin/objects/${state.selected.id}/render`,{method:'POST',body:params()});}else{await pendingIdentity;if(!$('upload-form').reportValidity())return;const images=state.files.filter(file=>/\.(png|jpe?g|tiff?)$/i.test(file.name)),fits=state.files.filter(file=>/\.(fits|fit|fts)$/i.test(file.name));if(images.length!==(solarMode()?1:4)||fits.length>1||images.length+fits.length!==state.files.length)throw Error(solarMode()?'single_image_required':'four_images_required');const form=new FormData();form.set('identifier',$('identifier').value);if($('identifier').dataset.override)form.set('identifier_override','1');form.set('session_name',$('session-name').value);form.set('capture_date',$('upload-capture-date').value);form.set('params',JSON.stringify(params()));images.forEach(file=>form.append('images',file));if(fits[0])form.set('fits',fits[0]);message('studio-message',t('uploading'));const result=await api('/api/admin/objects',{method:'POST',body:form});await refreshAdmin();selectObject(result.object.id);}message('studio-message',t('queuedMessage'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
 $('preview-button').addEventListener('click',async()=>{if(!state.selected||state.busy||!$('parameters-form').reportValidity())return;setBusy(true);message('studio-message',t('working'));try{const response=await api(`/api/admin/objects/${state.selected.id}/preview?point=${pointIndex+1}`,{method:'POST',body:params(),raw:true});if(state.preview)URL.revokeObjectURL(state.preview);state.preview=URL.createObjectURL(await response.blob());$('preview-image').src=state.preview;$('preview-image').hidden=false;message('studio-message','');}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
 $('rename-form').addEventListener('submit',async event=>{
   event.preventDefault();
@@ -392,6 +547,7 @@ $('observation-form').addEventListener('submit',async event=>{event.preventDefau
 let focusGeneration=0;
 async function setFocusImage(source){
   const generation=++focusGeneration;
+  resetAutoRoute();$('auto-tools').hidden=true;
   if(uploadPosterUrl){URL.revokeObjectURL(uploadPosterUrl);uploadPosterUrl=null;}
   const img=$('edit-poster');
   $('focus-image').hidden=true;
@@ -421,7 +577,7 @@ function drawFocusImage(){
     ctx.translate(canvas.width,0);ctx.rotate(Math.PI/2);
     ctx.drawImage(img,0,0,canvas.height,canvas.width);
   }
-  $('focus-image').hidden=false;
+  $('focus-image').hidden=false;$('auto-tools').hidden=false;
 }
 $('edit-poster').addEventListener('load',drawFocusImage);
 $('parameters-form').elements.orientation.addEventListener('change',()=>{
@@ -439,7 +595,7 @@ $('parameters-form').elements.orientation.addEventListener('change',()=>{
   }
   drawFocusImage();updateFocusMarker();
 });
-$('edit-poster').addEventListener('error',()=>{$('focus-image').hidden=true;});
+$('edit-poster').addEventListener('error',()=>{$('focus-image').hidden=true;$('auto-tools').hidden=true;resetAutoRoute();});
 function clamp(value,low,high){return Math.max(low,Math.min(high,value));}
 
 // Background-plane geometry at peak zoom (Scene.camera/warp at phase 0.5).
@@ -448,8 +604,8 @@ function resetAutoRoute(){
   autoGeneration++;suggestions=[];$('auto-review').hidden=true;$('auto-frames').replaceChildren();$('auto-zoom').disabled=false;
 }
 function suggestedPoints(){
-  const object=state.selected;
-  const rotate=$('parameters-form').elements.orientation.value==='portrait'&&object.source_width>object.source_height;
+  const img=$('edit-poster');
+  const rotate=$('parameters-form').elements.orientation.value==='portrait'&&img.naturalWidth>img.naturalHeight;
   return suggestions.map((p,i)=>({name:p.name||t('autoStructure')+' '+(i+1),zoom:p.zoom,
     focus_x:rotate?1-p.y:p.x,focus_y:rotate?p.x:p.y}));
 }
@@ -464,11 +620,23 @@ function showAutoRoute(){
     frames.append(box);$('auto-list').append(node('li','',pt.name+' · '+pt.zoom+'×'));
   });
 }
+async function draftRoute(count){
+  const img=$('edit-poster'),canvas=document.createElement('canvas');
+  const scale=Math.min(1,640/Math.max(img.naturalWidth,img.naturalHeight));
+  canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
+  canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+  canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+  const preview=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.92));
+  if(!preview)throw Error('invalid_image');
+  const body=new FormData();body.set('count',count);body.set('preview',preview,'preview.jpg');
+  return api('/api/admin/upload-autozoom',{method:'POST',body});
+}
 $('auto-zoom').addEventListener('click',async()=>{
   resetAutoRoute();const generation=autoGeneration;
   $('auto-zoom').disabled=true;$('auto-review').hidden=false;$('auto-note').textContent=t('working');$('auto-list').replaceChildren();$('auto-apply').hidden=true;
   try{
-    const reply=await api('/api/admin/objects/'+state.selected.id+'/autozoom',{method:'POST',body:{count:Number($('auto-count').value)}});
+    const count=Number($('auto-count').value);
+    const reply=state.selected?await api('/api/admin/objects/'+state.selected.id+'/autozoom',{method:'POST',body:{count}}):await draftRoute(count);
     if(generation!==autoGeneration)return;
     suggestions=reply.points;$('auto-note').textContent=t(suggestions.length?'autoReview':'autoEmpty');$('auto-apply').hidden=!suggestions.length;showAutoRoute();
   }catch(e){if(generation===autoGeneration)$('auto-note').textContent=errorText(e);}

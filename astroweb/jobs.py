@@ -129,7 +129,7 @@ class JobQueue:
             record = self.store.get("objects", identifier)
             if not record:
                 raise ValueError("object_not_found")
-            if (record.get("gaia") or {}).get("status") == "solved":
+            if record.get("body") or (record.get("gaia") or {}).get("status") == "solved":
                 return
             self.store.update("objects", identifier, gaia={"status":"pending", "request":uuid.uuid4().hex})
             self.executor.submit(self.align, identifier)
@@ -158,8 +158,11 @@ class JobQueue:
     def submit(self, identifier, raw_params=None):
         params = Parameters.parse(raw_params)
         with self.lock:
-            if not self.store.get("objects", identifier):
+            capture = self.store.get("objects", identifier)
+            if not capture:
                 raise ValueError("object_not_found")
+            if capture.get("body"):
+                params.method = "kenburns"
             jobs = self.store.all("jobs")
             if any(job["object_id"] == identifier and job["status"] in {"queued", "running", "cancelling"} for job in jobs):
                 raise ValueError("render_active")
@@ -203,6 +206,23 @@ class JobQueue:
             if progress is not None:
                 self.store.update("jobs",job_id,progress=progress)
 
+    def prepare_journey(self, job_id, identifier):
+        from .journey import geometry, movie
+        try:
+            record = self.store.get("objects", identifier)
+            field = geometry(self.store, record)
+            if field["kind"] == "missing":
+                return
+            self.store.update("jobs", job_id, stage="journey", progress=95)
+            self.checkpoint(job_id)
+            movie(self.store, record, field, progress=lambda fraction:
+                  self.checkpoint(job_id, round(95 + 4*fraction, 1)))
+        except RenderCancelled:
+            raise
+        except Exception:
+            # The viewer can retry independently if the optional journey failed.
+            logging.warning("Could not prepare sky journey for %s", identifier, exc_info=True)
+
     def run(self, job_id):
         with self.store.lock:
             if self.store.get("jobs",job_id)["status"] != "queued":
@@ -234,6 +254,8 @@ class JobQueue:
             stats = render_video({key: self.store.path(value) for key, value in record["assets"].items()}, self.store.path(relative), params, progress=lambda p: self.checkpoint(job_id,p))
             self.checkpoint(job_id)
             self.ensure_preview(relative)
+            self.checkpoint(job_id)
+            self.prepare_journey(job_id, record["id"])
             with self.store.lock:
                 self.checkpoint(job_id)
                 record = self.store.get("objects", record["id"])

@@ -43,7 +43,7 @@ def test_originals_preserved_and_bad_inputs_rejected(tmp_path, images):
     assert record["published"] is False
     with pytest.raises(ValueError, match="object_exists"):
         import_object(store, "NGC_7000", list(images.values()))
-    for value in ["../NGC_7000", "NGC_7000/../", "NGC7000", "A_1.exe"]:
+    for value in ["../NGC_7000", "NGC_7000/../", "NGC??7000", "A_1.exe"]:
         with pytest.raises(ValueError):
             normalize_id(value)
     with pytest.raises(ValueError, match="invalid_path"):
@@ -130,6 +130,69 @@ def test_auth_csrf_host_and_upload_validation(app, images):
     assert client.get("/").headers["Content-Security-Policy"].startswith("default-src 'self'")
     client.post("/api/logout", headers=headers)
     assert client.get("/api/admin/objects").status_code == 401
+
+
+@pytest.mark.parametrize("header_id, expected", [
+    ("M 31", "M_31"), ("Andromeda Galaxy", "M_31"), ("C 20", "NGC_7000"),
+    ("", "NGC_7000"), ("unknown science target", "NGC_7000"),
+])
+def test_upload_identifies_capture_from_fits_before_prefix(app, images, monkeypatch, header_id, expected):
+    client = app.test_client()
+    headers = sign_in(client)
+    monkeypatch.setattr(app.extensions["jobs"], "submit", lambda *args: {"id": "test"})
+    data = io.BytesIO()
+    fits.PrimaryHDU(header=fits.Header({"OBJECT": header_id})).writeto(data)
+    data.seek(0)
+    files = [(io.BytesIO(p.read_bytes()), p.name) for p in images.values()]
+    preview = client.post("/api/admin/upload-identity", json={
+        "object": header_id, "names": [name for _, name in files]}, headers=headers).json
+    assert preview["source"] == ("fits" if header_id in ("M 31","Andromeda Galaxy","C 20") else "prefix")
+    response = client.post("/api/admin/objects", data={
+        "identifier": "IC_1396", "images": files, "fits": (data, "NGC_7000_final.fits")
+    }, headers=headers)
+    assert response.status_code == 202, response.json
+    assert response.json["object"]["id"] == expected
+    assert app.extensions["store"].get("objects", expected)["observation"]["header"]["OBJECT"] == header_id
+
+
+def test_fits_upload_validates_common_export_family(tmp_path, images):
+    store = Store(tmp_path / "captures")
+    paths = [p.rename(p.with_name("mosaic_" + role + ".png")) for role, p in images.items()]
+    record = import_object(store,"M_31",paths,allow_export_prefix=True)
+    assert set(record["assets"]) == set(images)
+    paths[0] = paths[0].rename(paths[0].with_name("other_final.png"))
+    with pytest.raises(ValueError,match="invalid_filename"):
+        import_object(store,"M_31",paths,allow_export_prefix=True,repeat=True)
+
+
+@pytest.mark.parametrize("failure",[True,False])
+def test_journey_prepared_after_alignment_before_publication(tmp_path, images, monkeypatch, failure):
+    store = Store(tmp_path / "lib")
+    record = import_object(store, "NGC_7000", images.values())
+    jobs = JobQueue(store,resume=False)
+    calls = []
+    def fake_render(paths, target, params, progress):
+        target.parent.mkdir(parents=True,exist_ok=True)
+        target.write_bytes(b"capture")
+        return {"frames":96}
+    def fake_journey(current, capture, field, progress):
+        assert not capture["published"]
+        calls.append(field)
+        progress(.5)
+        if failure:
+            raise OSError("test")
+    monkeypatch.setattr(jobs,"align",lambda id: store.update("objects",id,observation={"ra":12,"dec":8}))
+    monkeypatch.setattr(jobs,"ensure_preview",lambda path: None)
+    monkeypatch.setattr("astroweb.jobs.render_video",fake_render)
+    monkeypatch.setattr("astroweb.journey.movie",fake_journey)
+    try:
+        job = jobs.submit(record["id"])
+        jobs.futures[job["id"]].result(timeout=10)
+        assert calls == [{"kind":"point","center":[12,8]}]
+        assert store.get("jobs",job["id"])["status"] == "completed"
+        assert store.get("objects",record["id"])["published"]
+    finally:
+        jobs.shutdown()
 
 
 def test_jobs_publish_only_success_and_preserve_previous(tmp_path, images, monkeypatch):

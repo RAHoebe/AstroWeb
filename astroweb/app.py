@@ -8,11 +8,12 @@ import secrets
 import tempfile
 import threading
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import requests
+from PIL import Image
 from flask import redirect, Flask, abort, jsonify, request, send_file, session
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -20,9 +21,11 @@ from werkzeug.utils import secure_filename
 
 from . import __version__
 from .jobs import JobQueue
-from .media import MAX_FILE, import_object, normalize_id, validate_image
+from .media import MAX_FILE, import_object, normalize_id, upload_identity, fits_target, file_prefix, validate_image
 from .metadata import refresh_metadata, renamed_metadata, validate_metadata
 from .render import Parameters, Scene, ffmpeg_executable, gallery_preview_path, read_rgb, resize_long, save_jpg
+from .catalogue import canonical,group_id,belongs
+from .solar import BODIES
 from .store import Store
 
 ROOT = Path(__file__).resolve().parent
@@ -118,8 +121,11 @@ def create_app(data_dir=None, testing=False):
     def present(record, private=False):
         from .observation import public_observation
         value = {k: record[k] for k in ["id", "width", "height", "metadata", "params", "render", "published", "created_at"]}
-        value.update(catalog_id=record.get("catalog_id",record["id"]),session_name=record.get("session_name",""))
+        from .collection import capture_date
+        value.update(capture_date=capture_date(record),body=record.get("body"),catalog_id=group_id(record),session_name=record.get("session_name",""))
         value.update(poster=f"/media/{record['id']}/poster", video=f"/media/{record['id']}/movie" if record["video"] else None, final=f"/media/{record['id']}/final", observation=record.get("observation") if private else public_observation(record.get("observation", {})), sky_available=all(record.get("observation", {}).get(k) is not None for k in ["ra", "dec", "latitude", "longitude", "date_obs"]))
+        if record.get("body"):
+            value["sky_available"] = False
         if Path(record["assets"]["final"]).suffix.lower() in {".tif", ".tiff"}:
             value["original_view"] = f"/media/{record['id']}/original-view"
         if record["video"]:
@@ -159,9 +165,17 @@ def create_app(data_dir=None, testing=False):
         from .galaxy import galactic_map
         record = get_object(identifier)
         from .environment import target_galaxy
-        from .collection import neighbours
-        visible = [r for r in store.all("objects") if r["published"]]
-        return jsonify({**present(record), "neighbours":neighbours(visible,record["id"]), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record))})
+        from .hubble import eligible as hubble_target
+        from .physical import field_scale
+        from .collection import capture_groups,date_option,neighbours
+        records=store.all("objects")
+        catalog=group_id(record)
+        groups=capture_groups([r for r in records if r["published"]])
+        visible=[g[0] for g in groups.values()]
+        primary=groups.get(catalog,[record])[0]
+        allowed=records if session.get("admin") else [r for r in records if r["published"]]
+        dates=capture_groups([r for r in allowed if group_id(r)==catalog]).get(catalog,[])
+        return jsonify({**present(record), "captures":[date_option(r) for r in dates],"neighbours":neighbours(visible,primary["id"]), "physical":field_scale(store,record), "hubble_available":hubble_target(record), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record))})
 
     @app.get("/api/objects/<identifier>/environment")
     def environment(identifier):
@@ -185,6 +199,26 @@ def create_app(data_dir=None, testing=False):
     def autozoom(identifier):
         from .autozoom import propose
         return jsonify(points=propose(store,get_object(identifier),json_body().get("count",4)))
+
+    @app.get("/api/objects/<identifier>/hubble")
+    def hubble_fields(identifier):
+        from .hubble import fields
+        record=get_object(identifier)
+        try:
+            options=fields(store,record)
+        except requests.RequestException:
+            return jsonify(error="hubble_unavailable"),503
+        return jsonify(fields=[o["id"] for o in options],observations=options)
+
+    @app.get("/media/<identifier>/hubble/<name>")
+    def hubble_movie(identifier,name):
+        from .hubble import movie
+        record=get_object(identifier)
+        try:
+            path=movie(store,record,name)
+        except requests.RequestException:
+            return jsonify(error="hubble_unavailable"),503
+        return send_file(path,mimetype="video/mp4",conditional=True,max_age=0)
 
     @app.get("/api/objects/<identifier>/polar")
     def polar_chart(identifier):
@@ -285,12 +319,44 @@ def create_app(data_dir=None, testing=False):
 
     @app.get("/api/objects")
     def objects():
-        return jsonify(objects=[present(record) for record in store.all("objects") if record["published"]])
+        from .collection import gallery
+        return jsonify(objects=[present(record) for record in gallery(r for r in store.all("objects") if r["published"])])
 
     @app.get("/api/admin/objects")
     @admin_required
     def admin_objects():
         return jsonify(objects=[present(record, True) for record in store.all("objects")], jobs=store.all("jobs", limit=50))
+
+    @app.post("/api/admin/upload-identity")
+    @admin_required
+    def identify_upload():
+        body = json_body()
+        names = body.get("names", [])
+        if not isinstance(names, list) or len(names) > 4 or not all(isinstance(n,str) for n in names):
+            raise ValueError("invalid_filename")
+        identifier, source, _ = upload_identity(names, body.get("object"))
+        return jsonify(identifier=identifier, source=source)
+
+    @app.post("/api/admin/upload-autozoom")
+    @admin_required
+    def draft_autozoom():
+        import numpy as np
+        from PIL import Image
+        from .autozoom import propose_image
+        upload = request.files.get("preview")
+        if not upload:
+            raise ValueError("invalid_image")
+        data = upload.read(512 * 1024 + 1)
+        if len(data) > 512 * 1024:
+            raise ValueError("image_too_large")
+        try:
+            with Image.open(io.BytesIO(data), formats=["JPEG"]) as img:
+                if max(img.size) > 640:
+                    raise ValueError("image_dimensions")
+                image = np.asarray(img.convert("L"))
+        except (OSError, Image.DecompressionBombError):
+            raise ValueError("invalid_image") from None
+        return jsonify(points=propose_image(image, request.form.get("count", type=int)))
 
     @app.post("/api/admin/upload-poster")
     @admin_required
@@ -309,14 +375,18 @@ def create_app(data_dir=None, testing=False):
     @app.post("/api/admin/objects")
     @admin_required
     def upload():
-        identifier = normalize_id(request.form.get("identifier", ""))
+        supplied = request.form.get("identifier", "").strip()
         try:
             raw_params = json.loads(request.form.get("params", "{}"))
         except ValueError:
             raise ValueError("invalid_parameters") from None
         params = Parameters.parse(raw_params)
         files = request.files.getlist("images")
-        if len(files) != 4:
+        # A single explicitly selected solar-system body has its own upload mode.
+        solar = supplied.upper() in BODIES
+        if solar and len(files) != 1:
+            raise ValueError("single_image_required")
+        if not solar and len(files) != 4:
             raise ValueError("four_images_required")
         with tempfile.TemporaryDirectory(prefix="upload-", dir=store.root) as temp:
             paths = []
@@ -334,13 +404,34 @@ def create_app(data_dir=None, testing=False):
             fits_path = None
             if fits and fits.filename:
                 from .observation import read_observation
-                if not Path(fits.filename).name.upper().startswith(identifier + "_"):
-                    raise ValueError("invalid_filename")
                 fits_path = Path(temp) / secure_filename(fits.filename)
+                if fits_path.suffix.lower() not in {".fit", ".fits", ".fts"}:
+                    raise ValueError("invalid_fits")
                 fits.save(fits_path)
                 observation = read_observation(fits_path)
+            source = prefix = None
+            if solar:
+                identifier = normalize_id(supplied)
+                params.method = "kenburns"
+            else:
+                header = (observation or {}).get("header", {})
+                identifier, source, prefix = upload_identity([p.name for p in paths], header.get("OBJECT"), supplied)
+                if request.form.get("identifier_override") == "1":
+                    identifier = normalize_id(supplied)
+                    source = "manual"
+                if not identifier:
+                    raise ValueError("invalid_identifier")
+                if fits_path and not header.get("OBJECT") and file_prefix(fits_path.name) and prefix and not belongs(fits_path.name, prefix):
+                    raise ValueError("invalid_filename")
             with queue.lock:
-                record = import_object(store, identifier, paths, request.form.get("session_name",""))
+                manual=request.form.get("capture_date","").strip()
+                if manual:
+                    try:
+                        manual=date.fromisoformat(manual).isoformat()
+                    except ValueError:
+                        raise ValueError("invalid_observation") from None
+                record = import_object(store, identifier, paths, request.form.get("session_name",""),
+                                       repeat=True,capture_date=manual or None, source_prefix=prefix, allow_export_prefix=source in {"fits", "manual"})
                 if fits_path:
                     from .observation import attach_fits
                     record = attach_fits(store, record, fits_path, observation)
@@ -389,6 +480,7 @@ def create_app(data_dir=None, testing=False):
     def preview(identifier):
         record = get_object(identifier)
         params = Parameters.parse(json_body())
+        if record.get("body"):params.method="kenburns"
         count = len(params.zoom_points) or 1
         index = request.args.get("point", default=1, type=int)
         if not 1 <= index <= count:
@@ -405,17 +497,17 @@ def create_app(data_dir=None, testing=False):
     @app.put("/api/admin/objects/<identifier>/identifier")
     @admin_required
     def change_identifier(identifier):
-        new = normalize_id(json_body().get("identifier",""))
+        new = canonical(normalize_id(json_body().get("identifier","")))
         record = get_object(identifier)
-        current_catalog = record.get("catalog_id",identifier)
+        current_catalog = group_id(record)
+        if (new in BODIES) != bool(record.get("body")):
+            raise ValueError("capture_kind_mismatch")
         if new != current_catalog:
-            metadata = renamed_metadata(new)
+            # Merging into an existing group reuses its editorial metadata.
+            known=next((r for r in store.all("objects") if group_id(r)==new),None)
+            metadata=known["metadata"] if known else renamed_metadata(new)
             with queue.lock:
-                if record.get("session_name"):
-                    new_id = new+"~"+identifier.split("~")[-1]
-                    record = store.rename_object(identifier,new_id,metadata,catalog_id=new)
-                else:
-                    record = store.rename_object(identifier,new,metadata)
+                record=store.rename_object(identifier,new,metadata)
         return jsonify(object=present(record, True))
 
     @app.put("/api/admin/objects/<identifier>/metadata")
@@ -464,12 +556,18 @@ def create_app(data_dir=None, testing=False):
         from .observation import attach_fits, read_observation
         record = get_object(identifier)
         file = request.files.get("fits")
-        if not file or not file.filename or not Path(file.filename).name.upper().startswith(record.get("catalog_id", identifier) + "_"):
+        if not file or not file.filename:
             raise ValueError("invalid_filename")
         with tempfile.TemporaryDirectory(prefix="fits-", dir=store.root) as temp:
             path = Path(temp) / secure_filename(file.filename)
             file.save(path)
             observation = read_observation(path)
+            if not record.get("body"):
+                header_id = fits_target(observation["header"].get("OBJECT"))
+                if not belongs(path.name, group_id(record)) and not (
+                    header_id and canonical(header_id) == group_id(record)
+                ):
+                    raise ValueError("invalid_filename")
             record = attach_fits(store, record, path, observation)
             queue.request_alignment(identifier)
         return jsonify(object=present(record, True))
@@ -478,6 +576,7 @@ def create_app(data_dir=None, testing=False):
     def sky(identifier):
         from .sky import build_sky
         record = get_object(identifier)
+        if record.get("body"):raise ValueError("sky_metadata_missing")
         return jsonify(build_sky(record))
 
     @app.get("/media/<identifier>/<kind>")
@@ -486,7 +585,6 @@ def create_app(data_dir=None, testing=False):
         if kind == "poster":
             relative = record["poster"]
             if request.args.get("rotation") == "90" and record["width"] > record["height"]:
-                from PIL import Image
                 output = io.BytesIO()
                 with Image.open(store.path(relative)) as image:
                     image.transpose(Image.Transpose.ROTATE_270).save(output, format="JPEG", quality=92)

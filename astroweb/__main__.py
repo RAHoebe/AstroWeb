@@ -33,24 +33,38 @@ def main():
         print("Wachtwoord opgeslagen / password saved")
         return
     from .jobs import JobQueue
-    from .media import EXTENSIONS, import_object
-    from .observation import attach_fits
+    from .media import EXTENSIONS, import_object, upload_identity
+    from .catalogue import canonical, group_id
+    from .observation import attach_fits, read_observation
     queue = JobQueue(store)
     submitted = []
     try:
         for folder in sorted(args.source.iterdir()):
             if not folder.is_dir():
                 continue
-            existing = store.get("objects", store.current_id(folder.name.upper()))
+            paths = sorted(p for p in folder.iterdir() if p.suffix.lower() in EXTENSIONS)
+            fits = sorted(p for p in folder.iterdir() if p.suffix.lower() in {".fits", ".fit", ".fts"})
+            observation = read_observation(fits[0]) if fits else {}
+            identifier, source, prefix = upload_identity([p.name for p in paths], observation.get("header", {}).get("OBJECT"), folder.name)
+            target = store.get("objects", store.current_id(canonical(identifier)))
+            family = group_id(target) if target else canonical(identifier)
+            siblings = [r for r in store.all("objects") if group_id(r) == family]
+            existing = None
+            if siblings:
+                import hashlib
+                final = next((p for p in paths if p.stem.lower().endswith("_final")), None)
+                if final is None and len(paths) == 1:
+                    final = paths[0]
+                digest = hashlib.sha256(final.read_bytes()).hexdigest() if final else None
+                existing = next((r for r in siblings if r["sha256"]["final"] == digest), None)
             if existing:
                 record = existing
             else:
-                record = import_object(store, folder.name, [p for p in folder.iterdir() if p.suffix.lower() in EXTENSIONS])
+                record = import_object(store, identifier, paths, repeat=True, source_prefix=prefix, allow_export_prefix=source == "fits")
                 print(f"Import: {record['id']}", flush=True)
             previous_fits = bool(record.get("fits"))
-            fits = list(folder.glob("*.fits")) + list(folder.glob("*.fit"))
-            if fits and not record.get("fits"):
-                record = attach_fits(store, record, fits[0])
+            if fits and not previous_fits:
+                record = attach_fits(store, record, fits[0], observation)
                 print(f"FITS: {record['id']}", flush=True)
             if (not existing or (fits and not previous_fits)) and not (args.render and not record.get("video")):
                 queue.request_alignment(record["id"])

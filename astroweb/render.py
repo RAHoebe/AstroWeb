@@ -104,6 +104,8 @@ def compose(background, stars, mode):
 
 
 def select_layers(images, params):
+    if set(images)=={"final"} and params.method=="kenburns":
+        return None,[]
     small = {k: resize_long(v, 640) for k, v in images.items()}
     sources = [params.star_source] if params.star_source != "auto" else ["stars_laid", "stars"]
     blends = [params.blend] if params.blend != "auto" else ["screen", "add"]
