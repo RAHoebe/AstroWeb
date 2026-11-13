@@ -80,7 +80,15 @@ def fields(store,record):
                 options.append({"id":name,"relation":"region","credit":plate["credit"],
                                 "telescope":plate.get("telescope"),
                                 "source":plate.get("source",f"https://esahubble.org/images/{name}/")})
-    if not options:
+    search = record.get("hst_search")
+    if search:
+        from .archive_search import field_key
+        if search["field"] == field_key(store,record):
+            if search.get("option"):
+                options.insert(0, search["option"])
+            elif search.get("unavailable") and not options and not preferred:
+                raise ValueError("hubble_unavailable")
+    if not options and not search:
         from .hst_archive import find_fields
         try:
             options = find_fields(store,record)

@@ -68,6 +68,7 @@ export const words = {
   hubble_heic0512d:["M31 · de stofbanden van Andromeda","M31 · Andromeda’s dust lanes"],
   'hubble_c20-wfpc2':["Stofboog bij V1057 Cyg · Hubble/WFPC2","Dust arc near V1057 Cyg · Hubble/WFPC2"],
   hstPlateNote:["De WFPC2-camera van Hubble toont een boog van verlicht stof bij V1057 Cyg in de Noord-Amerikanevel.","Hubble’s WFPC2 camera reveals an arc of illuminated dust near V1057 Cyg in the North America Nebula."],
+  fullHstNote:["Deze Hubble-opname van het object is gevonden via MAST of het ESA Hubble Science Archive. Het hele archiefveld en de FITS-uitsnede vallen binnen jouw opname. Het beeld toont de helderheid in één filter.","This Hubble observation of the target was found via MAST or the ESA Hubble Science Archive. Its full footprint and the FITS cutout fit inside your capture. The image shows brightness in one filter."],
   groundPlateNote:["Optische grondopname, uitgelijnd op je eigen foto.","Ground-based optical image, registered to your photograph."],
   skymapNote:["Deze opname van het object is automatisch gevonden in de NASA Hubble Skymap. De film eindigt met de volledige NASA-foto.","This image of the object was found automatically in the NASA Hubble Skymap. The film ends with the complete NASA photograph."],
   hubbleNote:["Van je eigen opname naar een herkenbaar deel van Andromeda in het optische PHAT/PHAST-mozaïek van Hubble.","From your capture to a named feature in Hubble’s optical PHAT/PHAST mosaic of Andromeda."],

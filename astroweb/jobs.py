@@ -139,12 +139,13 @@ class JobQueue:
         self.discover_skymap(identifier)
 
     def discover_skymap(self, identifier):
-        from .skymap import discover
+        from . import archive_search, skymap
         try:
-            discover(self.store, identifier)
+            skymap.discover(self.store, identifier)
+            archive_search.discover(self.store, identifier)
         except Exception:
             # Optional external data must not prevent publishing the user's film.
-            logging.exception("Could not select a Skymap destination for %s", identifier)
+            logging.exception("Could not select a Hubble destination for %s", identifier)
 
     def align(self, identifier):
         with self.store.lock:

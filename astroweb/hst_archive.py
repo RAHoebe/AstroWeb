@@ -52,6 +52,10 @@ def field_relation(record, name):
     return "field"
 
 
+def inside_capture(uv):
+    return uv is not None and np.isfinite(uv).all() and np.all((uv >= 0) & (uv <= 1))
+
+
 def registered_cutout(store,record,entry):
     folder=store.path("survey-cache/hst-archive")
     folder.mkdir(parents=True,exist_ok=True)
@@ -79,6 +83,12 @@ def registered_cutout(store,record,entry):
     _,uv=project(store,record,sky)
     if uv is None or not np.isfinite(uv).all():
         raise ValueError("hubble_no_field")
+    if entry.get("full_footprint"):
+        # Test outer pixel edges, not just the centre or the exposed overlap.
+        edges = np.float64([[-.5,-.5],[SIZE-.5,-.5],[SIZE-.5,SIZE-.5],[-.5,SIZE-.5]])
+        _, boundary = project(store,record,wcs.pixel_to_world(edges[:,0],SIZE-1-edges[:,1]))
+        if not inside_capture(boundary):
+            raise ValueError("hubble_no_field")
     matrix=cv2.getPerspectiveTransform(src,np.float32(uv*[record["width"],record["height"]]-.5))
     # Restrict the field to the overlap in detector coordinates. Corners of
     # the cutout can fall outside the uploaded image even on a real target.
