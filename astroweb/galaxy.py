@@ -120,10 +120,12 @@ def journey_labels(record, field):
         t = i/(journey.FRAMES-1)
         scale, offset = journey.camera_at(t, footprint, journey.WIDTH*.46, end)
         matrix = np.array([[scale,0,offset[0]],[0,scale,offset[1]],[0,0,1]])
-        opacity = 1-journey.smooth((t-.64)/.22) if "corners" in field else 1
-        if t>.59 and opacity and "corners" in field:
+        if t>.59 and "corners" in field:
             quad = np.float32(footprint*scale+offset)
-            pose,_ = journey.landing(quad,record["width"],record["height"],journey.smooth((t-.59)/.32))
+            pose,mirrored = journey.landing(quad,record["width"],record["height"],journey.smooth((t-.59)/.32))
+            # During the parity crossfade, follow the dominant sky image.
+            if mirrored and t >= .89+.055/2:
+                pose=pose[[3,2,1,0]]
             matrix = cv2.getPerspectiveTransform(quad,pose) @ matrix
-        frames.append([*matrix.ravel().round(7).tolist(),round(opacity,4)])
+        frames.append([*matrix.ravel().round(7).tolist(),1.0])
     return {"points":labels,"frames":frames,"fps":journey.FPS,"width":journey.WIDTH,"height":journey.HEIGHT}

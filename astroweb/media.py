@@ -76,12 +76,24 @@ def validate_images(paths):
     return next(iter(sizes))
 
 
-def import_object(store, identifier, paths):
+def import_object(store, identifier, paths, session_name=""):
     identifier = normalize_id(identifier)
-    if store.get("objects", store.current_id(identifier)):
+    catalog_id = identifier
+    session_name = session_name.strip()
+    if len(session_name)>80 or any(ord(c)<32 for c in session_name):
+        raise ValueError("invalid_session")
+    existing = store.get("objects",store.current_id(identifier))
+    if session_name:
+        catalog_id = (existing or {}).get("catalog_id", (existing or {}).get("id",identifier))
+        if any(r.get("catalog_id",r["id"])==catalog_id and
+               r.get("session_name","").casefold()==session_name.casefold() for r in store.all("objects")):
+            raise ValueError("session_exists")
+    elif existing:
         raise ValueError("object_exists")
     roles = identify_files(identifier, paths)
     width, height = validate_images(roles)
+    if session_name:
+        identifier = catalog_id+"~"+uuid.uuid4().hex[:12]
     root = store.path(f"objects/{identifier}")
     # A previous interrupted import must not be reused or silently overwritten.
     folder = root / ("originals-" + uuid.uuid4().hex[:10])
@@ -95,7 +107,12 @@ def import_object(store, identifier, paths):
             hashes[role] = hashlib.sha256(dest.read_bytes()).hexdigest()
         poster = folder.parent / "poster.jpg"
         save_jpg(poster, resize_long(read_rgb(roles["final"]), 1600))
-        record = {"id": identifier, "assets": assets, "sha256": hashes, "poster": poster.relative_to(store.root).as_posix(), "width": width, "height": height, "metadata": initial_metadata(identifier), "params": Parameters().__dict__, "video": None, "render": None, "published": False, "created_at": now()}
+        record = {"id": identifier, "assets": assets, "sha256": hashes, "poster": poster.relative_to(store.root).as_posix(), "width": width, "height": height, "metadata": initial_metadata(catalog_id), "params": Parameters().__dict__, "video": None, "render": None, "published": False, "created_at": now()}
+        if session_name:
+            record.update(catalog_id=catalog_id,session_name=session_name)
+            if existing:
+                import copy
+                record["metadata"] = copy.deepcopy(existing["metadata"])
         return store.put("objects", identifier, record)
     except BaseException:
         # Remove only this new, checked directory inside the data root.

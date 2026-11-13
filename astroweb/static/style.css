@@ -162,3 +162,29 @@ body.studio-route > :is(.site-header,main:not(#studio),.skip,.site-footer) { dis
 #polar-side { width:auto; }
 #polar-time { flex:1; min-width:80px; }
 @media(max-width:849px){.polar-stage{min-height:min(100vw,76svh)}}
+
+.collection-links,#viewer-neighbours { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+#viewer-neighbours { margin-left:auto; }
+#viewer-neighbours a { display:grid; padding:6px 12px; gap:1px; background:#121b2a; border:1px solid #334358; border-radius:6px; max-width:240px; }
+#viewer-neighbours a:hover,.atlas-row:hover { border-color:var(--cyan); }
+#viewer-neighbours small { color:var(--cyan); font-size:10px; }
+#viewer-neighbours strong { font-size:12px; }
+#viewer-neighbours span { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.collection-page .viewer-top { flex-wrap:wrap; }
+.collection-page h1 { font-size:clamp(24px,3vw,40px); }
+.collection-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(270px,26%); min-height:72svh; }
+.collection-chart { min-width:0; }
+#atlas-stage { height:clamp(320px,62svh,780px); position:relative; }
+#collection-sky { height:100%; width:100%; display:block; cursor:grab; touch-action:none; }
+#collection-sky:active { cursor:grabbing; }
+.collection-index { padding:20px; border-left:1px solid var(--line); min-width:0; }
+#atlas-list { display:grid; gap:6px; max-height:42svh; overflow:auto; }
+.atlas-row { display:grid; border:1px solid var(--line); border-radius:6px; padding:9px 12px; text-align:left; }
+.atlas-row[aria-pressed=true] { border-color:var(--gold); }
+.atlas-row small,#atlas-meta { color:var(--muted); }
+#atlas-detail,#atlas-compare { margin-top:18px; }
+#atlas-peer { max-width:100%; }
+#atlas-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0; }
+#atlas-pair img { width:100%; height:125px; object-fit:contain; background:#070c13; }
+#atlas-pair span { font-size:11px; }
+@media(max-width:849px){.collection-layout{grid-template-columns:1fr}.collection-index{border-left:0}.collection-links{justify-content:end}#viewer-neighbours{order:3;width:100%;margin:0}#viewer-neighbours a{flex:1;min-width:0}#atlas-stage{height:min(70svh,85vw)}}

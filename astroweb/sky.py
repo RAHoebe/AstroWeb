@@ -42,7 +42,7 @@ def build_sky(record):
         raise ValueError("sky_metadata_missing")
     payload = _build(obs["date_obs"], float(obs["latitude"]), float(obs["longitude"]), float(obs["ra"]), float(obs["dec"]), obs.get("timezone", "Europe/Amsterdam"), float(obs.get("elevation") or 0))
     # Position is deliberately kept internal unless the owner explicitly publishes it.
-    return {**payload, "location": {"latitude": obs["latitude"], "longitude": obs["longitude"]} if obs.get("publish_location") else None, "id": record["id"]}
+    return {**payload, "location": {"latitude": obs["latitude"], "longitude": obs["longitude"]} if obs.get("publish_location") else None, "id": record.get("catalog_id",record["id"])}
 
 
 @lru_cache(maxsize=32)

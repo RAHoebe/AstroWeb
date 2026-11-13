@@ -116,6 +116,7 @@ def create_app(data_dir=None, testing=False):
     def present(record, private=False):
         from .observation import public_observation
         value = {k: record[k] for k in ["id", "width", "height", "metadata", "params", "render", "published", "created_at"]}
+        value.update(catalog_id=record.get("catalog_id",record["id"]),session_name=record.get("session_name",""))
         value.update(poster=f"/media/{record['id']}/poster", video=f"/media/{record['id']}/movie" if record["video"] else None, final=f"/media/{record['id']}/final", observation=record.get("observation") if private else public_observation(record.get("observation", {})), sky_available=all(record.get("observation", {}).get(k) is not None for k in ["ra", "dec", "latitude", "longitude", "date_obs"]))
         if Path(record["assets"]["final"]).suffix.lower() in {".tif", ".tiff"}:
             value["original_view"] = f"/media/{record['id']}/original-view"
@@ -156,7 +157,9 @@ def create_app(data_dir=None, testing=False):
         from .galaxy import galactic_map
         record = get_object(identifier)
         from .environment import target_galaxy
-        return jsonify({**present(record), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record))})
+        from .collection import neighbours
+        visible = [r for r in store.all("objects") if r["published"]]
+        return jsonify({**present(record), "neighbours":neighbours(visible,record["id"]), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record))})
 
     @app.get("/api/objects/<identifier>/environment")
     def environment(identifier):
@@ -209,6 +212,15 @@ def create_app(data_dir=None, testing=False):
             abort(404)
         target = movie(store, record, field)
         return send_file(target, mimetype="video/mp4", conditional=True, max_age=0)
+
+    @app.get("/atlas")
+    def personal_atlas():
+        return send_file(ROOT / "static" / "collection.html")
+
+    @app.get("/api/atlas")
+    def personal_atlas_data():
+        from .collection import atlas_data
+        return jsonify(atlas_data(store, bool(session.get("admin"))))
 
     @app.get("/guide")
     def guide():
@@ -326,11 +338,11 @@ def create_app(data_dir=None, testing=False):
                 fits.save(fits_path)
                 observation = read_observation(fits_path)
             with queue.lock:
-                record = import_object(store, identifier, paths)
+                record = import_object(store, identifier, paths, request.form.get("session_name",""))
                 if fits_path:
                     from .observation import attach_fits
                     record = attach_fits(store, record, fits_path, observation)
-                job = queue.submit(identifier, params.__dict__)
+                job = queue.submit(record["id"], params.__dict__)
         return jsonify(object=present(record, True), job=job), 202
 
     @app.post("/api/admin/objects/<identifier>/align")
@@ -394,10 +406,15 @@ def create_app(data_dir=None, testing=False):
     def change_identifier(identifier):
         new = normalize_id(json_body().get("identifier",""))
         record = get_object(identifier)
-        if new != identifier:
+        current_catalog = record.get("catalog_id",identifier)
+        if new != current_catalog:
             metadata = renamed_metadata(new)
             with queue.lock:
-                record = store.rename_object(identifier, new, metadata)
+                if record.get("session_name"):
+                    new_id = new+"~"+identifier.split("~")[-1]
+                    record = store.rename_object(identifier,new_id,metadata,catalog_id=new)
+                else:
+                    record = store.rename_object(identifier,new,metadata)
         return jsonify(object=present(record, True))
 
     @app.put("/api/admin/objects/<identifier>/metadata")
@@ -442,7 +459,7 @@ def create_app(data_dir=None, testing=False):
         from .observation import attach_fits, read_observation
         record = get_object(identifier)
         file = request.files.get("fits")
-        if not file or not file.filename or not Path(file.filename).name.upper().startswith(identifier + "_"):
+        if not file or not file.filename or not Path(file.filename).name.upper().startswith(record.get("catalog_id", identifier) + "_"):
             raise ValueError("invalid_filename")
         with tempfile.TemporaryDirectory(prefix="fits-", dir=store.root) as temp:
             path = Path(temp) / secure_filename(file.filename)

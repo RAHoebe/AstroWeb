@@ -62,7 +62,7 @@ class Store:
             row = db.execute("SELECT current_id FROM object_aliases WHERE alias=?", (identifier,)).fetchone()
         return row[0] if row else identifier
 
-    def rename_object(self, old, new, metadata):
+    def rename_object(self, old, new, metadata, catalog_id=None):
         with self.lock, self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT record FROM objects WHERE id=?", (old,)).fetchone()
@@ -79,6 +79,8 @@ class Store:
                 raise ValueError("rename_busy")
             record.setdefault("storage_id", old)
             record.update(id=new,metadata=metadata)
+            if catalog_id:
+                record["catalog_id"] = catalog_id
             db.execute("UPDATE objects SET id=?,record=? WHERE id=?", (new,json.dumps(record),old))
             for job in jobs:
                 job["object_id"] = new

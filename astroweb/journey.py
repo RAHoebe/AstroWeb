@@ -197,11 +197,7 @@ def render_journey(store, record, field, output, plates):
     overview = cv2.resize(atlas,(1280,640),interpolation=cv2.INTER_AREA)
     photo = cv2.imread(str(store.path(record["poster"])))
     ph,pw = photo.shape[:2]
-    yy,xx = np.ogrid[-1:1:complex(HEIGHT), -1:1:complex(WIDTH)]
-    vignette = np.clip(1-.23*(xx*xx+yy*yy), .54, 1)
     src = np.float32([[0,0],[pw-1,0],[pw-1,ph-1],[0,ph-1]])
-    edge_feather = np.clip(np.minimum(1-np.abs(xx), 1-np.abs(yy))/.22, 0, 1).astype(np.float32)
-    matte = np.full((HEIGHT, WIDTH, 3), (12, 8, 6), np.uint8)
     start_scale = WIDTH*.46
     extent = np.ptp(points,axis=0)
     end_scale = min(WIDTH*.77/max(extent[0],1e-6),HEIGHT*.73/max(extent[1],1e-6)) if has_frame else start_scale*9
@@ -217,27 +213,30 @@ def render_journey(store, record, field, output, plates):
             texture = overview if scale<800 else atlas
             fac = scale/texture.shape[0]
             matrix = np.float32([[fac,0,offset[0]],[0,fac,offset[1]]])
-            scene = cv2.warpAffine(texture,matrix,(WIDTH,HEIGHT),flags=cv2.INTER_LINEAR,borderValue=(12,8,6))
-            scene, detailed = blend_details(scene, plates, target, offset, scale)
-            # Dim the wide-field plate as the sharp telescope image takes over.
-            fade = smooth((t-.44)/.33)
-            if has_frame and fade:
-                shade = 1-fade*(1-(.72 if detailed else .26)*vignette)
-                scene = np.uint8(scene*shade[:,:,None])
             quad = (points*scale+offset).astype(np.float32)
             cx,cy = np.rint(quad.mean(axis=0)).astype(int)
+            pose=quad
+            mirrored=False
+            roll=None
+            if has_frame and t>.59:
+                pose,mirrored=landing(quad,pw,ph,smooth((t-.59)/.32))
+                roll=cv2.getPerspectiveTransform(quad,pose)
+            def background(transform):
+                # Project the full atlas and plates directly into the final
+                # viewport, including sky outside the pre-roll video rectangle.
+                if transform is None:
+                    sky=cv2.warpAffine(texture,matrix,(WIDTH,HEIGHT),borderValue=(12,8,6))
+                else:
+                    sky=cv2.warpPerspective(texture,transform @ np.vstack((matrix,[0,0,1])),
+                                            (WIDTH,HEIGHT),borderValue=(12,8,6))
+                return blend_details(sky,plates,target,offset,scale,transform)
+            scene,detailed=background(roll)
+            if mirrored and t>.89:
+                upright=cv2.getPerspectiveTransform(quad,pose[[3,2,1,0]])
+                other,_=background(upright)
+                flip=smooth((t-.89)/.055)
+                scene=cv2.addWeighted(scene,1-flip,other,flip,0)
             if has_frame and t>.22:
-                arrival = smooth((t-.59)/.32)
-                pose, mirrored = landing(quad, pw, ph, arrival)
-                if arrival:
-                    transform = cv2.getPerspectiveTransform(quad, pose)
-                    # Fade the edges of the atlas viewport as it rolls out of
-                    # view so its rectangular boundary never crosses the sky.
-                    edge_alpha = 1-smooth(arrival/.14)*(1-edge_feather)
-                    scene = cv2.blendLinear(scene,matte,edge_alpha.astype(np.float32),
-                                            (1-edge_alpha).astype(np.float32))
-                    scene = cv2.warpPerspective(scene, transform, (WIDTH,HEIGHT), borderValue=(12,8,6))
-                    scene = cv2.addWeighted(scene,1-arrival,matte,arrival,0)
                 overlay = cv2.warpPerspective(photo,cv2.getPerspectiveTransform(src,pose),(WIDTH,HEIGHT))
                 if mirrored and t>.89:
                     # A reflection cannot be reached by a continuous camera roll.
@@ -263,7 +262,7 @@ def render_journey(store, record, field, output, plates):
             opacity = 1-smooth((t-.64)/.22) if has_frame else 1
             if opacity:
                 labelled = scene.copy()
-                draw_label(labelled,record["id"].replace("_"," "),(32,47),.82)
+                draw_label(labelled,record.get("catalog_id",record["id"]).replace("_"," "),(32,47),.82)
                 draw_label(labelled,f"l {np.rad2deg(mean_lon)%360:06.2f}   b {np.rad2deg(lat.mean()):+.2f}",
                            (33,70),.44,(177,190,202))
                 if detailed:
@@ -284,7 +283,7 @@ def render_journey(store, record, field, output, plates):
 def movie(store, record, field):
     from .survey import survey_for
     survey = survey_for(field)
-    digest = hashlib.sha256(json.dumps(["atlas-v7-registered",survey,record.get("sha256",{}).get("final"),field],
+    digest = hashlib.sha256(json.dumps(["atlas-v8-surroundings",survey,record.get("sha256",{}).get("final"),field],
                                        sort_keys=True).encode()).hexdigest()[:20]
     folder = store.path(f"objects/{record.get('storage_id', record['id'])}/journeys")
     if record.get("storage_id", record["id"]) != record["id"]:

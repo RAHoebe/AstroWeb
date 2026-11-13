@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090b12"><title>Hemelatlas · AstroWeb</title>
+  <link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/collection.js"></script>
+</head>
+<body class="collection-page">
+  <header class="viewer-top"><div><a class="brand" href="/">ASTROWEB</a><h1 data-i18n="collectionAtlas">Hemelatlas</h1></div>
+    <div class="viewer-actions"><div class="language" role="group" aria-label="Language"><button data-lang="nl">NL</button><button data-lang="en">EN</button></div><a class="button secondary" href="/#gallery" data-i18n="backGallery">Terug naar de galerij</a></div>
+  </header>
+  <main class="collection-layout">
+    <section class="collection-chart"><div id="atlas-stage"><canvas id="collection-sky" role="img" data-i18n-aria="collectionAtlas"></canvas></div>
+      <div class="atlas-controls"><button id="atlas-reset" type="button" class="button secondary" data-i18n="allSky">Hele hemel</button>
+        <label><span data-i18n="atlasZoom">Kaartzoom</span> <input id="atlas-scale" type="range" min="0" max="6" step=".025" value="0"></label>
+        <label class="atlas-toggle"><input id="atlas-labels" type="checkbox" checked><span data-i18n="objectNames">Objectnamen</span></label></div>
+      <p class="atlas-notes" data-i18n="collectionLegend">Omtrek: gemeten beeldveld. Kruis: alleen richtpunt. Zoom met het muiswiel of selecteer een opname.</p>
+    </section>
+    <aside class="collection-index"><h2 data-i18n="captures">Opnamen</h2><p id="atlas-status" role="status"></p>
+      <div id="atlas-list"></div><section id="atlas-detail" hidden>
+      <h3 id="atlas-title"></h3><p id="atlas-meta"></p><a id="atlas-open" class="button primary" data-i18n="viewCapture">Bekijk opname</a>
+      <div id="atlas-compare" hidden><label for="atlas-peer" data-i18n="compareField">Vergelijk met een andere opname</label><select id="atlas-peer"></select><div id="atlas-pair"></div></div>
+      </section>
+    </aside>
+  </main>
+</body></html>

@@ -118,7 +118,7 @@ def feather():
     return (255*weight*weight*(3-2*weight)).astype(np.uint8)
 
 
-def blend_details(scene, plates, target, offset, scale):
+def blend_details(scene, plates, target, offset, scale, roll=None):
     used=False
     for span,image in plates:
         side=span*scale
@@ -128,8 +128,13 @@ def blend_details(scene, plates, target, offset, scale):
         xy=(target-span/2)*scale+offset
         matrix=np.float32([[side/SIZE,0,xy[0]],[0,side/SIZE,xy[1]]])
         size=(scene.shape[1],scene.shape[0])
-        detail=cv2.warpAffine(image,matrix,size,flags=cv2.INTER_LINEAR)
-        alpha=cv2.warpAffine(feather(),matrix,size).astype(np.float32)*np.float32(strength/255)
+        if roll is None:
+            warp=lambda src:cv2.warpAffine(src,matrix,size,flags=cv2.INTER_LINEAR)
+        else:
+            transform=roll @ np.vstack((matrix,[0,0,1]))
+            warp=lambda src:cv2.warpPerspective(src,transform,size,flags=cv2.INTER_LINEAR)
+        detail=warp(image)
+        alpha=warp(feather()).astype(np.float32)*np.float32(strength/255)
         scene=cv2.blendLinear(scene,detail,1-alpha,alpha)
         used=True
     return scene,used
