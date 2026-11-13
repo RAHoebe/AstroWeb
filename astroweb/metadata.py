@@ -1,0 +1,207 @@
+"""Curated starting records plus optional, cached, attributed NASA enrichment."""
+import copy
+import html
+import math
+import os
+import re
+from datetime import datetime, timezone
+import xml.etree.ElementTree as ET
+
+import requests
+
+from .store import now
+
+NASA_NGC = "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-20/"
+NASA_IC = "https://science.nasa.gov/photojournal/blowin-in-the-stellar-wind/"
+
+SEEDS = {
+    "NGC_7000": {
+        "target": "NGC 7000", "type": {"nl": "Emissienevel", "en": "Emission nebula"},
+        "name": {"nl": "Noord-Amerikanevel", "en": "North America Nebula"},
+        "constellation": {"nl": "Zwaan", "en": "Cygnus"},
+        "summary": {"nl": "Gloeiend waterstof en donkere stofwolken tekenen een kosmische kustlijn in het sterrenbeeld Zwaan.", "en": "Glowing hydrogen and dark dust clouds trace a cosmic coastline in the constellation Cygnus."},
+        "description": {
+            "nl": "NGC 7000 dankt zijn bijnaam aan de opvallende vorm die op het Noord-Amerikaanse continent lijkt. Het is een uitgestrekt gebied van gas en stof waarin nieuwe sterren ontstaan. Hete jonge sterren laten het omringende gas oplichten, terwijl dichte stofwolken een deel van dat licht tegenhouden. De donkere insnijding die aan de Golf van Mexico doet denken, maakt de vorm bijzonder herkenbaar. De nevel staat aan de hemel in de buurt van Deneb. De kleuren van deze foto hangen samen met de opnamefilters en de beeldbewerking.",
+            "en": "NGC 7000 takes its nickname from its striking resemblance to the North American continent. It is an extensive region of gas and dust where new stars are forming. Hot young stars illuminate the surrounding gas, while dense dust clouds obscure some of its light. A dark indentation resembling the Gulf of Mexico makes the outline especially recognizable. The nebula lies near Deneb in our sky. The colors of this photograph depend on its imaging filters and processing."
+        },
+        "sources": [{"label": "NASA · Caldwell 20", "url": NASA_NGC}],
+        "aliases": ["NGC 7000", "North America Nebula", "Caldwell 20"],
+    },
+    "NGC_6992": {
+        "target": "NGC 6992",
+        "type": {"nl": "Supernovarest", "en": "Supernova remnant"},
+        "name": {"nl": "Oostelijke Sluiernevel · NGC 6992", "en": "Eastern Veil Nebula · NGC 6992"},
+        "constellation": {"nl": "Zwaan", "en": "Cygnus"},
+        "summary": {"nl": "Fijne gasdraden tekenen de oostelijke boog van een oude supernovarest in de Zwaan.",
+                    "en": "Fine filaments trace the eastern arc of an old supernova remnant in Cygnus."},
+        "description": {"nl": "NGC 6992 is een deel van de oostelijke Sluiernevel. De uitdijende schokgolf van een supernova raakt hier interstellair gas en laat dunne draden oplichten. NASA beschrijft de oostelijke boog als Caldwell 33. Die omvat ook het naburige gebied NGC 6995. Samen met de westelijke boog maken ze deel uit van de veel grotere Cygnus Loop.",
+                        "en": "NGC 6992 is part of the Eastern Veil Nebula. Here the expanding shock wave of a supernova encounters interstellar gas, lighting up thin filaments. NASA lists the eastern arc as Caldwell 33, which also includes neighbouring NGC 6995. The eastern and western arcs belong to the much larger Cygnus Loop."},
+        "aliases": ["NGC 6992", "NGC6992"],
+        "sources": [
+            {"label": "NASA · NGC 6992", "url": "https://science.nasa.gov/image-article/apod-2009-december-1-ngc-6992-filaments-of-the-veil-nebula/"},
+            {"label": "NASA · Caldwell 33", "url": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-33/"},
+            {"label": "ESA/Hubble · Cygnus Loop", "url": "https://esahubble.org/news/heic0006/"},
+            {"label": "CDS/SIMBAD · NGC 6992", "url": "https://simbad.cds.unistra.fr/simbad/sim-id?Ident=NGC+6992"}
+        ],
+    },
+    "IC_1396": {
+        "target":"IC 1396", "type":{"nl":"Emissienevel en sterrenhoop","en":"Emission nebula and star cluster"},
+        "name":{"nl":"IC 1396 · Het gebied van de Slurfnevel","en":"IC 1396 · The Elephant’s Trunk region"},
+        "constellation":{"nl":"Cepheus","en":"Cepheus"},
+        "summary":{"nl":"In Cepheus omlijst lichtgevend gas de donkere stofwolken van IC 1396.","en":"In Cepheus, glowing gas surrounds the dark clouds of IC 1396."},
+        "description":{"nl":"IC 1396 is een stervormingsgebied in Cepheus. Straling van hete sterren laat het omringende gas oplichten. De Slurfnevel, ook IC 1396A genoemd, is een langgerekte, dichte wolk binnen dit grotere complex.",
+                       "en":"IC 1396 is a star-forming region in Cepheus. Radiation from hot stars lights up the surrounding gas. The Elephant’s Trunk, also called IC 1396A, is an elongated dense cloud within this larger complex."},
+        "aliases":["IC 1396","IC1396"], "sources":[{"label":"NASA · IC 1396","url":"https://science.nasa.gov/image-article/apod-2017-july-20-ic-1396-emission-nebula-in-cepheus/"},{"label":"NASA/JPL · IC 1396A","url":NASA_IC}]
+    },
+    "HIP_106890": {
+        "target": "IC 1396", "type": {"nl": "Emissienevel en stof", "en": "Emission nebula & dust"},
+        "name": {"nl": "Het gebied van de Slurfnevel", "en": "The Elephant’s Trunk region"},
+        "constellation": {"nl": "Cepheus", "en": "Cepheus"},
+        "summary": {"nl": "Donkere stofstructuren steken af tegen het lichtgevende gas van IC 1396 in Cepheus.", "en": "Dark dust structures stand out against the glowing gas of IC 1396 in Cepheus."},
+        "description": {
+            "nl": "De Slurfnevel is een dichte wolk van gas en stof in het grotere stervormingsgebied IC 1396. Het licht en de sterrenwind van zware sterren vormen de karakteristieke randen en structuren. Dichte delen van de wolk kunnen zich tegen die straling beschermen en nieuwe sterren bevatten. HIP_106890 is hier het oorspronkelijke opnamelabel uit de telescoopworkflow: een HIP-nummer verwijst naar een ster, niet naar de volledige nevel. Het informatiedoel voor deze opname is daarom apart ingesteld op IC 1396. Zonder plate solving is de precieze kadrering niet bevestigd.",
+            "en": "The Elephant’s Trunk is a dense cloud of gas and dust within the larger IC 1396 star-forming region. Radiation and stellar winds from massive stars sculpt its distinctive rims and structures. Dense areas can shield themselves from that radiation and contain young stars. HIP_106890 is retained here as the original capture label from the telescope workflow: a HIP number identifies a star, not the whole nebula. The information target for this capture is therefore set separately to IC 1396. The exact framing has not been confirmed by plate solving."
+        },
+        "sources": [{"label": "NASA / JPL · IC 1396", "url": NASA_IC}],
+        "aliases": ["IC 1396", "Elephant's Trunk", "Elephant Trunk"],
+    },
+}
+
+
+def initial_metadata(identifier):
+    if identifier in SEEDS:
+        result = copy.deepcopy(SEEDS[identifier])
+        result["translation"] = "curated"
+    else:
+        name = identifier.replace("_", " ")
+        result = {
+            "target": name, "name": {"nl": name, "en": name}, "type": {"nl": "Deep-skyobject", "en": "Deep-sky object"},
+            "constellation": {"nl": "", "en": ""},
+            "summary": {"nl": "Een eigen blik op het diepe heelal.", "en": "A personal view of the deep sky."},
+            "description": {"nl": "Er is nog geen gecontroleerde Nederlandse objectbeschrijving. De beheerder kan broninformatie ophalen en de tekst aanvullen.", "en": "A verified object description has not yet been added. The administrator can fetch source information and edit the text."},
+            "sources": [], "aliases": [name], "translation": "pending",
+        }
+    result["updated_at"] = now()
+    return result
+
+
+def renamed_metadata(identifier):
+    result = initial_metadata(identifier)
+    if identifier in SEEDS:
+        return result
+    try:
+        result = refresh_metadata(result)
+    except (requests.RequestException, ValueError):
+        return result
+    external = result["external"]
+    for language, text in external["text"].items():
+        if text:
+            result["description"][language] = text
+            result["summary"][language] = text.split(". ",1)[0][:300]
+    result["translation"] = external["translation"]
+    return result
+
+
+def validate_metadata(raw):
+    if not isinstance(raw, dict):
+        raise ValueError("invalid_metadata")
+    result = {}
+    for key in ["name", "type", "constellation", "summary", "description"]:
+        value = raw.get(key)
+        if not isinstance(value, dict) or set(value) != {"nl", "en"}:
+            raise ValueError("invalid_metadata")
+        maximum = 5000 if key == "description" else 350
+        if any(not isinstance(t, str) or len(t) > maximum for t in value.values()):
+            raise ValueError("invalid_metadata")
+        result[key] = {language: text.strip() for language, text in value.items()}
+    target = raw.get("target", "")
+    if not isinstance(target, str) or not re.fullmatch(r"[A-Za-z0-9 _+.'-]{1,100}", target):
+        raise ValueError("invalid_metadata")
+    result["target"] = target.strip()
+    distance = raw.get("galactic_distance_ly")
+    if distance is not None:
+        if isinstance(distance, bool) or not isinstance(distance, (float, int)) or not math.isfinite(distance) or distance <= 0:
+            raise ValueError("invalid_metadata")
+        result["galactic_distance_ly"] = distance
+    result["aliases"] = [result["target"]]
+    result["translation"] = "admin"
+    result["updated_at"] = now()
+    return result
+
+
+def clean_text(value):
+    return html.unescape(re.sub(r"<[^>]+>", " ", value or "")).strip()
+
+
+def refresh_metadata(metadata, force=False):
+    result = copy.deepcopy(metadata)
+    external = result.get("external")
+    if external and not force:
+        age = datetime.now(timezone.utc) - datetime.fromisoformat(external["fetched_at"])
+        if age.days < 30:
+            return result
+    target = result["target"]
+    known = next((seed for seed in SEEDS.values() if target.casefold() in
+                  [name.casefold() for name in [seed["target"], *seed["aliases"]]]), None)
+    aliases = list(dict.fromkeys([target, *result.get("aliases", []), *(known["aliases"] if known else [])]))
+    # Query additional designations, but accept a media caption only when it
+    # identifies the target. Caldwell 33 is a wider region than NGC 6992.
+    queries = list(aliases)
+    if known is SEEDS["NGC_6992"]:
+        queries.extend(["Eastern Veil Nebula", "Caldwell 33"])
+    external = None
+    for query in queries:
+        try:
+            response = requests.get("https://images-api.nasa.gov/search", params={"q": query, "media_type": "image", "page_size": 30}, headers={"User-Agent": "AstroWeb/0.1"}, timeout=(4, 12))
+            response.raise_for_status()
+        except requests.RequestException:
+            break
+        matches = []
+        for item in response.json().get("collection", {}).get("items", []):
+            data = next(iter(item.get("data", [])), {})
+            text = clean_text(data.get("title", "") + " " + data.get("description", ""))
+            score = sum(bool(re.search(r"(?<![a-z0-9])" + re.escape(alias).replace(r"\ ", r"\s*") + r"(?![a-z0-9])", text, re.I)) for alias in aliases)
+            if score and data.get("nasa_id") and data.get("description"):
+                matches.append((score, data))
+        if matches:
+            data = max(matches, key=lambda item: item[0])[1]
+            external = {"provider":"NASA Image and Video Library", "title":clean_text(data.get("title","")),
+                        "text":{"en":clean_text(data["description"])[:3000], "nl":""},
+                        "credit":data.get("photographer") or data.get("secondary_creator") or data.get("center","NASA"),
+                        "url":"https://images.nasa.gov/details/"+requests.utils.quote(data["nasa_id"],safe="")}
+            break
+    if external is None and known:
+        # Local, bilingual editorial summary with the relevant primary source.
+        external = {"provider":"NASA Science", "title":known["name"]["en"], "text":copy.deepcopy(known["summary"]),
+                    "credit":"AstroWeb · NASA Science", "url":known["sources"][0]["url"]}
+    if external is None:
+        url = "https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/S?"+requests.utils.quote(target, safe="")
+        response = requests.get(url, timeout=(4,12))
+        response.raise_for_status()
+        try:
+            resolver = ET.fromstring(response.content).find(".//Resolver")
+        except ET.ParseError as exc:
+            raise requests.RequestException("Invalid Sesame response") from exc
+        if resolver is None or not resolver.findtext("oname"):
+            raise ValueError("metadata_not_found")
+        name = resolver.findtext("oname")
+        ra, dec = resolver.findtext("jradeg"), resolver.findtext("jdedeg")
+        position = f" (ICRS {float(ra):.5f}°, {float(dec):+.5f}°)" if ra and dec else ""
+        external = {"provider":"CDS/SIMBAD", "title":name, "text":{"en":f"Catalogue identification: {name}{position}.",
+                    "nl":f"Catalogusidentificatie: {name}{position}."}, "credit":"CDS, Strasbourg",
+                    "url":"https://simbad.cds.unistra.fr/simbad/sim-id?Ident="+requests.utils.quote(name,safe="")}
+    result["external"] = external
+    external.update(fetched_at=now(), translation="curated" if external["text"]["nl"] else "unavailable")
+    description = external["text"]["en"]
+    translate_url = os.environ.get("ASTROWEB_TRANSLATE_URL", "").rstrip("/")
+    if translate_url and description and not external["text"]["nl"]:
+        try:
+            translated = requests.post(translate_url + "/translate", json={"q": description, "source": "en", "target": "nl", "format": "text", "api_key": os.environ.get("ASTROWEB_TRANSLATE_KEY", "")}, timeout=(5, 60))
+            translated.raise_for_status()
+            value = translated.json().get("translatedText", "")
+            if isinstance(value, str) and value.strip():
+                result["external"]["text"]["nl"] = value.strip()[:6000]
+                result["external"]["translation"] = "machine"
+        except (requests.RequestException, ValueError):
+            result["external"]["translation"] = "failed"
+    return result

@@ -1,0 +1,8 @@
+# Aanvulling / overlay: docker compose -f compose.yaml -f compose.synology.yaml up -d
+services:
+  astroweb:
+    environment:
+      ASTROWEB_HTTPS: "1"
+      ASTROWEB_HOSTS: "localhost,127.0.0.1,astroweb.example.synology.me"
+    volumes:
+      - /volume1/docker/astroweb/data:/data

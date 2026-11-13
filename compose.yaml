@@ -1,0 +1,26 @@
+services:
+  astroweb:
+    build: .
+    image: astroweb:0.1.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      ASTROWEB_DATA: /data
+      ASTROWEB_HOSTS: "localhost,127.0.0.1"
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 4g
+    stop_grace_period: 5m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,10 @@
+.git
+.venv
+data
+AstroPhotos
+qa
+tests
+__pycache__
+.pytest_cache
+.env
+*.zip

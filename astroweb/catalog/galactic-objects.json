@@ -1,0 +1,226 @@
+[
+  {
+    "id": "NGC 7000",
+    "nl": "Noord-Amerikanevel",
+    "en": "North America Nebula",
+    "aliases": [
+      "C20"
+    ],
+    "ly": 1800,
+    "ra": 314.6958,
+    "dec": 44.33,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-20/"
+  },
+  {
+    "id": "NGC 6992",
+    "nl": "Oostelijke Sluiernevel",
+    "en": "Eastern Veil Nebula",
+    "aliases": [
+      "C33"
+    ],
+    "ly": 2000,
+    "ra": 314.0792,
+    "dec": 31.7433,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-33/"
+  },
+  {
+    "id": "IC 1396",
+    "nl": "IC 1396",
+    "en": "IC 1396",
+    "aliases": [],
+    "ly": 3000,
+    "ra": 324.71417,
+    "dec": 57.53111,
+    "source": "https://science.nasa.gov/image-article/apod-2017-july-20-ic-1396-emission-nebula-in-cepheus/"
+  },
+  {
+    "id": "M42",
+    "nl": "Orionnevel",
+    "en": "Orion Nebula",
+    "aliases": [
+      "NGC1976"
+    ],
+    "ly": 1500,
+    "ra": 83.8201,
+    "dec": -5.3876,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-42/"
+  },
+  {
+    "id": "M1",
+    "nl": "Krabnevel",
+    "en": "Crab Nebula",
+    "aliases": [
+      "NGC1952"
+    ],
+    "ly": 6500,
+    "ra": 83.6324,
+    "dec": 22.0174,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-1/"
+  },
+  {
+    "id": "M45",
+    "nl": "Plejaden",
+    "en": "Pleiades",
+    "aliases": [],
+    "ly": 445,
+    "ra": 56.65833,
+    "dec": 24.17806,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-45/"
+  },
+  {
+    "id": "M8",
+    "nl": "Lagunenevel",
+    "en": "Lagoon Nebula",
+    "aliases": [
+      "NGC6523"
+    ],
+    "ly": 5200,
+    "ra": 270.9042,
+    "dec": -24.3867,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-8/"
+  },
+  {
+    "id": "M16",
+    "nl": "Adelaarsnevel",
+    "en": "Eagle Nebula",
+    "aliases": [
+      "NGC6611"
+    ],
+    "ly": 7000,
+    "ra": 274.688,
+    "dec": -13.792,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-16/"
+  },
+  {
+    "id": "M17",
+    "nl": "Omeganevel",
+    "en": "Omega Nebula",
+    "aliases": [
+      "NGC6618"
+    ],
+    "ly": 5500,
+    "ra": 275.1958,
+    "dec": -16.1717,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-17/"
+  },
+  {
+    "id": "M20",
+    "nl": "Trifidnevel",
+    "en": "Trifid Nebula",
+    "aliases": [
+      "NGC6514"
+    ],
+    "ly": 5000,
+    "ra": 270.675,
+    "dec": -22.9717,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-20/"
+  },
+  {
+    "id": "M27",
+    "nl": "Halternevel",
+    "en": "Dumbbell Nebula",
+    "aliases": [
+      "NGC6853"
+    ],
+    "ly": 1200,
+    "ra": 299.90151327087,
+    "dec": 22.72119779431999,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-27/"
+  },
+  {
+    "id": "M57",
+    "nl": "Ringnevel",
+    "en": "Ring Nebula",
+    "aliases": [
+      "NGC6720"
+    ],
+    "ly": 2000,
+    "ra": 283.39623652463,
+    "dec": 33.02913424654,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-57/"
+  },
+  {
+    "id": "M13",
+    "nl": "Herculescluster",
+    "en": "Hercules Cluster",
+    "aliases": [
+      "NGC6205"
+    ],
+    "ly": 25000,
+    "ra": 250.423475,
+    "dec": 36.4613194,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-13/"
+  },
+  {
+    "id": "M22",
+    "nl": "M22",
+    "en": "M22",
+    "aliases": [
+      "NGC6656"
+    ],
+    "ly": 10000,
+    "ra": 279.09975,
+    "dec": -23.90475,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-22/"
+  },
+  {
+    "id": "M15",
+    "nl": "M15",
+    "en": "M15",
+    "aliases": [
+      "NGC7078"
+    ],
+    "ly": 33600,
+    "ra": 322.493042,
+    "dec": 12.167,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-15/"
+  },
+  {
+    "id": "M11",
+    "nl": "Wilde Eendcluster",
+    "en": "Wild Duck Cluster",
+    "aliases": [
+      "NGC6705"
+    ],
+    "ly": 6200,
+    "ra": 282.76542,
+    "dec": -6.27167,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-11/"
+  },
+  {
+    "id": "M35",
+    "nl": "M35",
+    "en": "M35",
+    "aliases": [
+      "NGC2168"
+    ],
+    "ly": 2800,
+    "ra": 92.28125,
+    "dec": 24.3375,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-35/"
+  },
+  {
+    "id": "M44",
+    "nl": "Praesepe",
+    "en": "Beehive Cluster",
+    "aliases": [
+      "NGC2632"
+    ],
+    "ly": 600,
+    "ra": 129.99333,
+    "dec": 19.60917,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-44/"
+  },
+  {
+    "id": "NGC 6960",
+    "nl": "Westelijke Sluiernevel",
+    "en": "Western Veil Nebula",
+    "aliases": [
+      "C34"
+    ],
+    "ly": 2000,
+    "ra": 311.40833,
+    "dec": 30.70833,
+    "source": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-34/"
+  }
+]
