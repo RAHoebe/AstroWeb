@@ -43,7 +43,21 @@ def test_named_m31_destinations_use_catalogue_centres(name,ra,dec):
 def test_ground_based_plate_offered_only_inside_registered_capture():
     r={"width":500,"height":480,"metadata":{"target":"C 20"},"sha256":{"final":"example"},
        "gaia":{"status":"solved","digest":"example","corners":[[315,42.6],[316.9,45.1],[314.9,45.9],[313.1,43.4]]}}
-    option,=hubble.fields(None,r)
+    options=hubble.fields(None,r)
+    assert [o["id"] for o in options]==["c20-wfpc2","heic0510a"]
+    assert options[0]["telescope"]=="HST/WFPC2"
+    option=options[1]
     assert option["id"]=="heic0510a" and "Digitized Sky Survey" in option["credit"]
     r["gaia"]["corners"]=[[80,0],[81,0],[81,1],[80,1]]
     assert hubble.window_geometry(None,r,option["id"]) is None
+
+def test_caldwell20_whole_frame_required_for_each_capture():
+    record={"width":800,"height":1200,"sha256":{"final":"test"},"metadata":{"target":"NGC 7000"},
+            "gaia":{"status":"solved","digest":"test","corners":[
+                [317.18230,43.88614],[316.14037,44.97247],[313.44828,43.58705],[314.51414,42.52549]]}}
+    assert hubble.window_geometry(None,record,"c20-wfpc2") is None
+    assert hubble.window_geometry(None,record,"heic0510a") is not None
+    plate=hubble.PLATES["c20-wfpc2"]
+    x,y=plate["focus"]
+    sky=hubble.plate_wcs(plate).pixel_to_world(x,plate["size"][1]-1-y)
+    assert (sky.ra.deg,sky.dec.deg)==pytest.approx((314.714925,44.264741),abs=.00001)

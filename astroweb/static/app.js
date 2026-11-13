@@ -272,7 +272,7 @@ function hubbleCaption(){
   const source=$('hubble-source');
   source.href=active?.source||(active?.filter?'https://hla.stsci.edu/hlaview.html#Images|'+encodeURIComponent(active.id):'https://esahubble.org/images/heic2501a/');
   source.textContent=active?.credit?active.credit+' ↗':active?.filter?'NASA/ESA Hubble · '+active.id+' ↗':'NASA, ESA, B. Williams (University of Washington) ↗';
-  $('hubble-description').textContent=active?.name?t('solarMissionNote'):active?t('hubble_'+active.relation)+' · '+t(active.id.startsWith('skymap-')?'skymapNote':active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
+  $('hubble-description').textContent=active?.name?t('solarMissionNote'):active?t('hubble_'+active.relation)+' · '+t(active.id.startsWith('skymap-')?'skymapNote':active.telescope?'hstPlateNote':active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
   const status=state.current?.body?({hubbleLoading:'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
   $('hubble-status').textContent=status?t(status):'';
   $('hubble-retry').hidden=hubbleState!=='hubble_unavailable';

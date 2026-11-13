@@ -25,6 +25,15 @@ TILES = "https://cdn.esahubble.org/archives/images/zoomable/heic2501a"
 WINDOWS = {"ngc206": (5325,7244), "m32": (11411,2437), "nucleus": (17461,6476)}
 # AVM calibration of the released large JPEGs. Pixel coordinates are top-down.
 PLATES = {
+    # The released WFPC2 JPEG was matched to 44 stars in the F606W HLA
+    # product hst_08216_44_wfpc2_f606w_wf. CD maps bottom-up FITS pixels.
+    "c20-wfpc2": dict(target="NGC_7000", size=(1330,1452), focus=(803,558),
+                      sky=(314.7059488841667,44.25845019444445), crpix=(762.99314,574.49945),
+                      cd=((-1.68198893e-5,2.22780662e-5),(2.22980315e-5,1.68273093e-5)),
+                      telescope="HST/WFPC2",
+                      url="https://science.nasa.gov/wp-content/uploads/2023/04/ngc7000_wfpc2_2flat_final-jpg.webp",
+                      source="https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-20/",
+                      credit="NASA, ESA, K. Stapelfeldt (JPL); processing: Gladys Kober (NASA/CUA)"),
     "ic1396a": dict(target="IC_1396", size=(1200,1200), sky=(324.0,57.4),
                     scale=1/3600, rotation=0, focus=(600,600), survey="PanSTARRS",
                     source="https://catalogs.mast.stsci.edu/panstarrs/",
@@ -69,6 +78,7 @@ def fields(store,record):
         if canonical(record["metadata"]["target"]) == plate["target"] or (is_andromeda(record) and plate["target"]=="M_31"):
             if window_geometry(store,record,name) is not None:
                 options.append({"id":name,"relation":"region","credit":plate["credit"],
+                                "telescope":plate.get("telescope"),
                                 "source":plate.get("source",f"https://esahubble.org/images/{name}/")})
     if not options:
         from .hst_archive import find_fields
@@ -86,6 +96,10 @@ def plate_wcs(plate):
     wcs=WCS(naxis=2)
     wcs.wcs.ctype=["RA---TAN","DEC--TAN"]
     wcs.wcs.crval=plate["sky"]
+    if "cd" in plate:
+        wcs.wcs.crpix=plate["crpix"]
+        wcs.wcs.cd=plate["cd"]
+        return wcs
     wcs.wcs.crpix=[length/2 for length in plate["size"]]
     wcs.wcs.cdelt=[-plate["scale"],plate["scale"]]
     wcs.wcs.crota=[plate["rotation"]]*2
@@ -105,6 +119,10 @@ def window_geometry(store,record,name):
         wcs=registration()
         half=1000
     square=np.array([[x-half,y-half],[x+half,y-half],[x+half,y+half],[x-half,y+half]])
+    if name in PLATES and PLATES[name].get("telescope"):
+        # A small focus area can fit even when the rest of the published
+        # photograph crosses the upload boundary. Require all four corners.
+        square=np.array([[0,0],[width-1,0],[width-1,height-1],[0,height-1]])
     sky=wcs.pixel_to_world(square[:,0],height-1-square[:,1])
     _,uv=project(store,record,sky)
     if uv is None or not np.isfinite(uv).all() or np.any((uv<0)|(uv>1)):
@@ -171,7 +189,8 @@ def render(store,record,name,registration_matrix,path,archive=None):
                 if not ok:raise ValueError("hubble_unavailable")
                 payload=encoded.tobytes()
             else:
-                reply=requests.get(f"https://cdn.esahubble.org/archives/images/large/{name}.jpg",timeout=(5,30))
+                url=plate.get("url",f"https://cdn.esahubble.org/archives/images/large/{name}.jpg")
+                reply=requests.get(url,timeout=(5,30))
                 reply.raise_for_status()
                 payload=reply.content
                 decoded=cv2.imdecode(np.frombuffer(payload,np.uint8),cv2.IMREAD_COLOR)
