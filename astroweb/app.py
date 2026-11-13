@@ -2,6 +2,7 @@ import functools
 import gzip
 import hmac
 import io
+import json
 import os
 import secrets
 import tempfile
@@ -22,7 +23,7 @@ from .jobs import JobQueue
 from .media import MAX_FILE, import_object, normalize_id, validate_image
 from .metadata import refresh_metadata, renamed_metadata, validate_metadata
 from .render import Parameters, Scene, ffmpeg_executable, gallery_preview_path, read_rgb, resize_long, save_jpg
-from .store import Store, now
+from .store import Store
 
 ROOT = Path(__file__).resolve().parent
 
@@ -86,10 +87,11 @@ def create_app(data_dir=None, testing=False):
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         if request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
-        if request.path.endswith("/sky") and response.status_code == 200 and "gzip" in request.headers.get("Accept-Encoding", ""):
-            response.set_data(gzip.compress(response.get_data(), compresslevel=5))
-            response.headers["Content-Encoding"] = "gzip"
-            response.headers["Vary"] = "Accept-Encoding"
+        if response.is_json and response.status_code == 200 and response.calculate_content_length() >= 16_384:
+            response.vary.add("Accept-Encoding")
+            if request.accept_encodings["gzip"] > 0:
+                response.set_data(gzip.compress(response.get_data(), compresslevel=4))
+                response.headers["Content-Encoding"] = "gzip"
         return response
 
     @app.errorhandler(ValueError)
@@ -288,7 +290,7 @@ def create_app(data_dir=None, testing=False):
     @app.get("/api/admin/objects")
     @admin_required
     def admin_objects():
-        return jsonify(objects=[present(record, True) for record in store.all("objects")], jobs=store.all("jobs")[:50])
+        return jsonify(objects=[present(record, True) for record in store.all("objects")], jobs=store.all("jobs", limit=50))
 
     @app.post("/api/admin/upload-poster")
     @admin_required
@@ -309,7 +311,7 @@ def create_app(data_dir=None, testing=False):
     def upload():
         identifier = normalize_id(request.form.get("identifier", ""))
         try:
-            raw_params = __import__("json").loads(request.form.get("params", "{}"))
+            raw_params = json.loads(request.form.get("params", "{}"))
         except ValueError:
             raise ValueError("invalid_parameters") from None
         params = Parameters.parse(raw_params)
@@ -395,7 +397,6 @@ def create_app(data_dir=None, testing=False):
         scene = Scene.from_paths({role: store.path(path) for role, path in record["assets"].items()}, params)
         # Show the chosen focal point at maximum zoom.
         import cv2
-        import io
         import numpy as np
         frame = np.rint(scene.frame(index/(count+1)) * 255).astype(np.uint8)
         _, data = cv2.imencode(".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
@@ -425,9 +426,13 @@ def create_app(data_dir=None, testing=False):
         value = validate_metadata(raw)
         if "galactic_distance_ly" not in raw and value["target"] == record["metadata"]["target"] and "galactic_distance_ly" in record["metadata"]:
             value["galactic_distance_ly"] = record["metadata"]["galactic_distance_ly"]
-        value["sources"] = record["metadata"].get("sources", [])
-        if "external" in record["metadata"]:
-            value["external"] = record["metadata"]["external"]
+        previous = record["metadata"]
+        same_target = value["target"].casefold() == previous["target"].casefold()
+        value["sources"] = previous.get("sources", []) if same_target else []
+        if same_target:
+            value["aliases"] = previous.get("aliases", value["aliases"])
+            if "external" in previous:
+                value["external"] = previous["external"]
         store.update("objects", identifier, metadata=value)
         return jsonify(ok=True)
 

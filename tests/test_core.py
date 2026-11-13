@@ -316,3 +316,38 @@ def test_gaia_recovers_reflected_field_and_rejects_unrelated_stars():
     np.testing.assert_allclose(result["corners"], np.column_stack((corners.ra.deg, corners.dec.deg)), atol=.0002)
     unrelated = rng.uniform([0, 0], [1000, 800], pixels.shape)
     assert fit_field(unrelated, catalog, [359.9, 65], 1000, 800, (1, 3)) is None
+
+def test_gzip_negotiation_of_large_json(app):
+    import gzip
+    store = app.extensions["store"]
+    store.put("objects","M_31",{"id":"M_31","width":200,"height":120,"assets":{"final":"M_31.png"},
+              "params":{},"render":None,"metadata":{"description":"x"*24000},"video":None,
+              "published":True,"created_at":"2026-01-01"})
+    client=app.test_client()
+    plain=client.get("/api/objects",headers={"Accept-Encoding":"gzip;q=0"})
+    compressed=client.get("/api/objects",headers={"Accept-Encoding":"gzip"})
+    assert plain.status_code == compressed.status_code == 200
+    assert "Content-Encoding" not in plain.headers
+    assert compressed.headers["Content-Encoding"] == "gzip"
+    assert gzip.decompress(compressed.data) == plain.data
+    assert "Accept-Encoding" in plain.vary and "Accept-Encoding" in compressed.vary
+
+
+def test_changing_catalogue_target_clears_old_source_links(app, images):
+    from astroweb.metadata import initial_metadata
+    store=app.extensions["store"]
+    record=import_object(store,"NGC_7000",list(images.values()))
+    meta=record["metadata"]
+    meta["external"]={"provider":"test","url":"https://example.org/old"}
+    store.update("objects",record["id"],metadata=meta)
+    client=app.test_client()
+    headers=sign_in(client)
+    url="/api/admin/objects/NGC_7000/metadata"
+    response=client.put(url,json=meta,headers=headers)
+    assert response.status_code==200
+    assert store.get("objects",record["id"])["metadata"]["external"]==meta["external"]
+    assert store.get("objects",record["id"])["metadata"]["aliases"]==meta["aliases"]
+    updated=initial_metadata("M_31")
+    assert client.put(url,json=updated,headers=headers).status_code==200
+    saved=store.get("objects",record["id"])["metadata"]
+    assert not saved["sources"] and "external" not in saved

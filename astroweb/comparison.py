@@ -6,7 +6,6 @@ import os
 import threading
 import uuid
 
-import astropy.units as u
 import cv2
 import numpy as np
 from astropy.coordinates import SkyCoord, CartesianRepresentation

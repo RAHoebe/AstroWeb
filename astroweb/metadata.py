@@ -133,7 +133,7 @@ def validate_metadata(raw):
             raise ValueError("invalid_metadata")
         result[key] = {language: text.strip() for language, text in value.items()}
     target = raw.get("target", "")
-    if not isinstance(target, str) or not re.fullmatch(r"[A-Za-z0-9 _+.'-]{1,100}", target):
+    if not isinstance(target, str) or not target.strip() or not re.fullmatch(r"[A-Za-z0-9 _+.'-]{1,100}", target):
         raise ValueError("invalid_metadata")
     result["target"] = target.strip()
     distance = raw.get("galactic_distance_ly")

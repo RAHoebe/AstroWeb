@@ -36,6 +36,7 @@ def main():
     from .media import EXTENSIONS, import_object
     from .observation import attach_fits
     queue = JobQueue(store)
+    submitted = []
     try:
         for folder in sorted(args.source.iterdir()):
             if not folder.is_dir():
@@ -55,10 +56,12 @@ def main():
                 queue.request_alignment(record["id"])
             if args.render and not record.get("video"):
                 job = queue.submit(record["id"])
+                submitted.append(job["id"])
                 print(f"Render: {record['id']} ({job['id']})", flush=True)
     finally:
         queue.shutdown()
-    failed = [job for job in store.all("jobs") if job["status"] == "failed"]
+    results = [store.get("jobs", job_id) for job_id in submitted]
+    failed = [job for job in results if job["status"] == "failed"]
     if failed:
         raise SystemExit("Mislukte renders / failed renders: " + ", ".join(job["object_id"] for job in failed))
 

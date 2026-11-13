@@ -29,19 +29,19 @@ async function api(url,options={}){
 function message(id,text,error=false){const target=$(id);target.textContent=text;target.classList.toggle('error',error);}
 let toastTimer;function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function setBusy(value){state.busy=value;for(const id of ['render-button','preview-button','fetch-nasa'])$(id).disabled=value;}
-function applyLanguage(value){setLanguage(value);drawPicker();buildGallery();if(state.current){renderViewerText();journeyCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();}if(studioRoute)document.title='AstroWeb · Studio';sky.draw();}
+function applyLanguage(value){setLanguage(value);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
 
 async function loadGallery(){try{state.objects=(await api('/api/objects')).objects;buildGallery();}catch(e){$('gallery-grid').replaceChildren(node('div','empty-state',errorText(e)));}}
 function buildGallery(){
-  const grid=$('gallery-grid');grid.querySelectorAll('video').forEach(video=>video.pause());grid.replaceChildren();
+  const grid=$('gallery-grid');observer.disconnect();grid.querySelectorAll('video').forEach(video=>video.pause());grid.replaceChildren();
   const count=state.objects.length;$('gallery-count').textContent=String(count).padStart(2,'0')+' '+t(count===1?'filmSingular':'films');
   $('hero-play').disabled=!count;
   if(!count){grid.append(node('div','empty-state',t('emptyGallery')));return;}
   let hero=state.objects.find(o=>o.id===featuredId);
   if(!hero){hero=state.objects[Math.floor(Math.random()*count)];featuredId=hero.id;}$('hero-image').src=hero.poster;$('hero-name').textContent=local(hero.metadata.name);$('hero-id').textContent=captureLabel(hero);
   state.objects.forEach((object,index)=>{
-    const card=node('article','gallery-card');card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label',t('openFilm')+' · '+local(object.metadata.name));
+    const card=node('a','gallery-card');card.href='/viewer/'+encodeURIComponent(object.id);card.setAttribute('aria-label',t('openFilm')+' · '+local(object.metadata.name));
     const media=node('div','card-media');const image=node('img');image.width=object.width;image.height=object.height;image.src=object.poster;image.alt=local(object.metadata.name);image.loading='lazy';const video=node('video');video.muted=true;video.loop=true;video.playsInline=true;video.preload='none';video.setAttribute('aria-hidden','true');
     const top=node('div','card-topline');top.append(node('span','media-badge',t('cinematic')+' · '+object.params.duration+'s'),node('span','card-number',String(index+1).padStart(2,'0')));
     const bottom=node('div','card-bottomline');bottom.append(node('span','',t('hoverPreview')),node('span','card-open','↗'));media.append(image,video,top,node('span','card-play','▶'),bottom);
@@ -49,12 +49,12 @@ function buildGallery(){
     const tags=node('div','card-tags');const details=[local(object.metadata.constellation),object.observation?.telescope,duration(object.observation?.integration)].filter(Boolean);details.forEach(text=>{const tag=node('span');tag.append(node('i'),document.createTextNode(text));tags.append(tag);});info.append(tags);card.append(media,info);
     async function play(){if(reducedMotion.matches||document.hidden)return;if(!video.src)video.src=object.preview||object.video;try{await video.play();if(card.matches(':hover')||document.activeElement===card)card.classList.add('playing');else video.pause();}catch{card.classList.remove('playing');}}
     function pause(){video.pause();card.classList.remove('playing');}
-    card.addEventListener('pointerenter',event=>{if(event.pointerType!=='touch')play();});card.addEventListener('pointerleave',pause);card.addEventListener('focus',play);card.addEventListener('blur',pause);card.addEventListener('click',()=>{pause();openViewer(object);});card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();pause();openViewer(object);}});grid.append(card);
+    card.addEventListener('pointerenter',event=>{if(event.pointerType!=='touch')play();});card.addEventListener('pointerleave',pause);card.addEventListener('focus',play);card.addEventListener('blur',pause);card.addEventListener('click',pause);card.addEventListener('keydown',event=>{if(event.key===' '){event.preventDefault();card.click();}});grid.append(card);observer.observe(card);
   });
 }
 $('hero-play').addEventListener('click',()=>{const object=state.objects.find(o=>o.id===featuredId);if(object)openViewer(object);});
 const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(!entry.isIntersecting){entry.target.querySelector('video')?.pause();entry.target.classList.remove('playing');}}));
-new MutationObserver(()=>document.querySelectorAll('.gallery-card').forEach(card=>observer.observe(card))).observe($('gallery-grid'),{childList:true});
+
 document.addEventListener('visibilitychange',()=>{if(document.hidden){document.querySelectorAll('video').forEach(video=>video.pause());sky.pause();}});
 
 function fact(list,label,value){if(value===undefined||value===null||value==='')return;const item=node('div');item.append(node('dt','',label),node('dd','',String(value)));list.append(item);}
@@ -76,7 +76,7 @@ function renderViewerText(){
   const object=state.current,m=object.metadata,obs=object.observation||{};document.title=local(m.name)+' · AstroWeb';$('viewer-id').textContent=captureLabel(object)+' · '+local(m.type);$('viewer-title').textContent=local(m.name);$('viewer-description').textContent=local(m.description);$('viewer-original').alt=local(m.name);$('viewer-facts').replaceChildren();
   fact($('viewer-facts'),t('constellation'),local(m.constellation));fact($('viewer-facts'),t('catalogTarget'),m.target);fact($('viewer-facts'),t('integration'),duration(obs.integration));fact($('viewer-facts'),t('telescope'),obs.telescope);fact($('viewer-facts'),t('frames'),obs.frames);fact($('viewer-facts'),t('singleExposure'),obs.exposure?obs.exposure+' s':'');fact($('viewer-facts'),t('filter'),obs.filter);
   if(obs.date_obs){const stamp=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{dateStyle:'medium',timeStyle:'short',timeZone:obs.timezone||'UTC'}).format(new Date(obs.date_obs));fact($('viewer-facts'),t('observedAt'),stamp+' · '+(obs.timezone||'UTC'));}
-  $('viewer-sources').replaceChildren();const links=[...(m.sources||[])];if(m.external)links.push({label:m.external.provider,url:m.external.url});for(const link of links){if(!/^https:\/\//.test(link.url))continue;const a=node('a','',link.label+' ↗');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';$('viewer-sources').append(a);}
+  $('viewer-sources').replaceChildren();const links=[...(m.sources||[])];if(m.external&&!links.some(link=>link.url===m.external.url))links.push({label:m.external.provider,url:m.external.url});for(const link of links){if(!/^https:\/\//.test(link.url))continue;const a=node('a','',link.label+' ↗');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';$('viewer-sources').append(a);}
   $('external-description').replaceChildren();if(m.external){const ext=m.external;const details=node('details','external-block');details.append(node('summary','',t('nasaMore')));const text=local(ext.text);details.append(node('p','',text||t('untranslated')));if(language==='nl'&&ext.translation==='machine')details.append(node('p','small',t('machineTranslation')));details.append(node('p','small',ext.credit+' · '+t('fetchedAt')+' '+formatDate(ext.fetched_at)));$('external-description').append(details);}
 }
 function openViewer(object){location.assign('/viewer/'+encodeURIComponent(object.id));}
@@ -84,10 +84,26 @@ async function loadViewer(){
   let object;
   try{object=await api('/api/objects/'+location.pathname.split('/').pop());}
   catch(e){$('viewer-title').textContent=errorText(e);return;}
-  setComparisonObject(object.id);$('environment-tab').hidden=!object.environment_available;configureGalaxy(object.galaxy,object.metadata.name);state.current=object;$('viewer').classList.toggle('portrait',object.height>object.width);$('viewer').style.setProperty('--film-ratio',String(object.width/object.height));if(object.video)$('viewer-video').src=object.video;$('viewer-video').poster=object.poster;$('viewer-original').src=object.original_view||object.final;$('download-movie').hidden=!object.video;if(object.video)$('download-movie').href=object.video+(object.video.includes('?')?'&':'?')+'download=1';$('download-original').href=object.final+'?download=1';renderViewerText();const tab=location.hash.slice(1);
+  state.current=object;
+  setComparisonObject(object.id);
+  $('environment-tab').hidden=!object.environment_available;
+  configureGalaxy(object.galaxy,object.metadata.name);
+  $('download-movie').hidden=!object.video;
+  if(object.video)$('download-movie').href=object.video+(object.video.includes('?')?'&':'?')+'download=1';
+  $('download-original').href=object.final+'?download=1';
+  renderViewerText();
+  const tab=location.hash.slice(1);
   selectTab(['original','sky','journey','polar'].includes(tab)||(tab==='galaxy'&&object.galaxy)||(tab==='environment'&&object.environment_available)?tab:'film');
-  if(!$('film-panel').hidden&&!reducedMotion.matches)$('viewer-video').play().catch(()=>{});}
+  if(object.video&&!$('film-panel').hidden&&!reducedMotion.matches)$('viewer-video').play().catch(()=>{});}
 function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','sky','polar'])$(panel+'-panel').hidden=panel!==name;history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
+  const object=state.current;
+  if(name==='original'&&!$('viewer-original').hasAttribute('src')){
+    $('viewer-original').src=object.original_view||object.final;
+  }
+  if(name==='film'&&object.video&&!$('viewer-video').hasAttribute('src')){
+    $('viewer-video').poster=object.poster;
+    $('viewer-video').src=object.video;
+  }
   if(name==='original'&&new URLSearchParams(location.search).has('discover')){
     $('discover-toggle').checked=true;
     loadDiscovery();
@@ -370,9 +386,9 @@ $('rename-form').addEventListener('submit',async event=>{
     await refreshAdmin();selectObject(result.object.id);toast(t('saved'));
   }catch(e){toast(errorText(e));}finally{button.disabled=false;}
 });
-$('metadata-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body={target:form.get('target'),galactic_distance_ly:form.get('galactic_distance_ly')?Number(form.get('galactic_distance_ly')):null};for(const key of ['name','type','constellation','summary','description'])body[key]={nl:form.get(key+'_nl'),en:form.get(key+'_en')};try{await api(`/api/admin/objects/${state.selected.id}/metadata`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);await loadGallery();}catch(e){toast(errorText(e));}});
-$('fetch-nasa').addEventListener('click',async()=>{if(!state.selected||state.busy)return;setBusy(true);message('studio-message',t('working'));try{await api(`/api/admin/objects/${state.selected.id}/metadata/refresh`,{method:'POST',body:{}});message('studio-message',t('saved'));await refreshAdmin();await loadGallery();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
-$('observation-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body=Object.fromEntries(form);body.publish_location=form.has('publish_location');for(const key of ['latitude','longitude','ra','dec'])body[key]=+body[key];try{await api(`/api/admin/objects/${state.selected.id}/observation`,{method:'PUT',body});sky.invalidate(state.selected.id);toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);await loadGallery();}catch(e){toast(errorText(e));}});
+$('metadata-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body={target:form.get('target'),galactic_distance_ly:form.get('galactic_distance_ly')?Number(form.get('galactic_distance_ly')):null};for(const key of ['name','type','constellation','summary','description'])body[key]={nl:form.get(key+'_nl'),en:form.get(key+'_en')};try{await api(`/api/admin/objects/${state.selected.id}/metadata`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
+$('fetch-nasa').addEventListener('click',async()=>{if(!state.selected||state.busy)return;setBusy(true);message('studio-message',t('working'));try{await api(`/api/admin/objects/${state.selected.id}/metadata/refresh`,{method:'POST',body:{}});message('studio-message',t('saved'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
+$('observation-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body=Object.fromEntries(form);body.publish_location=form.has('publish_location');for(const key of ['latitude','longitude','ra','dec'])body[key]=+body[key];try{await api(`/api/admin/objects/${state.selected.id}/observation`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
 let focusGeneration=0;
 async function setFocusImage(source){
   const generation=++focusGeneration;
@@ -612,7 +628,7 @@ $('publish-version').addEventListener('click',async()=>{
 });
 $('delete-version').addEventListener('click',async()=>{
   const list=$('version-list'),id=list.value,object=state.selected;
-  if(!object||!id||!window.confirm(object.id+' · '+list.selectedOptions[0].text+'\\n\\n'+t('deletePrompt')))return;
+  if(!object||!id||!window.confirm(captureLabel(object)+' · '+list.selectedOptions[0].text+'\n\n'+t('deletePrompt')))return;
   const player=$('version-video');
   player.pause();player.removeAttribute('src');player.load();
   $('delete-version').disabled=true;

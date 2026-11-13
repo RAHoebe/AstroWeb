@@ -3,17 +3,22 @@ const $=id=>document.getElementById(id);
 const lerp=(a,b,f)=>a+(b-a)*f;
 const angle=(a,b,f)=>(a+(((b-a+540)%360)-180)*f+360)%360;
 export class SkyPlayer{
-  constructor(){this.canvas=$('sky-canvas');this.ctx=this.canvas.getContext('2d');this.cache=new Map();this.playing=false;this.frame=0;this.raf=null;this.last=0;this.loadGeneration=0;$('sky-play').addEventListener('click',()=>this.playing?this.pause():this.play());$('sky-time').addEventListener('input',()=>{this.pause();this.frame=+$('sky-time').value/1000*(this.data.samples.length-1);this.draw();});}
-  async load(object,api){this.pause();const generation=++this.loadGeneration;$('sky-status').textContent=t('skyLoading');this.data=null;
+  constructor(){this.canvas=$('sky-canvas');this.ctx=this.canvas.getContext('2d');this.cache=new Map();this.playing=false;this.frame=0;this.raf=null;this.last=0;this.loadGeneration=0;this.loadError=null;$('sky-play').addEventListener('click',()=>this.playing?this.pause():this.play());$('sky-time').addEventListener('input',()=>{this.pause();this.frame=+$('sky-time').value/1000*(this.data.samples.length-1);this.draw();});}
+  async load(object,api){this.pause();this.loadError=null;const generation=++this.loadGeneration;$('sky-status').textContent=t('skyLoading');this.data=null;
     $('sky-play').disabled=true;
     $('sky-time').disabled=true;
     $('sky-time').value='0';
     for(const id of ['sky-date','sky-caption','sky-clock'])$(id).textContent='';
-    this.ctx.clearRect(0,0,1400,650);try{const data=this.cache.get(object.id)||await api(`/api/objects/${object.id}/sky`);if(generation!==this.loadGeneration)return;this.cache.set(object.id,data);this.data=data;$('sky-play').disabled=false;$('sky-time').disabled=false;this.index=new Map(data.stars.map((s,i)=>[s.hip,i]));this.frame=Math.max(0,data.samples.findIndex(r=>r.time>=data.observed_at));if(this.frame<0)this.frame=0;$('sky-status').textContent='';$('sky-date').textContent=formatDate(data.evening+'T12:00:00');$('sky-caption').textContent=t('skyCaption')+' '+data.timezone;this.draw();}catch(e){if(generation===this.loadGeneration)$('sky-status').textContent=t(e.message);}}
-  invalidate(id){this.cache.delete(id);}
+    this.ctx.clearRect(0,0,1400,650);try{const data=this.cache.get(object.id)||await api(`/api/objects/${object.id}/sky`);if(generation!==this.loadGeneration)return;this.cache.set(object.id,data);this.data=data;$('sky-play').disabled=false;$('sky-time').disabled=false;this.index=new Map(data.stars.map((s,i)=>[s.hip,i]));this.frame=Math.max(0,data.samples.findIndex(r=>r.time>=data.observed_at));$('sky-status').textContent='';this.updateLanguage();}catch(e){if(generation===this.loadGeneration){this.loadError=e.message;this.updateLanguage();}}}
+  updateLanguage(){
+    if(this.loadError){$('sky-status').textContent=t(this.loadError);return;}
+    if(!this.data)return;
+    $('sky-date').textContent=formatDate(this.data.evening+'T12:00:00');
+    $('sky-caption').textContent=t('skyCaption')+' '+this.data.timezone;
+    this.draw();
+  }
   play(){if(!this.data)return;this.playing=true;$('sky-play').textContent='Ⅱ';this.last=performance.now();const tick=now=>{if(!this.playing)return;this.frame=(this.frame+(now-this.last)/45000*(this.data.samples.length-1))%(this.data.samples.length-1);this.last=now;this.draw();this.raf=requestAnimationFrame(tick);};this.raf=requestAnimationFrame(tick);}
   pause(){this.playing=false;cancelAnimationFrame(this.raf);$('sky-play').textContent='▶';}
-  stop(){this.pause();this.loadGeneration++;}
   draw(){if(!this.data)return;const c=this.ctx,d=this.data;const i=Math.min(d.samples.length-2,Math.floor(this.frame)),f=this.frame-i;const a=d.samples[i],b=d.samples[i+1];const alt=lerp(a.altitude,b.altitude,f),az=angle(a.azimuth,b.azimuth,f),stamp=lerp(a.time,b.time,f),sun=lerp(a.sun,b.sun,f);const darkness=Math.max(.08,Math.min(1,(-sun+2)/20));
     c.clearRect(0,0,1400,650);const gradient=c.createLinearGradient(0,0,0,530);gradient.addColorStop(0,darkness>.6?'#050a18':'#102b45');gradient.addColorStop(.8,darkness>.6?'#111f35':'#34516b');gradient.addColorStop(1,darkness>.6?'#253044':'#876e70');c.fillStyle=gradient;c.fillRect(0,0,1400,650);
     const point=(altitude,azimuth)=>[azimuth/360*1400,490-altitude/90*440];
@@ -27,6 +32,10 @@ export class SkyPlayer{
     const dirs=language==='nl'?['N','O','Z','W','N']:['N','E','S','W','N'];c.fillStyle='#8b9cb4';c.font='11px Segoe UI';dirs.forEach((name,k)=>c.fillText(name,Math.min(1380,k*350+10),530));
     c.fillStyle='#9bdfec';c.font='10px Segoe UI';c.fillText(t('night')+' / '+d.id.replace('_',' '),30,32);c.fillStyle='#b9cadc';c.font='12px Segoe UI';c.fillText(`${t('altitude')} ${alt.toFixed(1)}°   ·   ${t('azimuth')} ${az.toFixed(1)}°   ·   ${t('sun')} ${sun.toFixed(1)}°`,920,32);if(alt<0){c.fillStyle='#d4b58b';c.font='16px Segoe UI';c.fillText(t('belowHorizon'),35,70);}
     const left=40,right=1360,top=560,bottom=622;const px=index=>left+index/(d.samples.length-1)*(right-left),py=value=>bottom-Math.max(0,value)/90*(bottom-top);c.strokeStyle='#2a384d';c.beginPath();c.moveTo(left,bottom);c.lineTo(right,bottom);c.stroke();c.strokeStyle='#d4b58b';c.lineWidth=1.5;c.beginPath();d.samples.forEach((row,k)=>k?c.lineTo(px(k),py(row.altitude)):c.moveTo(px(k),py(row.altitude)));c.stroke();const marker=px(this.frame);c.strokeStyle='#9bdfec70';c.beginPath();c.moveTo(marker,top-5);c.lineTo(marker,bottom+4);c.stroke();c.fillStyle='#9bdfec';c.beginPath();c.arc(marker,py(alt),3,0,Math.PI*2);c.fill();const observed=(d.observed_at-d.samples[0].time)/(d.samples.at(-1).time-d.samples[0].time);if(observed>=0&&observed<=1){c.fillStyle='#c796d8';c.beginPath();c.arc(left+observed*(right-left),bottom+8,3,0,Math.PI*2);c.fill();}
-    $('sky-time').value=String(this.frame/(d.samples.length-1)*1000);$('sky-clock').textContent=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:d.timezone,timeZoneName:'short'}).format(new Date(stamp*1000));
+    if(this.clockLanguage!==language||this.clockZone!==d.timezone){
+      this.clockLanguage=language;this.clockZone=d.timezone;
+      this.clockFormat=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{hour:'2-digit',minute:'2-digit',timeZone:d.timezone,timeZoneName:'short'});
+    }
+    $('sky-time').value=String(this.frame/(d.samples.length-1)*1000);$('sky-clock').textContent=this.clockFormat.format(new Date(stamp*1000));
   }
 }

@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import astropy.units as u
 import numpy as np
-from astropy.coordinates import AltAz, EarthLocation, FK5, SkyCoord, get_sun
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
 from astropy.time import Time
 from astropy.utils import iers
 

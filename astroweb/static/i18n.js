@@ -54,6 +54,7 @@ export const words = {
   emptyAtlas:["Er zijn nog geen opnamen in deze atlas.","This atlas contains no captures yet."],unpublished:["In Studio","In Studio"],
   captureSession:["Sessienaam (optioneel)","Session name (optional)"],sessionHint:["Gebruik voor een nieuwe nacht of een nieuw paneel dezelfde object-ID en een unieke sessienaam.","For a new night or panel, use the same object ID and a unique session name."],
   invalid_session:["Kies een sessienaam van maximaal 80 tekens.","Choose a session name of up to 80 characters."],session_exists:["Deze sessienaam bestaat al voor dit doel.","This target already has a session with that name."],
+  navigation:["Navigatie","Navigation"],animatedSky:["Geanimeerde sterrenhemel","Animated night sky"],chooseLanguage:["Taal kiezen","Choose language"],
   orientation:["Beeldstand","Orientation"],orientPortrait:["Portret · draai liggende beelden","Portrait · rotate landscape images"],orientOriginal:["Originele stand","Original orientation"],
   deleteVersion:["Verwijder versie","Delete version"],deletePrompt:["Deze filmversie en de bijbehorende preview definitief verwijderen?","Permanently delete this film version and its preview?"],
   versionDeleted:["Filmversie verwijderd.","Film version deleted."],version_published:["Kies eerst een andere versie voor de galerij.","Select another gallery version first."],
@@ -77,4 +78,4 @@ export function t(key){return words[key]?.[language==='en'?1:0] ?? words.interna
 export function local(value){return value?.[language] || '';}
 export function setLanguage(value){language=value==='en'?'en':'nl';localStorage.setItem('astroweb-language',language);document.documentElement.lang=language;document.title=language==='nl'?'AstroWeb — Een venster op het heelal':'AstroWeb — A window into the universe';document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));document.querySelectorAll('[data-i18n-aria]').forEach(el=>el.setAttribute('aria-label',t(el.dataset.i18nAria)));document.querySelectorAll('[data-lang]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.lang===language)));}
 export function formatDate(value,options={}){return value?new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{dateStyle:'long',...options}).format(new Date(value)):'';}
-export function duration(seconds){if(!seconds)return '';const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=Math.round(seconds%60);return [h?`${h} h`:'',m?`${m} min`:'',s?`${s} s`:''].filter(Boolean).join(' ');}
+export function duration(seconds){if(!seconds)return '';const total=Math.round(seconds),h=Math.floor(total/3600),m=Math.floor(total%3600/60),s=total%60;return [h?`${h} h`:'',m?`${m} min`:'',s?`${s} s`:''].filter(Boolean).join(' ');}

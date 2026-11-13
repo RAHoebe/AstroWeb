@@ -67,7 +67,7 @@ function draw(){
     }
     else{c.beginPath();c.moveTo(x-5,y);c.lineTo(x+5,y);c.moveTo(x,y-5);c.lineTo(x,y+5);c.stroke();}
     if(x<0||x>w||y<0||y>h)continue;
-    c.fillStyle=c.strokeStyle;c.beginPath();c.arc(x,y,active?3.5:2.5,0,2*Math.PI);c.fill();hit.push({x,y,v});
+    c.fillStyle=c.strokeStyle;c.beginPath();c.arc(x,y,active?3.5:2.5,0,2*Math.PI);c.fill();if(!v.field.corners)hit.push({x,y,v});
     if(!$('atlas-labels').checked)continue;
     const text=[displayId(v),v.session_name].filter(Boolean).join(' · ');
     c.font='12px Segoe UI';const len=c.measureText(text).width+10;
@@ -137,7 +137,7 @@ canvas.addEventListener('wheel',event=>{
   setZoom(next,(event.clientX-rect.left)/rect.width-.5,(event.clientY-rect.top)/rect.height-.5);
 },{passive:false});
 canvas.addEventListener('pointerdown',e=>{if(e.button!==0||!e.isPrimary)return;drag={id:e.pointerId,x:e.clientX,y:e.clientY,ra,dec};canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;ra=(drag.ra+(e.clientX-drag.x)*360/(canvas.clientWidth*zoom)+360)%360;dec=clamp(drag.dec+(e.clientY-drag.y)*180/(canvas.clientHeight*zoom),-90+90/zoom,90-90/zoom);draw();});
+canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId||Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<4)return;ra=(drag.ra+(e.clientX-drag.x)*360/(canvas.clientWidth*zoom)+360)%360;dec=clamp(drag.dec+(e.clientY-drag.y)*180/(canvas.clientHeight*zoom),-90+90/zoom,90-90/zoom);draw();});
 canvas.addEventListener('pointerup',e=>{
   if(!drag||drag.id!==e.pointerId)return;
   if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<5){

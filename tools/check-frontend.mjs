@@ -13,7 +13,7 @@ for(const file of files){
 const i18n=fs.readFileSync(path.join(root,'i18n.js'),'utf8').replaceAll('export ','');
 const context=vm.createContext({localStorage:{getItem:()=>null},document:{}});
 vm.runInContext(i18n+';this.words=words;',context);
-const html=['index.html','collection.html'].map(f=>fs.readFileSync(path.join(root,f),'utf8')).join('\n');
+const html=['index.html','collection.html','guide.html'].map(f=>fs.readFileSync(path.join(root,f),'utf8')).join('\n');
 const keys=[...html.matchAll(/data-i18n(?:-aria)?="([^"]+)"/g)].map(m=>m[1]);
 for(const key of keys)if(!context.words[key])throw Error('Missing translation: '+key);
 for(const [key,value] of Object.entries(context.words))if(value.length!==2||value.some(text=>typeof text!=='string'||!text))throw Error('Incomplete translation: '+key);

@@ -1,5 +1,6 @@
 """Small durable JSON-record store; connections are never shared across threads."""
 import json
+from contextlib import contextmanager
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -23,10 +24,14 @@ class Store:
             db.execute("CREATE TABLE IF NOT EXISTS object_aliases (alias TEXT PRIMARY KEY, current_id TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS settings (id TEXT PRIMARY KEY, record TEXT NOT NULL)")
 
+    @contextmanager
     def connect(self):
         db = sqlite3.connect(self.db, timeout=30)
-        db.execute("PRAGMA busy_timeout=30000")
-        return db
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def get(self, table, key, default=None):
         if table not in {"objects", "jobs", "settings"}:
@@ -35,12 +40,13 @@ class Store:
             row = db.execute(f"SELECT record FROM {table} WHERE id=?", (key,)).fetchone()
         return json.loads(row[0]) if row else default
 
-    def all(self, table):
+    def all(self, table, limit=None):
         if table not in {"objects", "jobs"}:
             raise ValueError("table")
         with self.connect() as db:
-            rows = db.execute(f"SELECT record FROM {table} ORDER BY rowid DESC").fetchall()
-        return [json.loads(row[0]) for row in rows]
+            sql = f"SELECT record FROM {table} ORDER BY rowid DESC"
+            rows = db.execute(sql) if limit is None else db.execute(sql+" LIMIT ?", (limit,))
+            return [json.loads(row[0]) for row in rows]
 
     def put(self, table, key, value):
         if table not in {"objects", "jobs", "settings"}:

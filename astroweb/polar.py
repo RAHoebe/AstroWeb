@@ -2,7 +2,6 @@
 import json
 from functools import lru_cache
 
-import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord
 from .galaxy import key, landmarks, target_entry
