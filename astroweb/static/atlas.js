@@ -19,10 +19,19 @@ function canvas(id){
 }
 function labels(ctx,points,w,h){
   const occupied=[];
+  const budget=Math.max(12,Math.min(64,Math.round(w*h/10000)));
   ctx.font=(w<500?'11':'13')+'px "Segoe UI", sans-serif';
   ctx.textBaseline='middle';
-  for(const {x,y,text,active} of points){
-    if(x<8||x>w-8||y<12||y>h-15)continue;
+  const visible=points.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.x>=8&&p.x<=w-8&&p.y>=12&&p.y<=h-15);
+  // First pass distributes labels across the sky, second pass fills open spaces.
+  const cells=new Set(),first=[],remaining=[];
+  for(const point of visible){
+    const cell=Math.floor(point.x/90)+','+Math.floor(point.y/55);
+    if(cells.has(cell))remaining.push(point);
+    else{cells.add(cell);first.push(point);}
+  }
+  for(const {x,y,text,active} of first.concat(remaining)){
+    if(occupied.length>=budget)break;
     const width=ctx.measureText(text).width+12;
     for(const [dx,dy] of [[9,-14],[9,14],[-width-9,-14],[-width-9,14]]){
       const l=x+dx,top=y+dy-9;
@@ -70,7 +79,7 @@ export function drawGalaxy(){
   ctx.fillText(ly.toLocaleString(language)+' '+t('lightYears'),18,h-20);
   $('galaxy-time').value=Math.round(progress*1000);
   $('galaxy-play').textContent=t(playing?'atlasPause':progress>=1?'atlasReplay':'atlasPlay');
-  $('galaxy-distance').textContent=t('solarDistance')+' ≈ '+galaxy.ly.toLocaleString(language)+' '+t('lightYears');
+  $('galaxy-distance').textContent=t('solarDistance')+' Ã¢â€°Ë† '+galaxy.ly.toLocaleString(language)+' '+t('lightYears');
 }
 export function stopGalaxy(){
   playing=false;cancelAnimationFrame(request);drawGalaxy();
@@ -117,10 +126,12 @@ function drawJourney(time=video.currentTime){
   const scale=Math.min(w/journey.width,h/journey.height);
   const vw=journey.width*scale,vh=journey.height*scale;
   ctx.save();ctx.translate((w-vw)/2,(h-vh)/2);ctx.globalAlpha=frame[9];
-  const points=journey.points.map((point,i)=>{
+  const points=[];
+  journey.points.forEach((point,i)=>{
+    if(point.detail&&time<3.4)return;
     const [x,y]=point.xy,d=x*frame[6]+y*frame[7]+frame[8];
-    return {x:scale*(x*frame[0]+y*frame[1]+frame[2])/d,
-            y:scale*(x*frame[3]+y*frame[4]+frame[5])/d,text:local(point),active:i===0};
+    points.push({x:scale*(x*frame[0]+y*frame[1]+frame[2])/d,
+            y:scale*(x*frame[3]+y*frame[4]+frame[5])/d,text:local(point),active:i===0});
   });
   labels(ctx,points,vw,vh);ctx.restore();
 }

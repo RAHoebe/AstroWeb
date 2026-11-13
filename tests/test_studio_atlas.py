@@ -50,3 +50,12 @@ def test_rename_keeps_storage_jobs_aliases_and_rejects_collisions(tmp_path):
         store.rename_object(new,"M_42",{})
     store.rename_object(new,old,initial_metadata(old))
     assert store.current_id(new) == old and store.current_id(old) == old
+
+def test_expanded_atlas_separates_sky_objects_from_galactic_distances():
+    from astroweb.galaxy import field_catalog, landmarks, target_entry
+    assert len(landmarks()) > 800
+    assert len(field_catalog()[0]) > 11000
+    assert target_entry("SIRIUS")["ly"] < 10
+    assert galactic_map({"id":"M_31", "metadata":{"target":"M31"}}) is None
+    assert galactic_map({"id":"NGC_104", "metadata":{"target":"47 Tuc"}})["ly"] > 10000
+    assert "xy" not in target_entry("TRUMPLER37")

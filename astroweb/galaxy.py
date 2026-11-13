@@ -11,7 +11,6 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 
 from . import journey
-from .sky import star_catalog
 
 # Normalized pixel positions on PIA10748, calibrated to the annotated ESO map.
 SUN = (.5, .69)
@@ -29,15 +28,45 @@ def face_position(ra, dec, ly):
 
 
 @lru_cache(maxsize=1)
+def expanded_catalog():
+    path = Path(__file__).with_name("catalog") / "atlas-landmarks.json"
+    return json.loads(path.read_text(encoding="utf8"))
+
+
+@lru_cache(maxsize=1)
 def landmarks():
-    items = json.loads((Path(__file__).with_name("catalog")/"galactic-objects.json").read_text(encoding="utf8"))
-    return [{**row, "xy":face_position(row["ra"], row["dec"], row["ly"])} for row in items]
+    path = Path(__file__).with_name("catalog") / "galactic-objects.json"
+    items = json.loads(path.read_text(encoding="utf8"))
+    extra = expanded_catalog()
+    # Preserve bright-star priority on the all-sky view while giving the
+    # landmarks near the current gallery fields first choice of space.
+    for row in extra["objects"]:
+        items.append({**row, "nl":row.get("nl", row["en"]), "aliases":row.get("aliases", []),
+                      "source":row.get("source", extra["sources"][row["src"]])})
+    gal = SkyCoord([r["ra"] for r in items]*u.deg,[r["dec"] for r in items]*u.deg).galactic
+    for row, lon, lat in zip(items, gal.l.radian, gal.b.radian):
+        if "ly" in row:
+            length = row["ly"]*math.cos(lat)/LY_PER_IMAGE
+            row["xy"] = [SUN[0]-length*math.sin(lon), SUN[1]-length*math.cos(lon)]
+    return items
+
+
+def target_entry(target):
+    return next((r for r in landmarks() if target in
+                 {key(r["id"]), key(r["nl"]), key(r["en"]), *map(key,r["aliases"])}), None)
+
+
+@lru_cache(maxsize=1)
+def field_catalog():
+    rows = expanded_catalog()["field_objects"]
+    return rows, SkyCoord([r[1] for r in rows]*u.deg,[r[2] for r in rows]*u.deg)
 
 
 def galactic_map(record):
     meta = record["metadata"]
     target = key(meta.get("target") or record["id"])
-    chosen = next((r for r in landmarks() if target in {key(r["id"]), *map(key, r["aliases"])}), None)
+    known = target_entry(target)
+    chosen = known
     custom = meta.get("galactic_distance_ly")
     if custom is not None:
         obs = record.get("observation") or {}
@@ -45,11 +74,11 @@ def galactic_map(record):
             return None
         chosen = {"id":meta["target"], "ly":custom, "source":None,
                   "xy":face_position(obs["ra"], obs["dec"], custom)}
-    if not chosen:
+    if not chosen or "xy" not in chosen:
         return None
     points = [{"id":"Sun", "nl":"Zon", "en":"Sun", "xy":SUN},
               {"id":"Sgr A*", "nl":"Galactisch centrum", "en":"Galactic centre", "xy":[.5,.5]}]
-    points.extend({k:r[k] for k in ("id","nl","en","xy")} for r in landmarks() if key(r["id"]) != target and r is not chosen)
+    points.extend({k:r[k] for k in ("id","nl","en","xy")} for r in landmarks() if "xy" in r and r is not known)
     return {"xy":chosen["xy"], "ly":chosen["ly"], "source":chosen["source"], "points":points,
             "ly_per_image":LY_PER_IMAGE}
 
@@ -60,20 +89,24 @@ def journey_labels(record, field):
     meridian, footprint, _, _ = journey.field_projection(field)
     candidates = [{"id":r["id"], "nl":r["nl"], "en":r["en"], "ra":r["ra"], "dec":r["dec"]}
                   for r in landmarks()]
-    for star in sorted(star_catalog(), key=lambda s:s["magnitude"]):
-        if star["name"]:
-            candidates.append({"id":str(star["hip"]), "nl":star["name"], "en":star["name"],
-                               "ra":star["ra"], "dec":star["dec"]})
-    # The active target follows the measured field; exclude its duplicate catalogue name.
+    # Add regional NGC/IC labels for the zoom, without shipping an all-sky list to the browser.
+    coords = np.array(field["corners"] if "corners" in field else [field["center"]])
+    center = SkyCoord(*coords.T,unit="deg").cartesian.mean()
+    rows, sky = field_catalog()
+    sep = SkyCoord(center,frame="icrs").separation(sky).deg
+    for index in np.flatnonzero(sep < 12):
+        name,ra,dec = rows[index]
+        candidates.append({"id":name,"nl":name,"en":name,"ra":ra,"dec":dec,"detail":True})
     target = key(record["metadata"].get("target") or record["id"])
-    known = next((r for r in landmarks() if target in {key(r["id"]), *map(key,r["aliases"])}), None)
+    known = target_entry(target)
     if known:
         candidates = [r for r in candidates if r["id"] != known["id"]]
+    candidates = [r for r in candidates if key(r["id"]) != target]
     gal = SkyCoord([r["ra"] for r in candidates]*u.deg,[r["dec"] for r in candidates]*u.deg).galactic
     projected = journey.hammer((gal.l.radian-meridian+np.pi)%(2*np.pi)-np.pi,gal.b.radian)*[2,1]
     extent = np.ptp(footprint,axis=0)
     end = min(journey.WIDTH*.77/max(extent[0],1e-6),journey.HEIGHT*.73/max(extent[1],1e-6)) if "corners" in field else journey.WIDTH*.46*9
-    labels = [{"nl":r["nl"], "en":r["en"], "xy":np.round(xy,7).tolist()} for r,xy in zip(candidates,projected)]
+    labels = [{"nl":r["nl"], "en":r["en"], "xy":np.round(xy,7).tolist(), "detail":r.get("detail",False)} for r,xy in zip(candidates,projected)]
     labels.insert(0, {"nl":record["metadata"]["name"]["nl"], "en":record["metadata"]["name"]["en"],
                       "xy":footprint.mean(axis=0).tolist()})
     frames = []
