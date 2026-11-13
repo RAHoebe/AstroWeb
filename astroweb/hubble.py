@@ -82,10 +82,11 @@ def fields(store,record):
                                 "source":plate.get("source",f"https://esahubble.org/images/{name}/")})
     search = record.get("hst_search")
     if search:
-        from .archive_search import field_key
+        from .archive_search import field_key, saved_options
         if search["field"] == field_key(store,record):
-            if search.get("option"):
-                options.insert(0, search["option"])
+            archived = saved_options(search)
+            if archived:
+                options = [*archived, *options]
             elif search.get("unavailable") and not options and not preferred:
                 raise ValueError("hubble_unavailable")
     if not options and not search:

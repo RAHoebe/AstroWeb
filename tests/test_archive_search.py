@@ -53,7 +53,10 @@ def test_upload_pipeline_searches_both_catalogues_and_saves_only_full_match(tmp_
         return [row(),row(),row(target="NGC13001")]
     monkeypatch.setattr(archive_search,"nasa_rows",nasa)
     monkeypatch.setattr(archive_search,"esa_rows",esa)
-    monkeypatch.setattr(hst_archive,"registered_cutout",lambda store,record,e: calls.append(e["id"]))
+    def cutout(store,record,e):
+        calls.append(e["id"])
+        return None,np.eye(3),None
+    monkeypatch.setattr(hst_archive,"registered_cutout",cutout)
     queue=JobQueue(st,resume=False)
     try:
         queue.prepare_capture(rec["id"])
@@ -97,7 +100,7 @@ def test_partial_archive_match_leaves_skymap_first_and_only(tmp_path,monkeypatch
     monkeypatch.setattr(archive_search,"esa_rows",lambda terms:[])
     archive_search.discover(st,rec["id"])
     saved=st.get("objects",rec["id"])
-    assert saved["hst_search"]["option"] is None
+    assert saved["hst_search"]["options"] == []
     assert hubble.fields(st,saved)==[photo]
 
 
@@ -111,3 +114,27 @@ def test_actual_fits_pixel_edges_must_fit_even_when_catalogue_polygon_fits(tmp_p
     fits.writeto(path,np.ones((180,180),dtype="float32"),w.to_header())
     with pytest.raises(ValueError,match="hubble_no_field"):
         hst_archive.registered_cutout(st,rec,entry)
+
+def test_spatial_selection_checks_both_footprints_and_upgrades_legacy_result(tmp_path,monkeypatch):
+    rec=capture()
+    st=Store(tmp_path)
+    def candidate(i,x,w=1.):
+        return {"id":str(i),"footprint":[[x,0],[x+w,0],[x+w,w],[x,w]]}
+    rows=[candidate(1,0),candidate(2,.5,.4),candidate(3,2),candidate(4,4),candidate(5,6)]
+    prior={"id":"1","full_footprint":True}
+    rec.update(skymap={"target":"NGC_1300"},hst_search={"field":archive_search.field_key(st,rec),"option":prior})
+    st.put("objects",rec["id"],rec)
+    assert hubble.fields(st,rec)==[prior]
+    monkeypatch.setattr(archive_search,"nasa_rows",lambda terms: [])
+    monkeypatch.setattr(archive_search,"esa_rows",lambda terms: [])
+    monkeypatch.setattr(archive_search,"ranked_entries",lambda *args:[rows[1],rows[0],*rows[2:]])
+    def cutout(store,record,entry):
+        assert entry["id"]!="2"  # smaller chip inside the preferred field
+        if entry["id"]=="4":
+            raise ValueError("hubble_no_field")
+        m=np.eye(3)
+        if entry["id"]=="5":m[0,2]=hst_archive.SIZE
+        return None,m,None
+    monkeypatch.setattr(hst_archive,"registered_cutout",cutout)
+    archive_search.discover(st,rec["id"])
+    assert [o["id"] for o in hubble.fields(st,st.get("objects",rec["id"]))]==["1","5"]

@@ -8,6 +8,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import cv2
 import numpy as np
 import requests
 from astropy.coordinates import SkyCoord
@@ -20,6 +21,8 @@ from .journey import geometry
 
 MAST = "https://mast.stsci.edu/api/v0/invoke"
 COLUMNS = "obs_id,target_name,s_ra,s_dec,s_region,t_exptime"
+MAX_FIELDS = 6
+MAX_FAILED_CUTOUTS = 16
 
 
 def target_names(record):
@@ -90,6 +93,24 @@ def polygon(region):
         return None
 
 
+def saved_options(state):
+    """Keep single-field results from earlier installations available."""
+    if "options" in state:
+        return state["options"]
+    return [state["option"]] if state.get("option") else []
+
+
+def same_field(polygon, others):
+    # Use camera-plane coordinates (also across RA zero). The smaller area
+    # is the denominator so a second filter or a nested chip is not a new stop.
+    area = cv2.contourArea(polygon)
+    for other in others:
+        overlap, _ = cv2.intersectConvexConvex(polygon, other)
+        if overlap >= .5 * min(area, cv2.contourArea(other)):
+            return True
+    return False
+
+
 def ranked_entries(store, record, rows, terms):
     aliases = {key(canonical(term)) for term in terms}
     entries = {}
@@ -115,11 +136,14 @@ def ranked_entries(store, record, rows, terms):
                 continue
         except (KeyError, TypeError, ValueError):
             continue
+        hull = cv2.convexHull(uv.astype(np.float32))
+        if cv2.contourArea(hull) <= 0:
+            continue
         # Prefer a broad optical filter and longer exposures within that class.
         score = (match[3] == "w", exposure, ident)
         entries[ident] = (score, {"id":ident, "target":target, "relation":"target",
                             "filter":"F"+match[2]+match[3].upper(), "ra":ra, "dec":dec,
-                            "full_footprint":True})
+                            "full_footprint":True, "footprint":hull.reshape(-1,2).tolist()})
     return [entry for _,entry in sorted(entries.values(), key=lambda item:item[0], reverse=True)]
 
 
@@ -133,18 +157,43 @@ def lookup(store, record):
                 rows.extend(search.result())
             except (requests.RequestException, ValueError) as exc:
                 errors.append(exc)
-    for entry in ranked_entries(store,record,rows,terms)[:12]:
+    candidates = ranked_entries(store,record,rows,terms)
+    prior = record.get("hst_search") or {}
+    previous = saved_options(prior) if prior.get("field")==field_key(store,record) else []
+    previous_ids = [e["id"] for e in previous]
+    # Retain existing destinations first if they still pass all geometry checks.
+    candidates.sort(key=lambda e: previous_ids.index(e["id"]) if e["id"] in previous_ids else len(previous_ids))
+    accepted, footprints, cutouts = [], [], []
+    failed_cutouts = 0
+    edges = np.float32([[[-.5,-.5],[hst_archive.SIZE-.5,-.5],[hst_archive.SIZE-.5,hst_archive.SIZE-.5],[-.5,hst_archive.SIZE-.5]]])
+    for entry in candidates:
+        if failed_cutouts >= MAX_FAILED_CUTOUTS:
+            break
+        hull = np.float32(entry["footprint"])
+        if same_field(hull, footprints):
+            continue
         try:
-            hst_archive.registered_cutout(store,record,entry)
+            _, matrix, _ = hst_archive.registered_cutout(store,record,entry)
         except requests.RequestException as exc:
             errors.append(exc)
+            failed_cutouts += 1
             continue
-        except (ValueError, OSError):
+        except (ValueError,OSError):
+            failed_cutouts += 1
             continue
-        return entry
-    if errors:
+        # The small WCS cutout used by the movie can be shared even when the
+        # catalogue mosaics have different outlines. Check both.
+        cutout = cv2.convexHull(cv2.perspectiveTransform(edges,matrix)[0])
+        if cv2.contourArea(cutout) <= 0 or same_field(cutout, cutouts):
+            continue
+        footprints.append(hull)
+        cutouts.append(cutout)
+        accepted.append({k:v for k,v in entry.items() if k!="footprint"})
+        if len(accepted)==MAX_FIELDS:
+            break
+    if errors and not accepted:
         raise ValueError("hubble_unavailable") from errors[0]
-    return None
+    return accepted
 
 
 def field_key(store, record):
@@ -165,14 +214,16 @@ def discover(store, identifier):
     if signature is None:
         return
     prior = record.get("hst_search") or {}
-    if prior.get("field") == signature and (prior.get("option") or prior.get("retry",0)>time.time()):
+    if prior.get("field") == signature and "options" in prior and (prior["options"] or prior.get("retry",0)>time.time()):
         return
     try:
-        option = lookup(store,record)
-        result = {"field":signature, "option":option, "retry":time.time()+7*skymap.DAY}
+        options = lookup(store,record)
+        result = {"field":signature, "options":options, "retry":time.time()+7*skymap.DAY}
     except (requests.RequestException, OSError, ValueError):
         logging.warning("Hubble archive search incomplete for %s", identifier, exc_info=True)
-        result = {"field":signature, "option":None, "unavailable":True, "retry":time.time()+3600}
+        if prior.get("field")==signature and saved_options(prior):
+            return
+        result = {"field":signature, "options":[], "unavailable":True, "retry":time.time()+3600}
     with store.lock:
         latest = store.get("objects",identifier)
         if latest and field_key(store,latest) == signature:

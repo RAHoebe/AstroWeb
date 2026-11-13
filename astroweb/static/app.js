@@ -262,11 +262,13 @@ $('discovery-list').addEventListener('change',e=>{discoveryId=e.target.value;ren
 let hubbleFields=null,hubblePending=null,hubbleState='',hubbleObservations=[];
 function hubbleCaption(){
   const select=$('hubble-field');
+  let archiveIndex=0;
   for(const opt of select.options){
     const obs=hubbleObservations.find(o=>o.id===opt.value);
     if(obs?.name){opt.textContent=local(obs.name);continue;}
     const label=obs?.id.startsWith('skymap-')?'NASA Hubble Skymap · '+obs.title:obs?.filter?(obs.target==='ANY'?t('archiveField'):obs.target)+' · '+obs.filter:t('hubble_'+opt.value);
-    opt.textContent=t('hubble_'+(obs?.relation||'field'))+' · '+label;
+    const field=obs?.full_footprint?' · '+t('archiveRegion')+' '+(++archiveIndex):'';
+    opt.textContent=t('hubble_'+(obs?.relation||'field'))+' · '+label+field;
   }
   const active=hubbleObservations.find(o=>o.id===select.value);
   const source=$('hubble-source');
@@ -274,6 +276,7 @@ function hubbleCaption(){
   source.textContent=active?.credit?active.credit+' ↗':active?.filter?'NASA/ESA Hubble · '+active.id+' ↗':'NASA, ESA, B. Williams (University of Washington) ↗';
   $('hubble-description').textContent=active?.name?t('solarMissionNote'):active?t('hubble_'+active.relation)+' · '+t(active.id.startsWith('skymap-')?'skymapNote':active.full_footprint?'fullHstNote':active.telescope?'hstPlateNote':active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
   const status=state.current?.body?({hubbleLoading:'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
+  if(active?.full_footprint)$('hubble-description').textContent+=' RA '+active.ra.toFixed(4)+'° · Dec '+active.dec.toFixed(4)+'°';
   $('hubble-status').textContent=status?t(status):'';
   $('hubble-retry').hidden=hubbleState!=='hubble_unavailable';
 }

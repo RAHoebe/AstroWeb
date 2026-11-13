@@ -57,6 +57,7 @@ export const words = {
   captureSession:["Sessienaam (optioneel)","Session name (optional)"],sessionHint:["Gebruik bij een volgende opname dezelfde object-ID. De galerij toont de nieuwste opnamedatum. Een sessienaam is optioneel.","Use the same object ID for another capture. The gallery shows the latest observation date. A session name is optional."],
   invalid_session:["Kies een sessienaam van maximaal 80 tekens.","Choose a session name of up to 80 characters."],session_exists:["Deze sessienaam bestaat al voor dit doel.","This target already has a session with that name."],
   navigation:["Navigatie","Navigation"],animatedSky:["Geanimeerde sterrenhemel","Animated night sky"],chooseLanguage:["Taal kiezen","Choose language"],
+  archiveRegion:["Veld","Field"],
   archiveField:["Hubble-beeldveld","Hubble field"],archiveHubbleNote:["Van je eigen foto naar een optische Hubble-opname binnen dit kader. Het archiefbeeld toont de helderheid in één filter.","From your capture to an optical Hubble observation inside its footprint. The archive image shows intensity in one filter."],
   hubbleTitle:["Van eigen opname naar Hubble","From your capture to Hubble"],hubbleField:["Bestemming","Destination"],
   oneCapture:["opname","capture"],manyCaptures:["opnames","captures"],
