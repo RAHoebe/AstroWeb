@@ -2,15 +2,21 @@
 const posters=new Map();
 export function posterURL(id){return '/media/'+encodeURIComponent(id)+'/poster';}
 
+export function loadPoster(id){
+  let image=posters.get(id);
+  if(!image){
+    image=new Image();posters.set(id,image);
+    image.src=posterURL(id);
+  }
+  return image;
+}
+
 export function drawFootprintImage(ctx,id,quad,redraw){
   const xs=quad.map(p=>p[0]),ys=quad.map(p=>p[1]);
   if(Math.max(...xs)<0||Math.max(...ys)<0||Math.min(...xs)>ctx.canvas.clientWidth||Math.min(...ys)>ctx.canvas.clientHeight)return;
-  let img=posters.get(id);
-  if(!img){
-    img=new Image();posters.set(id,img);img.onload=redraw;
-    img.src=posterURL(id);return;
-  }
-  if(!img.complete||!img.naturalWidth)return;
+  const img=loadPoster(id);
+  if(!img.complete){img.addEventListener('load',redraw,{once:true});return;}
+  if(!img.naturalWidth)return;
   const [a,b,c,d]=quad,w=img.naturalWidth,h=img.naturalHeight;
   function half(vertices,origin,horizontal,vertical){
     ctx.save();

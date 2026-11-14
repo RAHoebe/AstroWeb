@@ -216,8 +216,8 @@ body.studio-route > :is(.site-header,main:not(#studio),.skip,.site-footer) { dis
 .pano-stage { height:clamp(270px,69svh,1100px); overflow:hidden; position:relative; background:#05060a; border-radius:12px; cursor:grab; touch-action:none; }
 .pano-stage:focus-visible { outline:2px solid var(--cyan); }
 .pano-stage.dragging { cursor:grabbing; }
-#pano-tiles,#pano-markers,#pano-editor-pins { position:absolute; inset:0; pointer-events:none; }
-#pano-tiles img { position:absolute; top:0; left:0; max-width:none; user-select:none; }
+#pano-sky,#pano-markers,#pano-editor-pins { position:absolute; inset:0; pointer-events:none; }
+#pano-sky { width:100%; height:100%; }
 #pano-notice { position:absolute; top:45%; width:100%; text-align:center; pointer-events:none; }
 .pano-toolbar { padding:14px 0 6px; }
 .pano-toolbar select { max-width:min(48vw,300px); }

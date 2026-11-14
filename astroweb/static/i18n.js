@@ -97,7 +97,7 @@ export const words = {
   panoRemove:["Verwijder koppeling","Remove link"],panoSave:["Panorama opslaan","Save panorama"],panoOpen:["Open panorama","Open panorama"],
   panoLocate:["Zoek opname","Find capture"],panoChoose:["Kies een opname","Choose a capture"],panoReset:["Beginstand","Reset view"],
   panoZoomIn:["Inzoomen","Zoom in"],panoZoomOut:["Uitzoomen","Zoom out"],panoReturn:["Terug naar panorama","Back to panorama"],
-  panoHelp:["Sleep of gebruik de pijltjes om rond te kijken. Zoom met het muiswiel of de knoppen. Open een opname via de markering.","Drag or use the arrow keys to look around. Zoom with the wheel or buttons. Select a marker to open its capture."],
+  panoHelp:["Sleep of gebruik de pijltjes om rond te kijken. Zoom met het muiswiel of de knoppen. Klik op een fotokader of markering om de opname te openen.","Drag or use the arrow keys to look around. Zoom with the wheel or buttons. Select a photo frame or marker to open its capture."],
   panoUnavailable:["Het panorama kon niet worden geladen.","The panorama could not be loaded."],invalid_panorama:["Controleer de koppelingen en hun posities.","Check the linked captures and their positions."],
   startrails:["Sterrensporen","Star trails"],milkyway:["Melkwegfoto","Milky Way photograph"],
   landscapeTitle:["Titel van de opname (optioneel)","Capture title (optional)"],

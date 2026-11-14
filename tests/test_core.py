@@ -169,6 +169,25 @@ def test_panorama_pins_permissions_validation_and_renamed_targets(app, images):
     assert guest.get(scene).json["pins"]==[]
 
 
+def test_panorama_uses_original_corner_order_for_each_published_capture(app, images):
+    from astropy.coordinates import SkyCoord
+    from astroweb.panorama import sky_pixels
+    store=app.extensions["store"]
+    corners=[[12,41],[10,41],[10,40],[12,40]]
+    records=[import_object(store,"NGC_7000",images.values(),repeat=True,capture_date=day)
+             for day in ("2026-09-12","2026-11-09")]
+    for r in records:
+        store.update("objects",r["id"],published=True,gaia={"status":"solved",
+                     "digest":r["sha256"]["final"],"corners":corners})
+    pins=app.test_client().get("/api/panorama").json["pins"]
+    assert [pin["detail"] for pin in pins]==["2026-11-09","2026-09-12"]
+    for pin in pins:
+        np.testing.assert_allclose(pin["corners"],sky_pixels(SkyCoord(*np.array(corners).T,unit="deg")))
+    store.update("objects",records[0]["id"],gaia={},observation={"ra":11,"dec":40.5})
+    points=app.test_client().get("/api/panorama").json["pins"]
+    assert "corners" not in next(p for p in points if p["target"]==records[0]["id"])
+
+
 def test_gallery_portrait_poster_rotates_landscape_source(app, images):
     store=app.extensions["store"]
     for path in images.values():

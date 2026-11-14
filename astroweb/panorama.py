@@ -4,7 +4,7 @@ import math
 import numpy as np
 from astropy.coordinates import SkyCoord
 
-from .collection import gallery
+from .collection import capture_date, capture_groups
 from .journey import geometry, panorama_pixels
 
 
@@ -39,19 +39,29 @@ def validate(store, record, body):
     return {"wrap":wrap,"pins":result}
 
 
+def sky_pixels(sky):
+    gal = sky.galactic
+    x, y = panorama_pixels(gal.l.radian, gal.b.radian, 6000, 3000)
+    return np.stack((((x+.5)/6000)%1, (y+.5)/3000), axis=-1).tolist()
+
+
 def overview(store):
-    pins=[]
-    for record in gallery(r for r in store.all("objects") if r["published"] and not r.get("body") and not r.get("capture_kind")):
-        field=geometry(store,record)
-        if field.get("corners"):
-            corners=SkyCoord(*np.asarray(field["corners"]).T,unit="deg")
-            sky=SkyCoord(corners.cartesian.mean(),frame="icrs")
-        elif field.get("center"):
-            sky=SkyCoord(*field["center"],unit="deg")
-        else:
-            continue
-        gal=sky.galactic
-        x,y=panorama_pixels(gal.l.radian,gal.b.radian,6000,3000)
-        pins.append({"target":record["id"],"name":record["metadata"]["name"],
-                     "x":float((x+.5)/6000)%1,"y":float((y+.5)/3000)})
+    pins = []
+    groups = capture_groups(r for r in store.all("objects") if r["published"] and not r.get("body") and not r.get("capture_kind"))
+    for captures in groups.values():
+        for record in captures:
+            field = geometry(store, record)
+            pin = {"target":record["id"], "name":record["metadata"]["name"]}
+            if field.get("corners"):
+                corners = SkyCoord(*np.asarray(field["corners"]).T, unit="deg")
+                sky = SkyCoord(corners.cartesian.mean(), frame="icrs")
+                pin["corners"] = sky_pixels(corners)
+            elif field.get("center"):
+                sky = SkyCoord(*field["center"], unit="deg")
+            else:
+                continue
+            pin["x"], pin["y"] = sky_pixels(sky)
+            if len(captures)>1:
+                pin["detail"] = " · ".join(filter(None, [(capture_date(record) or "")[:10], record.get("session_name")])) or record["id"]
+            pins.append(pin)
     return {"image":"/media/panorama/eso0932a.jpg","wrap":True,"pins":pins}
