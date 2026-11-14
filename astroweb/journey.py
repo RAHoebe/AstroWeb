@@ -75,6 +75,8 @@ def fits_footprint(path, poster, width, height):
 
 
 def geometry(store, record):
+    if record.get("capture_kind"):
+        return {"kind":"missing"}
     if record.get("body"):
         from .solar import pointing
         return pointing(record)

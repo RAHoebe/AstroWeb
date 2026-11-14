@@ -64,12 +64,16 @@ def is_andromeda(record):
 
 
 def eligible(record):
+    if record.get("capture_kind"):
+        return False
     state = record.get("skymap") or {}
     has_destination = state.get("option") and state.get("target") == skymap.target_key(record)
     return bool(has_destination or is_andromeda(record) or record.get("fits") or (record.get("gaia") or {}).get("corners"))
 
 
 def fields(store,record):
+    if record.get("capture_kind"):
+        return []
     options=[]
     preferred = skymap.cached_option(store, record)
     if is_andromeda(record):

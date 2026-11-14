@@ -2,6 +2,7 @@ import {openPolar,closePolar,drawPolar} from './polar.js';
 import {layoutComparison,setComparisonObject,openEnvironment,comparisonText} from './compare.js';
 import {configureGalaxy,openGalaxy,stopGalaxy,setJourneyLabels,atlasLanguage} from './atlas.js';
 import {t,local,language,setLanguage,formatDate,duration} from './i18n.js';
+import {editPanorama,editorLanguage} from './panorama-editor.js';
 import {SkyPlayer} from './sky.js';
 const $=id=>document.getElementById(id);
 const state={objects:[],adminObjects:[],jobs:[],session:null,selected:null,current:null,files:[],busy:false,preview:null};
@@ -29,7 +30,7 @@ async function api(url,options={}){
 function message(id,text,error=false){const target=$(id);target.textContent=text;target.classList.toggle('error',error);}
 let toastTimer;function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function setBusy(value){state.busy=value;for(const id of ['render-button','preview-button','fetch-nasa'])$(id).disabled=value;}
-function applyLanguage(value){setLanguage(value);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
+function applyLanguage(value){setLanguage(value);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();editorLanguage();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
 
 async function loadGallery(){try{state.objects=(await api('/api/objects')).objects;buildGallery();}catch(e){$('gallery-grid').replaceChildren(node('div','empty-state',errorText(e)));}}
@@ -79,6 +80,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){document.q
 
 function fact(list,label,value){if(value===undefined||value===null||value==='')return;const item=node('div');item.append(node('dt','',label),node('dd','',String(value)));list.append(item);}
 function captureLabel(obj){
+  if(obj.capture_kind)return [t(obj.capture_kind),obj.session_name].filter(Boolean).join(' · ');
   return [(obj.catalog_id||obj.id).replace('_',' '),obj.session_name].filter(Boolean).join(' · ');
 }
 function renderNeighbours(){
@@ -138,12 +140,24 @@ async function loadViewer(){
     setLabel($('sky-panel').querySelector('.eyebrow'),'solarSkyDay');
     for(const id of ['ir-toggle','discover-toggle'])$(id).closest('label').hidden=true;
   }
+  const query=new URLSearchParams(location.search);
+  if(query.get('from')==='panorama'){
+    const link=document.querySelector('.viewer-actions [data-i18n="backGallery"]');
+    link.dataset.i18n='panoReturn';link.textContent=t('panoReturn');
+    link.href='/panorama'+(query.get('scene')?'?capture='+encodeURIComponent(query.get('scene')):'');
+  }
   setComparisonObject(object.id);
   $('environment-tab').hidden=!object.environment_available;
   configureGalaxy(object.galaxy,object.metadata.name);
   $('download-movie').hidden=!object.video;
   if(object.video)$('download-movie').href=object.video+(object.video.includes('?')?'&':'?')+'download=1';
   $('download-original').href=object.final+'?download=1';
+  if(object.capture_kind){
+    $('capture-panorama').hidden=false;
+    $('capture-panorama').href='/panorama?capture='+encodeURIComponent(object.id);
+    for(const tab of document.querySelectorAll('[data-view]'))tab.hidden=!['film','original'].includes(tab.dataset.view);
+    for(const id of ['ir-toggle','discover-toggle'])$(id).closest('label').hidden=true;
+  }
   renderViewerText();
   const tab=location.hash.slice(1);
   const requested=object.body&&tab==='hubble'?'solar-system':tab;
@@ -158,7 +172,7 @@ function selectTab(name){document.querySelectorAll('[data-view]').forEach(tab=>{
     $('viewer-video').poster=object.poster;
     $('viewer-video').src=object.video;
   }
-  if(name==='original'&&!object.body&&new URLSearchParams(location.search).has('discover')){
+  if(name==='original'&&!object.body&&!object.capture_kind&&new URLSearchParams(location.search).has('discover')){
     $('discover-toggle').checked=true;
     loadDiscovery();
   }
@@ -434,25 +448,39 @@ function fillParams(value={}){
 function updateOutputs(){updateFocusMarker();for(const output of document.querySelectorAll('[data-output]')){const key=output.dataset.output,value=+$('parameters-form').elements.namedItem(key).value;output.textContent=key.startsWith('pan')?(value*100).toFixed(1)+'%':key==='zoom'?value.toFixed(2)+'×':value.toFixed(2);}}
 $('parameters-form').addEventListener('input',updateOutputs);$('parameters-form').addEventListener('submit',event=>event.preventDefault());
 function solarMode(){return state.selected?!!state.selected.body:$('capture-kind').value==='solar';}
+function nightscapeKind(){
+  if(state.selected)return state.selected.capture_kind;
+  const kind=$('capture-kind').value;
+  return ['startrails','milkyway'].includes(kind)?kind:null;
+}
+function singleImageMode(){return solarMode()||!!nightscapeKind();}
 function updateCaptureKind(){
-  const solar=solarMode(),fields=$('parameters-form').elements;
+  const solar=solarMode(),landscape=nightscapeKind(),single=singleImageMode(),fields=$('parameters-form').elements;
   const body=$('solar-body'),identifier=$('identifier');
   body.hidden=document.querySelector('label[for="solar-body"]').hidden=!solar;
-  identifier.hidden=document.querySelector('label[for="identifier"]').hidden=solar;
-  identifier.required=!solar;
+  identifier.hidden=document.querySelector('label[for="identifier"]').hidden=single;
+  $('landscape-title').hidden=document.querySelector('label[for="landscape-title"]').hidden=!landscape;
+  $('rename-form').closest('details').hidden=!!landscape;
+  $('fetch-nasa').hidden=!!landscape;
+  $('metadata-form').elements.target.closest('label').hidden=!!landscape;
+  $('metadata-form').elements.galactic_distance_ly.closest('label').hidden=!!landscape;
+  document.querySelector('[data-i18n="galacticDistanceHint"]').hidden=!!landscape;
+  identifier.required=!single;
   if(solar&&!state.selected)identifier.value=body.value;
-  fields.method.querySelectorAll('option').forEach(o=>o.disabled=solar&&o.value!=='kenburns');
-  if(solar){fields.method.value='kenburns';fields.depth.value=0;}
-  for(const k of ['depth','star_source','blend'])fields[k].closest('label').hidden=solar;
-  if(state.selected&&solar)$('find-more').hidden=true;
-  const texts=[['uploadIntro','solarIntro'],['chooseFiles','solarChoose'],['filenameHint','solarHint'],['dropHint','solarFiles']];
-  for(const [deep,bodyKey] of texts){
-    const el=document.querySelector('#upload-section [data-i18n="'+deep+'"],#upload-section [data-i18n="'+bodyKey+'"]');
-    el.dataset.i18n=solar?bodyKey:deep;el.textContent=t(el.dataset.i18n);
+  fields.method.querySelectorAll('option').forEach(o=>o.disabled=single&&o.value!=='kenburns');
+  if(single){fields.method.value='kenburns';fields.depth.value=0;}
+  for(const k of ['depth','star_source','blend'])fields[k].closest('label').hidden=single;
+  if(state.selected&&single)$('find-more').hidden=true;
+  const texts=[['uploadIntro','solarIntro','landscapeIntro'],['chooseFiles','solarChoose'],['filenameHint','solarHint'],['dropHint','solarFiles']];
+  for(const [deep,bodyKey,landscapeKey=bodyKey] of texts){
+    const selectors=[deep,bodyKey,landscapeKey].map(k=>'#upload-section [data-i18n="'+k+'"]');
+    const el=document.querySelector(selectors.join(','));
+    el.dataset.i18n=landscape?landscapeKey:solar?bodyKey:deep;
+    el.textContent=t(el.dataset.i18n);
   }
 }
 $('capture-kind').addEventListener('change',()=>{
-  $('identifier').value='';fillParams(solarMode()?{method:'kenburns',orientation:'original'}:{});
+  $('identifier').value='';fillParams(singleImageMode()?{method:'kenburns',orientation:'original'}:{});
   updateCaptureKind();assignFiles(state.files);
 });
 $('solar-body').addEventListener('change',updateCaptureKind);
@@ -460,14 +488,14 @@ function newObject(){clearImportControls();state.selected=null;setFocusImage(nul
 $('new-object').addEventListener('click',newObject);
 function renderChoice(){
   const g=state.selected?.gaia||{};
-  $('gaia-status').textContent=g.status?t('gaia_'+g.status)+(g.matches?' · '+g.matches+' '+t('gaiaStars')+' · '+g.median_arcsec+'″':''):'';
+  $('gaia-status').textContent=g.status&&!state.selected?.capture_kind?t('gaia_'+g.status)+(g.matches?' · '+g.matches+' '+t('gaiaStars')+' · '+g.median_arcsec+'″':''):'';
   $('gaia-retry').hidden=['pending','running','solved','not_applicable'].includes(g.status);
   const choice=state.selected?.render?.choice;$('render-choice').textContent=choice?`${t('starLayer')}: ${choice.source} · ${t('blending')}: ${choice.blend} · MAE ${(choice.mae*100).toFixed(2)}%`:'';}
 $('gaia-retry').addEventListener('click',async()=>{
   try{await api('/api/admin/objects/'+state.selected.id+'/align',{method:'POST'});await refreshAdmin();}
   catch(e){toast(errorText(e));}
 });
-function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'?discover=1#original';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;$('edit-object-title').textContent=captureLabel(object)+' · '+local(object.metadata.name);setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);updateCaptureKind();const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
+function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;editPanorama(object,state.adminObjects,api);$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'?discover=1#original';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;$('edit-object-title').textContent=captureLabel(object)+' · '+local(object.metadata.name);setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);updateCaptureKind();const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
 let pendingLandmark=null;
 const draftKey=id=>'astroweb-discovery-draft-'+id;
 function clearImportControls(){
@@ -537,7 +565,7 @@ async function identifyDraft(files){
   const input=$('identifier'), hint=$('identifier-source');
   hint.textContent='';
   delete input.dataset.override;
-  if(solarMode()||!files.length)return;
+  if(singleImageMode()||!files.length)return;
   const photos=files.filter(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name));
   const fits=files.find(f=>/\.(fits|fit|fts)$/i.test(f.name));
   try{
@@ -557,15 +585,15 @@ $('identifier').addEventListener('input',()=>{
 });
 function assignFiles(files){
   state.files=[...files];
-  const final=solarMode()?state.files.find(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name)):state.files.find(file=>/_final\.(png|jpe?g|tiff?)$/i.test(file.name));
+  const final=singleImageMode()?state.files.find(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name)):state.files.find(file=>/_final\.(png|jpe?g|tiff?)$/i.test(file.name));
   setFocusImage(final);
-  if(!solarMode()&&!$('identifier').dataset.override)$('identifier').value='';
+  if(!singleImageMode()&&!$('identifier').dataset.override)$('identifier').value='';
   pendingIdentity=identifyDraft(state.files);
   renderFileList();
 }
-function renderFileList(){const list=$('file-checklist');list.replaceChildren();for(const role of (solarMode()?['final','FITS']:['final','starless','stars','stars_laid','FITS'])){const matches=state.files.filter(file=>solarMode()&&role==='final'?/\.(png|jpe?g|tiff?)$/i.test(file.name):role==='FITS'?/\.(fits|fit|fts)$/i.test(file.name):new RegExp('_'+role+'\\.(png|jpe?g|tiff?)$','i').test(file.name));const chip=node('span','file-chip'+(matches.length===1?' ready':matches.length>1?' invalid':''),(matches.length===1?'✓ ':'')+role+(role==='FITS'?' · '+(language==='nl'?'optioneel':'optional'):''));chip.title=matches.map(file=>file.name).join('\n');list.append(chip);}}
+function renderFileList(){const list=$('file-checklist');list.replaceChildren();for(const role of (singleImageMode()?['final','FITS']:['final','starless','stars','stars_laid','FITS'])){const matches=state.files.filter(file=>singleImageMode()&&role==='final'?/\.(png|jpe?g|tiff?)$/i.test(file.name):role==='FITS'?/\.(fits|fit|fts)$/i.test(file.name):new RegExp('_'+role+'\\.(png|jpe?g|tiff?)$','i').test(file.name));const chip=node('span','file-chip'+(matches.length===1?' ready':matches.length>1?' invalid':''),(matches.length===1?'✓ ':'')+role+(role==='FITS'?' · '+(language==='nl'?'optioneel':'optional'):''));chip.title=matches.map(file=>file.name).join('\n');list.append(chip);}}
 $('image-files').addEventListener('change',event=>assignFiles(event.target.files));const drop=document.querySelector('.dropzone');drop.addEventListener('dragover',event=>{event.preventDefault();drop.classList.add('dragging');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragging'));drop.addEventListener('drop',event=>{event.preventDefault();drop.classList.remove('dragging');assignFiles(event.dataTransfer.files);});
-$('render-button').addEventListener('click',async()=>{if(state.busy||!$('parameters-form').reportValidity())return;setBusy(true);try{if(state.selected){await api(`/api/admin/objects/${state.selected.id}/render`,{method:'POST',body:params()});}else{await pendingIdentity;if(!$('upload-form').reportValidity())return;const images=state.files.filter(file=>/\.(png|jpe?g|tiff?)$/i.test(file.name)),fits=state.files.filter(file=>/\.(fits|fit|fts)$/i.test(file.name));if(images.length!==(solarMode()?1:4)||fits.length>1||images.length+fits.length!==state.files.length)throw Error(solarMode()?'single_image_required':'four_images_required');const form=new FormData();form.set('identifier',$('identifier').value);if($('identifier').dataset.override)form.set('identifier_override','1');form.set('session_name',$('session-name').value);form.set('capture_date',$('upload-capture-date').value);form.set('params',JSON.stringify(params()));images.forEach(file=>form.append('images',file));if(fits[0])form.set('fits',fits[0]);message('studio-message',t('uploading'));const result=await api('/api/admin/objects',{method:'POST',body:form});await refreshAdmin();selectObject(result.object.id);}message('studio-message',t('queuedMessage'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
+$('render-button').addEventListener('click',async()=>{if(state.busy||!$('parameters-form').reportValidity())return;setBusy(true);try{if(state.selected){await api(`/api/admin/objects/${state.selected.id}/render`,{method:'POST',body:params()});}else{await pendingIdentity;if(!$('upload-form').reportValidity())return;const images=state.files.filter(file=>/\.(png|jpe?g|tiff?)$/i.test(file.name)),fits=state.files.filter(file=>/\.(fits|fit|fts)$/i.test(file.name));if(images.length!==(singleImageMode()?1:4)||fits.length>1||images.length+fits.length!==state.files.length)throw Error(singleImageMode()?'single_image_required':'four_images_required');const form=new FormData();form.set('identifier',$('identifier').value);if(nightscapeKind()){form.set('capture_kind',nightscapeKind());form.set('title',$('landscape-title').value);}if($('identifier').dataset.override)form.set('identifier_override','1');form.set('session_name',$('session-name').value);form.set('capture_date',$('upload-capture-date').value);form.set('params',JSON.stringify(params()));images.forEach(file=>form.append('images',file));if(fits[0])form.set('fits',fits[0]);message('studio-message',t('uploading'));const result=await api('/api/admin/objects',{method:'POST',body:form});await refreshAdmin();selectObject(result.object.id);}message('studio-message',t('queuedMessage'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
 $('preview-button').addEventListener('click',async()=>{if(!state.selected||state.busy||!$('parameters-form').reportValidity())return;setBusy(true);message('studio-message',t('working'));try{const response=await api(`/api/admin/objects/${state.selected.id}/preview?point=${pointIndex+1}`,{method:'POST',body:params(),raw:true});if(state.preview)URL.revokeObjectURL(state.preview);state.preview=URL.createObjectURL(await response.blob());$('preview-image').src=state.preview;$('preview-image').hidden=false;message('studio-message','');}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
 $('rename-form').addEventListener('submit',async event=>{
   event.preventDefault();

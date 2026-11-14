@@ -8,7 +8,7 @@ from .sky import CATALOG, star_catalog
 
 
 def identity(record):
-    return {"id":record["id"], "catalog_id":group_id(record),
+    return {"id":record["id"], "catalog_id":group_id(record), "capture_kind":record.get("capture_kind"),
             "session_name":record.get("session_name",""), "name":record["metadata"]["name"]}
 
 

@@ -205,3 +205,33 @@ body.studio-route > :is(.site-header,main:not(#studio),.skip,.site-footer) { dis
 .capture-switch select { width:100%; min-width:0; }
 
 #viewer-description { white-space: pre-line; }
+
+.pano-page { background:#090b12; }
+.pano-header,.pano-toolbar,.pano-actions,.pano-foot { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.pano-header,.pano-toolbar,.pano-foot { justify-content:space-between; }
+.pano-header { padding:20px 4vw 16px; }
+.pano-header h1 { font-size:clamp(23px,3vw,39px); line-height:1.2; margin:0; }
+.pano-header .eyebrow { margin:0 0 5px; }
+.pano-shell { margin:0 3vw; background:var(--bg); }
+.pano-stage { height:clamp(270px,69svh,1100px); overflow:hidden; position:relative; background:#05060a; border-radius:12px; cursor:grab; touch-action:none; }
+.pano-stage:focus-visible { outline:2px solid var(--cyan); }
+.pano-stage.dragging { cursor:grabbing; }
+#pano-tiles,#pano-markers,#pano-editor-pins { position:absolute; inset:0; pointer-events:none; }
+#pano-tiles img { position:absolute; top:0; left:0; max-width:none; user-select:none; }
+#pano-notice { position:absolute; top:45%; width:100%; text-align:center; pointer-events:none; }
+.pano-toolbar { padding:14px 0 6px; }
+.pano-toolbar select { max-width:min(48vw,300px); }
+.pano-toolbar .button { min-height:36px; padding:4px 12px; }
+.pano-foot { color:var(--muted); font-size:12px; padding-bottom:14px; }
+.pano-foot a { color:var(--cyan); }
+.pano-shell:fullscreen { display:flex; flex-direction:column; margin:0; padding:10px; }
+.pano-shell:fullscreen .pano-stage { flex:1; min-height:0; }
+#pano-map { position:relative; width:fit-content; max-width:100%; margin:12px auto; cursor:crosshair; }
+#pano-map img { display:block; max-width:100%; max-height:65vh; width:auto; height:auto; }
+.pano-pin { position:absolute; pointer-events:auto; transform:translate(6px,-50%); font-size:12px; white-space:nowrap; line-height:1.5; padding:3px 7px; background:#090b12dd; border:1px solid #a4e3ee99; border-radius:5px; color:#e5f8fc; }
+.pano-pin::before { content:""; position:absolute; left:-10px; top:50%; margin-top:-3px; width:6px; height:6px; border-radius:50%; background:var(--cyan); }
+.pano-pin-left { transform:translate(calc(-100% - 6px),-50%); }
+.pano-pin-left::before { left:auto; right:-10px; }
+.pano-pin.selected,.pano-pin:focus-visible { outline:2px solid var(--cyan); }
+.collection-links { flex-wrap:wrap; }
+@media(max-width:700px){ .pano-actions,.pano-toolbar { gap:8px; }.pano-stage { height:56svh; }.pano-header { padding:12px 3vw; }.pano-shell:fullscreen .pano-foot p { margin:4px 0; } }

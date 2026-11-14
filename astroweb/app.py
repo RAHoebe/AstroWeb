@@ -21,7 +21,7 @@ from werkzeug.utils import secure_filename
 
 from . import __version__
 from .jobs import JobQueue
-from .media import MAX_FILE, import_object, normalize_id, upload_identity, fits_target, file_prefix, validate_image
+from .media import MAX_FILE, NIGHTSCAPES, import_object, normalize_id, upload_identity, fits_target, file_prefix, validate_image
 from .metadata import refresh_metadata, renamed_metadata, validate_metadata
 from .render import Parameters, Scene, ffmpeg_executable, gallery_preview_path, read_rgb, resize_long, save_jpg
 from .catalogue import canonical,group_id,belongs
@@ -122,7 +122,7 @@ def create_app(data_dir=None, testing=False):
         from .observation import public_observation
         value = {k: record[k] for k in ["id", "width", "height", "metadata", "params", "render", "published", "created_at"]}
         from .collection import capture_date
-        value.update(capture_date=capture_date(record),body=record.get("body"),catalog_id=group_id(record),session_name=record.get("session_name",""))
+        value.update(capture_kind=record.get("capture_kind"),capture_date=capture_date(record),body=record.get("body"),catalog_id=group_id(record),session_name=record.get("session_name",""))
         value.update(poster=f"/media/{record['id']}/poster", video=f"/media/{record['id']}/movie" if record["video"] else None, final=f"/media/{record['id']}/final", observation=record.get("observation") if private else public_observation(record.get("observation", {})), sky_available=all(record.get("observation", {}).get(k) is not None for k in ["ra", "dec", "latitude", "longitude", "date_obs"]))
         if record.get("body"):
             from .solar import displayed_metadata, observing_time
@@ -138,6 +138,9 @@ def create_app(data_dir=None, testing=False):
             value["video"] += f"?v={film_id}"
             value["preview"] = f"/media/{record['id']}/preview?v={film_id}" if gallery_preview_path(store.path(record["video"])).is_file() else value["video"]
         if private:
+            if record.get("capture_kind") in NIGHTSCAPES:
+                from .panorama import settings
+                value["panorama"] = settings(store,record,private=True)
             value["gaia"] = record.get("gaia") or {}
             value["source_poster"] = f"/media/{record['id']}/poster"
             value["source_width"], value["source_height"] = record["width"], record["height"]
@@ -161,6 +164,39 @@ def create_app(data_dir=None, testing=False):
         if record["id"] != identifier:
             return redirect(f"/viewer/{record['id']}")
         return send_file(ROOT / "static" / "index.html")
+
+    @app.get("/panorama")
+    def panorama_page():
+        return send_file(ROOT / "static" / "panorama.html")
+
+    @app.get("/media/panorama/eso0932a.jpg")
+    def panorama_background():
+        return send_file(ROOT / "catalog" / "milky-way.jpg", conditional=True, max_age=86400)
+
+    @app.get("/api/panorama")
+    def panorama_scene():
+        from .panorama import overview, settings
+        identifier = request.args.get("capture")
+        if not identifier:
+            return jsonify(overview(store))
+        record = get_object(identifier)
+        if record.get("capture_kind") not in NIGHTSCAPES:
+            abort(404)
+        obj = present(record)
+        return jsonify(**settings(store,record,bool(session.get("admin"))),
+                       image=obj.get("original_view") or obj["final"], name=record["metadata"]["name"], id=record["id"])
+
+    @app.put("/api/admin/objects/<identifier>/panorama")
+    @admin_required
+    def save_panorama(identifier):
+        from .panorama import validate
+        with store.lock:
+            record = get_object(identifier)
+            if record.get("capture_kind") not in NIGHTSCAPES:
+                abort(404)
+            config = validate(store,record,json_body())
+            store.update("objects",identifier,panorama=config)
+        return jsonify(ok=True)
 
     @app.get("/api/objects/<identifier>")
     def object_detail(identifier):
@@ -399,11 +435,13 @@ def create_app(data_dir=None, testing=False):
             raise ValueError("invalid_parameters") from None
         params = Parameters.parse(raw_params)
         files = request.files.getlist("images")
-        # A single explicitly selected solar-system body has its own upload mode.
+        kind = request.form.get("capture_kind", "")
+        if kind and kind not in NIGHTSCAPES:
+            raise ValueError("capture_kind_mismatch")
         solar = supplied.upper() in BODIES
-        if solar and len(files) != 1:
+        if (solar or kind) and len(files) != 1:
             raise ValueError("single_image_required")
-        if not solar and len(files) != 4:
+        if not (solar or kind) and len(files) != 4:
             raise ValueError("four_images_required")
         with tempfile.TemporaryDirectory(prefix="upload-", dir=store.root) as temp:
             paths = []
@@ -427,9 +465,11 @@ def create_app(data_dir=None, testing=False):
                 fits.save(fits_path)
                 observation = read_observation(fits_path)
             source = prefix = None
-            if solar:
-                identifier = normalize_id(supplied)
+            if solar or kind:
+                identifier = supplied if kind else normalize_id(supplied)
                 params.method = "kenburns"
+                if kind and "orientation" not in raw_params:
+                    params.orientation = "original"
             else:
                 header = (observation or {}).get("header", {})
                 identifier, source, prefix = upload_identity([p.name for p in paths], header.get("OBJECT"), supplied)
@@ -448,7 +488,7 @@ def create_app(data_dir=None, testing=False):
                     except ValueError:
                         raise ValueError("invalid_observation") from None
                 record = import_object(store, identifier, paths, request.form.get("session_name",""),
-                                       repeat=True,capture_date=manual or None, source_prefix=prefix, allow_export_prefix=source in {"fits", "manual"})
+                                       repeat=True,nightscape=kind,title=request.form.get("title",""),capture_date=manual or None, source_prefix=prefix, allow_export_prefix=source in {"fits", "manual"})
                 if fits_path:
                     from .observation import attach_fits
                     record = attach_fits(store, record, fits_path, observation)
@@ -497,7 +537,7 @@ def create_app(data_dir=None, testing=False):
     def preview(identifier):
         record = get_object(identifier)
         params = Parameters.parse(json_body())
-        if record.get("body"):params.method="kenburns"
+        if record.get("body") or record.get("capture_kind"):params.method="kenburns"
         count = len(params.zoom_points) or 1
         index = request.args.get("point", default=1, type=int)
         if not 1 <= index <= count:
@@ -517,7 +557,7 @@ def create_app(data_dir=None, testing=False):
         new = canonical(normalize_id(json_body().get("identifier","")))
         record = get_object(identifier)
         current_catalog = group_id(record)
-        if (new in BODIES) != bool(record.get("body")):
+        if record.get("capture_kind") or (new in BODIES) != bool(record.get("body")):
             raise ValueError("capture_kind_mismatch")
         if new != current_catalog:
             # Merging into an existing group reuses its editorial metadata.
@@ -552,6 +592,8 @@ def create_app(data_dir=None, testing=False):
     @admin_required
     def fetch_metadata(identifier):
         record = get_object(identifier)
+        if record.get("capture_kind"):
+            raise ValueError("capture_kind_mismatch")
         try:
             value = refresh_metadata(record["metadata"], force=False)
         except requests.RequestException:
@@ -592,7 +634,7 @@ def create_app(data_dir=None, testing=False):
             path = Path(temp) / secure_filename(file.filename)
             file.save(path)
             observation = read_observation(path)
-            if not record.get("body"):
+            if not (record.get("body") or record.get("capture_kind")):
                 header_id = fits_target(observation["header"].get("OBJECT"))
                 if not belongs(path.name, group_id(record)) and not (
                     header_id and canonical(header_id) == group_id(record)

@@ -6,7 +6,8 @@ from .discovery import discover
 
 def propose(store,record,count):
     image=cv2.imread(str(store.path(record["poster"])),cv2.IMREAD_GRAYSCALE)
-    return propose_image(image, count, discover(store, record)["objects"])
+    objects = [] if record.get("capture_kind") else discover(store, record)["objects"]
+    return propose_image(image, count, objects)
 
 
 def propose_image(image, count, objects=()):

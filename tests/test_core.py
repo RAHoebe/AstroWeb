@@ -105,6 +105,70 @@ def app(tmp_path):
     app.extensions["jobs"].shutdown()
 
 
+@pytest.mark.parametrize("kind,with_fits",[("startrails",False),("milkyway",True)])
+def test_landscape_upload_and_rerender(app,images,monkeypatch,kind,with_fits):
+    client=app.test_client();headers=sign_in(client);store=app.extensions["store"];queue=app.extensions["jobs"]
+    def no_catalogue(*args):
+        pytest.fail("landscape reached a catalogue lookup")
+    monkeypatch.setattr("astroweb.skymap.discover",no_catalogue)
+    def upload():
+        form={"capture_kind":kind,"title":"Night at the lake","images":(io.BytesIO(images["final"].read_bytes()),"landscape.png"),
+              "params":json.dumps({"duration":4,"resolution":720})}
+        if with_fits:
+            data=io.BytesIO()
+            fits.PrimaryHDU(header=fits.Header({"OBJECT":"M 31","DATE-OBS":"2026-09-01T20:30:00"})).writeto(data)
+            data.seek(0);form["fits"]=(data,"observing-night.fits")
+        reply=client.post("/api/admin/objects",headers=headers,data=form)
+        assert reply.status_code==202,reply.json
+        ident=reply.json["object"]["id"];job=reply.json["job"]["id"]
+        queue.futures[job].result(timeout=30)
+        rec=store.get("objects",ident)
+        assert rec["published"] and rec["capture_kind"]==kind
+        assert rec["metadata"]["name"]["nl"]=="Night at the lake"
+        assert rec["params"]["orientation"]=="original" and rec["params"]["method"]=="kenburns"
+        assert store.path(rec["assets"]["final"]).read_bytes()==images["final"].read_bytes()
+        if with_fits:
+            assert rec["observation"]["header"]["OBJECT"]=="M 31"
+        assert "body" not in rec and "hst_search" not in rec
+        detail=client.get("/api/objects/"+ident).json
+        assert detail["capture_kind"]==kind and not detail["hubble_available"]
+        assert detail["video"] and detail["final"]
+        return ident
+    first=upload();second=upload()
+    assert first!=second and len(client.get("/api/objects").json["objects"])==2
+    result=client.post("/api/admin/objects/"+first+"/render",headers=headers,json={"method":"layered","duration":4,"resolution":720})
+    assert result.status_code==202
+    queue.futures[result.json["job"]["id"]].result(timeout=30)
+    assert len(store.get("objects",first)["versions"])==2
+
+
+def test_panorama_pins_permissions_validation_and_renamed_targets(app, images):
+    store=app.extensions["store"]
+    rec=import_object(store,"",[images["final"]],nightscape="milkyway")
+    target=import_object(store,"NGC_7000",images.values())
+    store.update("objects",rec["id"],published=True)
+    client=app.test_client()
+    route="/api/admin/objects/"+rec["id"]+"/panorama"
+    config={"wrap":True,"pins":[{"target":target["id"],"x":.25,"y":.62}]}
+    assert client.put(route,json=config).status_code in (401,403)
+    headers=sign_in(client)
+    assert client.put(route,headers=headers,json=config).status_code==200
+    scene="/api/panorama?capture="+rec["id"]
+    assert client.get(scene).json["pins"][0]["target"]==target["id"]
+    guest=app.test_client()
+    assert guest.get(scene).json["pins"]==[]
+    assert guest.get("/api/panorama?capture="+target["id"]).status_code==404
+    for pin in [dict(target=target["id"],x=1.01,y=.5),dict(target="unknown",x=.5,y=.5),
+                dict(target=rec["id"],x=.5,y=.5)]:
+        assert client.put(route,headers=headers,json={"wrap":False,"pins":[pin]}).status_code==400
+    store.update("objects",target["id"],published=True)
+    renamed=store.rename_object(target["id"],"IC_1396",target["metadata"])
+    assert guest.get(scene).json["pins"][0]["target"]==renamed["id"]
+    assert guest.get(scene).json["wrap"]
+    assert client.put(route,headers=headers,json={"wrap":False,"pins":[]}).status_code==200
+    assert guest.get(scene).json["pins"]==[]
+
+
 def test_gallery_portrait_poster_rotates_landscape_source(app, images):
     store=app.extensions["store"]
     for path in images.values():

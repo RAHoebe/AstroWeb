@@ -14,6 +14,7 @@ from .metadata import initial_metadata
 from .render import Parameters, read_rgb, resize_long, save_jpg
 from .store import now
 
+NIGHTSCAPES = {"startrails": ("Sterrensporen", "Star trails"), "milkyway": ("Melkwegfoto", "Milky Way photograph")}
 ROLES = ("final", "starless", "stars", "stars_laid")
 EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 MAX_FILE = 100 * 1024 * 1024
@@ -121,8 +122,17 @@ def validate_images(paths):
     return next(iter(sizes))
 
 
-def import_object(store, identifier, paths, session_name="", *, repeat=False, capture_date=None, source_prefix=None, allow_export_prefix=False):
-    identifier = normalize_id(identifier)
+def import_object(store, identifier, paths, session_name="", *, repeat=False, capture_date=None, source_prefix=None, allow_export_prefix=False, nightscape=None, title=""):
+    if nightscape:
+        if nightscape not in NIGHTSCAPES:
+            raise ValueError("capture_kind_mismatch")
+        title = title.strip()
+        if len(title)>100 or any(ord(ch)<32 for ch in title):
+            raise ValueError("invalid_capture_title")
+        # Each landscape is its own gallery entry, including repeated nights of the same type.
+        identifier = nightscape.upper()+"~"+uuid.uuid4().hex
+    else:
+        identifier = normalize_id(identifier)
     catalog_id = identifier
     session_name = session_name.strip()
     if len(session_name)>80 or any(ord(c)<32 for c in session_name):
@@ -130,14 +140,14 @@ def import_object(store, identifier, paths, session_name="", *, repeat=False, ca
     existing = store.get("objects",store.current_id(identifier))
     catalog_id=group_id(existing) if existing else canonical(identifier)
     siblings=[r for r in store.all("objects") if group_id(r)==catalog_id]
-    separate=bool(session_name or (repeat and siblings))
+    separate=not nightscape and bool(session_name or (repeat and siblings))
     if session_name:
         if any(r.get("session_name","").casefold()==session_name.casefold() for r in siblings):
             raise ValueError("session_exists")
     elif siblings and not repeat:
         raise ValueError("object_exists")
     solar=catalog_id in BODIES
-    if solar:
+    if solar or nightscape:
         paths=list(paths)
         if len(paths)!=1 or Path(paths[0]).suffix.lower() not in EXTENSIONS:
             raise ValueError("single_image_required")
@@ -162,8 +172,16 @@ def import_object(store, identifier, paths, session_name="", *, repeat=False, ca
         poster = folder.parent / "poster.jpg"
         save_jpg(poster, resize_long(read_rgb(roles["final"]), 1600))
         record = {"id": identifier, "assets": assets, "sha256": hashes, "poster": poster.relative_to(store.root).as_posix(), "width": width, "height": height, "metadata": initial_metadata(catalog_id), "params": Parameters().__dict__, "video": None, "render": None, "published": False, "created_at": now()}
+        if nightscape:
+            nl,en=NIGHTSCAPES[nightscape]
+            record["metadata"].update(target=en, name={"nl":title or nl,"en":title or en},
+                                      type={"nl":nl,"en":en},summary={"nl":"","en":""},
+                                      description={"nl":"","en":""},translation="curated",aliases=[],sources=[])
+            record.update(capture_kind=nightscape,session_name=session_name)
         if solar:
-            record.update(body=catalog_id,gaia={"status":"not_applicable"},params=Parameters(method="kenburns",orientation="original").__dict__)
+            record["body"]=catalog_id
+        if solar or nightscape:
+            record.update(gaia={"status":"not_applicable"},params=Parameters(method="kenburns",orientation="original").__dict__)
         if capture_date:
             record["capture_date"]=capture_date
         if separate:

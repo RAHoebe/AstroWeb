@@ -129,7 +129,7 @@ class JobQueue:
             record = self.store.get("objects", identifier)
             if not record:
                 raise ValueError("object_not_found")
-            if record.get("body") or (record.get("gaia") or {}).get("status") == "solved":
+            if record.get("capture_kind") or record.get("body") or (record.get("gaia") or {}).get("status") == "solved":
                 return
             self.store.update("objects", identifier, gaia={"status":"pending", "request":uuid.uuid4().hex})
             self.executor.submit(self.prepare_capture, identifier)
@@ -140,6 +140,8 @@ class JobQueue:
 
     def discover_skymap(self, identifier):
         from . import archive_search, skymap
+        if (self.store.get("objects", identifier) or {}).get("capture_kind"):
+            return
         try:
             skymap.discover(self.store, identifier)
             archive_search.discover(self.store, identifier)
@@ -174,7 +176,7 @@ class JobQueue:
             capture = self.store.get("objects", identifier)
             if not capture:
                 raise ValueError("object_not_found")
-            if capture.get("body"):
+            if capture.get("body") or capture.get("capture_kind"):
                 params.method = "kenburns"
             jobs = self.store.all("jobs")
             if any(job["object_id"] == identifier and job["status"] in {"queued", "running", "cancelling"} for job in jobs):

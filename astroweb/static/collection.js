@@ -5,7 +5,7 @@ const canvas=$('collection-sky'),c=canvas.getContext('2d');
 let items=[],stars=new Map(),lines=[],selected=null,peer=null,ra=180,dec=0,zoom=1,hit=[],drag=null,failed=false;
 const wrap=x=>((x+180)%360+360)%360-180;
 const clamp=(x,l,h)=>Math.max(l,Math.min(h,x));
-const displayId=v=>(v.catalog_id||v.id).replace('_',' ');
+const displayId=v=>v.capture_kind?t(v.capture_kind):(v.catalog_id||v.id).replace('_',' ');
 const label=v=>[displayId(v),v.session_name,local(v.name)].filter(Boolean).join(' · ');
 function center(v){
   if(v.field.center)return v.field.center;
