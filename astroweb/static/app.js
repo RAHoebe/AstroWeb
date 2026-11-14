@@ -1,3 +1,4 @@
+import {enablePinch} from './pinch.js';
 import {openPolar,closePolar,drawPolar} from './polar.js';
 import {layoutComparison,setComparisonObject,openEnvironment,comparisonText} from './compare.js';
 import {configureGalaxy,openGalaxy,stopGalaxy,setJourneyLabels,atlasLanguage} from './atlas.js';
@@ -216,11 +217,11 @@ function layoutOriginal(){
   $('original-fit').disabled=photoZoom===1;
   $('original-level').textContent=photoZoom.toLocaleString(language,{maximumFractionDigits:2})+'×';
 }
-function zoomOriginal(value,x=0,y=0){
+function zoomOriginal(value,x=0,y=0,nx=x,ny=y){
   const control=$('original-scale');
   control.value=String(value);
   const next=Number(control.value),ratio=next/photoZoom;
-  photoX=x+(photoX-x)*ratio;photoY=y+(photoY-y)*ratio;
+  photoX=nx+(photoX-x)*ratio;photoY=ny+(photoY-y)*ratio;
   photoZoom=next;layoutOriginal();
 }
 function photoAnchor(e){
@@ -236,6 +237,11 @@ originalStage.addEventListener('wheel',e=>{
   e.preventDefault();zoomOriginal(next,...photoAnchor(e));
 },{passive:false});
 originalStage.addEventListener('dblclick',e=>zoomOriginal(photoZoom===1?+$('original-scale').max:1,...photoAnchor(e)));
+enablePinch(originalStage,{
+  getZoom:()=>photoZoom,
+  begin(){photoDrag=null;originalStage.classList.remove('dragging');},
+  transform(value,previous,next){zoomOriginal(value,previous.x,previous.y,next.x,next.y);}
+});
 originalStage.addEventListener('pointerdown',e=>{
   if(e.target.closest('.discovery-pin')||photoZoom===1||!e.isPrimary||e.button!==0)return;
   photoDrag={id:e.pointerId,x:e.clientX-photoX,y:e.clientY-photoY};

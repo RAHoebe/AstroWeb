@@ -1,3 +1,4 @@
+import {enablePinch} from './pinch.js';
 import {drawFootprintImage,loadPoster} from './footprint.js';
 import {local,language,setLanguage,t} from './i18n.js';
 
@@ -50,7 +51,10 @@ function draw(){
     ctx.drawImage(img,left+tile*sw,top,sw,sh);
   }
   hit=[];
-  for(const pin of scene.pins){
+  // Draw the selected capture last so it also wins hit testing in overlaps.
+  const selected=$('pano-jump').value;
+  const layers=selected?[...scene.pins].sort((a,b)=>Number(a.target===selected)-Number(b.target===selected)):scene.pins;
+  for(const pin of layers){
     if(!pin.corners||(!$('pano-photos').checked&&flight?.pin!==pin))continue;
     const cx=w/2+shortest(pin.x-x)*sw;
     for(const offset of [-sw,0,sw]){
@@ -89,7 +93,7 @@ function draw(){
   $('pano-out').disabled=zoom<=1;$('pano-in').disabled=zoom>=8;
 }
 function hitAt(e){
-  const r=stage.getBoundingClientRect();
+  const r=canvas.getBoundingClientRect();
   const px=(e.clientX-r.left)*canvas.width/r.width,py=(e.clientY-r.top)*canvas.height/r.height;
   return hit.slice().reverse().find(item=>ctx.isPointInPath(item.path,px,py))?.pin;
 }
@@ -130,10 +134,10 @@ function visit(pin){
     f.frame=requestAnimationFrame(tick);
   }).catch(()=>{if(flight===f)location.assign(url);});
 }
-function zoomAt(value,ox=0,oy=0){
+function zoomAt(value,ox=0,oy=0,nx=ox,ny=oy){
   if(!img?.naturalWidth)return;
   cancelFlight();const old=dimensions();zoom=clamp(value,1,8);const next=dimensions();
-  x+=ox*(1/old.sw-1/next.sw);y+=oy*(1/old.sh-1/next.sh);draw();
+  x+=ox/old.sw-nx/next.sw;y+=oy/old.sh-ny/next.sh;draw();
 }
 function pan(dx,dy){
   if(!img?.naturalWidth)return;
@@ -141,7 +145,7 @@ function pan(dx,dy){
 }
 function languageUI(){
   setLanguage(language);
-  if(!scene)return;
+  if(!img)return;
   $('pano-heading').textContent=scene.name?local(scene.name):t('panoSkyTitle');
   document.title=$('pano-heading').textContent+' · AstroWeb';
   links.forEach((link,i)=>{link.textContent=pinName(scene.pins[i]);});
@@ -169,9 +173,16 @@ stage.addEventListener('wheel',e=>{
   const r=stage.getBoundingClientRect();
   zoomAt(zoom*Math.exp(-clamp(e.deltaY*(e.deltaMode===1?16:1),-250,250)*.003),e.clientX-r.left-r.width/2,e.clientY-r.top-r.height/2);
 },{passive:false});
+enablePinch(stage,{
+  getZoom:()=>zoom,
+  begin(){cancelFlight();drag=null;stage.classList.remove('dragging');},
+  transform(value,previous,next){zoomAt(value,previous.x,previous.y,next.x,next.y);}
+});
 stage.onpointerdown=e=>{
-  if(!img?.naturalWidth||drag||e.button!==0||e.target.closest('a'))return;
-  cancelFlight();drag={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false};stage.setPointerCapture(e.pointerId);
+  if(!img||drag||e.button!==0||e.target.closest('a'))return;
+  if(flight){cancelFlight();return;}
+  drag={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false,pin:hitAt(e)};
+  stage.setPointerCapture(e.pointerId);
   stage.focus({preventScroll:true});stage.classList.add('dragging');
 };
 stage.onpointermove=e=>{
@@ -181,7 +192,7 @@ stage.onpointermove=e=>{
 };
 stage.onpointerup=e=>{
   if(drag?.id!==e.pointerId||drag.moved)return;
-  const pin=hitAt(e);if(pin)visit(pin);
+  if(drag.pin && hitAt(e)===drag.pin)visit(drag.pin);
 };
 stage.onlostpointercapture=()=>{drag=null;stage.classList.remove('dragging');};
 stage.onkeydown=e=>{
@@ -204,6 +215,11 @@ async function init(){
     $('pano-back').dataset.i18n='panoBackPhoto';$('pano-back').href='/viewer/'+encodeURIComponent(scene.id)+'#original';
     $('pano-credit').hidden=true;
   }
+  // Publish the camera, hit regions and controls together, after decoding.
+  const background=new Image();
+  background.src=scene.image;
+  await background.decode();
+  img=background;
   links=scene.pins.map(pin=>{
     const a=document.createElement('a');a.className='pano-pin';
     const query=new URLSearchParams({from:'panorama'});if(capture)query.set('scene',scene.id);
@@ -215,13 +231,13 @@ async function init(){
     return a;
   });
   $('pano-markers').replaceChildren(...links);
-  $('pano-jump').disabled=$('pano-labels').disabled=!links.length;
   languageUI();
-  img=new Image();img.src=scene.image;await img.decode();
   $('pano-photo-control').hidden=!scene.pins.some(p=>p.corners);
-  startView();
   const saved=JSON.parse(sessionStorage.getItem(memory)||'null');
-  if(saved&&[saved.x,saved.y,saved.zoom].every(Number.isFinite)){({x,y,zoom}=saved);zoom=clamp(zoom,1,8);}
-  draw();
+  if(saved&&[saved.x,saved.y,saved.zoom].every(Number.isFinite)){({x,y,zoom}=saved);zoom=clamp(zoom,1,8);draw();}
+  else startView();
+  $('pano-jump').disabled=$('pano-labels').disabled=!links.length;
+  $('pano-reset').disabled=false;
+  $('pano-photos').disabled=$('pano-photo-control').hidden;
 }
 init().catch(()=>{$('pano-notice').textContent=t('panoUnavailable');});

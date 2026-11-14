@@ -4,7 +4,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..','astroweb','static');
-const files=['panorama.js','panorama-editor.js','footprint.js','collection.js','app.js','compare.js','polar.js','sky.js','atlas.js','i18n.js','guide.js'];
+const files=['pinch.js','panorama.js','panorama-editor.js','footprint.js','collection.js','app.js','compare.js','polar.js','sky.js','atlas.js','i18n.js','guide.js'];
 for(const file of files){
   const source=fs.readFileSync(path.join(root,file),'utf8');
   if(/[\u00c2\u00c3][^\x00-\x7f]|\ufffd/u.test(source))throw Error('Damaged UTF-8 text in '+file);

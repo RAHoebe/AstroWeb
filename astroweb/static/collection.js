@@ -1,3 +1,4 @@
+import {enablePinch} from './pinch.js';
 import {drawFootprintImage,posterURL} from './footprint.js';
 import {t,language,local,setLanguage} from './i18n.js';
 const $=id=>document.getElementById(id);
@@ -127,12 +128,11 @@ $('atlas-peer').onchange=e=>{
 function overview(){ra=180;dec=0;zoom=1;draw();}
 $('atlas-photos').onchange=draw;
 $('atlas-reset').onclick=overview;$('atlas-labels').onchange=draw;
-function setZoom(value,x=0,y=0){
+function setZoom(value,x=0,y=0,nx=x,ny=y){
   const next=clamp(value,1,64);
   // x and y are fractions of the canvas measured from its centre.
-  const delta=1/next-1/zoom;
-  ra=(ra+360*x*delta+360)%360;
-  dec=clamp(dec+180*y*delta,-90+90/next,90-90/next);
+  ra=(ra+360*(nx/next-x/zoom)+360)%360;
+  dec=clamp(dec+180*(ny/next-y/zoom),-90+90/next,90-90/next);
   zoom=next;
   draw();
 }
@@ -146,6 +146,14 @@ canvas.addEventListener('wheel',event=>{
   event.preventDefault();
   setZoom(next,(event.clientX-rect.left)/rect.width-.5,(event.clientY-rect.top)/rect.height-.5);
 },{passive:false});
+enablePinch(canvas,{
+  getZoom:()=>zoom,
+  begin(){drag=null;},
+  transform(value,previous,next){
+    const {width,height}=canvas.getBoundingClientRect();
+    setZoom(value,previous.x/width,previous.y/height,next.x/width,next.y/height);
+  }
+});
 canvas.addEventListener('pointerdown',e=>{if(e.button!==0||!e.isPrimary)return;drag={id:e.pointerId,x:e.clientX,y:e.clientY,ra,dec};canvas.setPointerCapture(e.pointerId);});
 canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId||Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<4)return;ra=(drag.ra+(e.clientX-drag.x)*360/(canvas.clientWidth*zoom)+360)%360;dec=clamp(drag.dec+(e.clientY-drag.y)*180/(canvas.clientHeight*zoom),-90+90/zoom,90-90/zoom);draw();});
 canvas.addEventListener('pointerup',e=>{
