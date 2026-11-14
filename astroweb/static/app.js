@@ -33,6 +33,23 @@ function applyLanguage(value){setLanguage(value);drawPicker();if(!viewerRoute&&!
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
 
 async function loadGallery(){try{state.objects=(await api('/api/objects')).objects;buildGallery();}catch(e){$('gallery-grid').replaceChildren(node('div','empty-state',errorText(e)));}}
+function galleryEdgeGray(image){
+  const width=image.naturalWidth, height=image.naturalHeight;
+  const canvas=document.createElement('canvas');
+  canvas.width=width;canvas.height=2;
+  const ctx=canvas.getContext('2d');
+  if(!ctx)return;
+  ctx.drawImage(image,0,0,width,1,0,0,width,1);
+  ctx.drawImage(image,0,height-1,width,1,0,1,width,1);
+  const pixels=ctx.getImageData(0,0,width,2).data, levels=[];
+  for(let i=0;i<pixels.length;i+=4){
+    levels.push(Math.round(.2126*pixels[i]+.7152*pixels[i+1]+.0722*pixels[i+2]));
+  }
+  levels.sort((a,b)=>a-b);
+  const gray=Math.round((levels[width-1]+levels[width])/2);
+  image.parentElement.style.backgroundColor=`rgb(${gray}, ${gray}, ${gray})`;
+}
+
 function buildGallery(){
   const grid=$('gallery-grid');observer.disconnect();grid.querySelectorAll('video').forEach(video=>video.pause());grid.replaceChildren();
   const count=state.objects.length;$('gallery-count').textContent=String(count).padStart(2,'0')+' '+t(count===1?'filmSingular':'films');
@@ -40,11 +57,14 @@ function buildGallery(){
   if(!count){grid.append(node('div','empty-state',t('emptyGallery')));return;}
   let hero=state.objects.find(o=>o.id===featuredId);
   if(!hero){hero=state.objects[Math.floor(Math.random()*count)];featuredId=hero.id;}$('hero-image').src=hero.poster;$('hero-name').textContent=local(hero.metadata.name);$('hero-id').textContent=captureLabel(hero);
-  state.objects.forEach((object,index)=>{
+  state.objects.forEach(object=>{
     const card=node('a','gallery-card');card.href='/viewer/'+encodeURIComponent(object.id);card.setAttribute('aria-label',t('openFilm')+' · '+local(object.metadata.name));
-    const media=node('div','card-media');const image=node('img');image.width=object.width;image.height=object.height;image.src=object.poster;image.alt=local(object.metadata.name);image.loading='lazy';const video=node('video');video.muted=true;video.loop=true;video.playsInline=true;video.preload='none';video.setAttribute('aria-hidden','true');
-    const top=node('div','card-topline');top.append(node('span','media-badge',t('cinematic')+' · '+object.params.duration+'s'),node('span','card-number',String(index+1).padStart(2,'0')));
-    const bottom=node('div','card-bottomline');bottom.append(node('span','',t('hoverPreview')),node('span','card-open','↗'));media.append(image,video,top,node('span','card-play','▶'),bottom);
+    const media=node('div','card-media'), image=node('img'), video=node('video');
+    image.width=object.width;image.height=object.height;image.alt=local(object.metadata.name);image.loading='lazy';
+    video.muted=true;video.loop=true;video.playsInline=true;video.preload='none';video.setAttribute('aria-hidden','true');
+    media.append(image,video);
+    image.addEventListener('load',()=>galleryEdgeGray(image),{once:true});
+    image.src=object.poster;
     const info=node('div','card-info');const category=node('div','card-type');category.append(node('span','',captureLabel(object)),node('span','',local(object.metadata.type)));info.append(category,node('h3','',local(object.metadata.name)),node('p','',local(object.metadata.summary)));
     const tags=node('div','card-tags');const details=[object.capture_date?object.capture_date.slice(0,10):'',local(object.metadata.constellation),object.observation?.telescope,duration(object.observation?.integration)].filter(Boolean);details.forEach(text=>{const tag=node('span');tag.append(node('i'),document.createTextNode(text));tags.append(tag);});info.append(tags);card.append(media,info);
     async function play(){if(reducedMotion.matches||document.hidden)return;if(!video.src)video.src=object.preview||object.video;try{await video.play();if(card.matches(':hover')||document.activeElement===card)card.classList.add('playing');else video.pause();}catch{card.classList.remove('playing');}}
@@ -266,7 +286,7 @@ function hubbleCaption(){
   for(const opt of select.options){
     const obs=hubbleObservations.find(o=>o.id===opt.value);
     if(obs?.name){opt.textContent=local(obs.name);continue;}
-    const label=obs?.id.startsWith('skymap-')?'NASA Hubble Skymap · '+obs.title:obs?.filter?(obs.target==='ANY'?t('archiveField'):obs.target)+' · '+obs.filter:t('hubble_'+opt.value);
+    const label=obs?.id.startsWith('skymap-')?'NASA Hubble Skymap · '+obs.title:obs?.filter?(['ANY','NONE','PAR','PARALLEL'].includes(obs.target?.toUpperCase())?t('archiveField'):obs.target)+' · '+obs.filter:t('hubble_'+opt.value);
     const field=obs?.full_footprint?' · '+t('archiveRegion')+' '+(++archiveIndex):'';
     opt.textContent=t('hubble_'+(obs?.relation||'field'))+' · '+label+field;
   }

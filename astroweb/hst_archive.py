@@ -29,9 +29,9 @@ SIZE=1800
 # Archive target designations associated with documented portions of these
 # extended objects. Unrelated objects and untargeted parallels remain field-only.
 REGIONS = {
-    "NGC7000": ("V1057CYG",),
-    "NGC6992": ("CYGLOOPNENR","CYGLOOPNENR1","CYGLOOPNENR2","NGC6995A","CYGLOOPSECLOUD","CYGLOOPSECLOUDTWEAK"),
-    "IC1396": ("IC1396A","TRUMPLER37","TR37","HD206267"),
+    "NGC7000": ("V1057-CYG","V1057 CYG","CYGNUS WALL","LDN 935"),
+    "NGC6992": ("CYGLOOP-NENR","CYGLOOP-NENR1","CYGLOOP-NENR2","NGC6995-A","CYGLOOP-SE-CLOUD","CYGLOOP-SE-CLOUD-TWEAK"),
+    "IC1396": ("IC1396A","IC 1396A","IC1396-TAIL","ELEPHANT TRUNK","TRUMPLER 37","TR37","HD206267","HD-206267"),
 }
 
 
@@ -47,7 +47,7 @@ def field_relation(record, name):
     if archive in aliases:
         return "target"
     # A numbered galaxy ID should not match another galaxy (M1 vs M101).
-    if any(archive in REGIONS.get(a, ()) for a in aliases):
+    if any(archive == key(region) for a in aliases for region in REGIONS.get(a, ())):
         return "region"
     return "field"
 
@@ -153,10 +153,7 @@ def find_fields(store,record):
     def target_sql(term):
         return "'"+term.replace("'","''")+"'"
     terms.update(term.replace(" ","-") for term in list(terms))
-    archive_aliases={"V1057CYG":"V1057-CYG","NGC6995A":"NGC6995-A","IC1396A":"IC1396A",
-                     "CYGLOOPNENR":"CYGLOOP-NENR","CYGLOOPNENR1":"CYGLOOP-NENR1","CYGLOOPNENR2":"CYGLOOP-NENR2",
-                     "CYGLOOPSECLOUD":"CYGLOOP-SE-CLOUD","CYGLOOPSECLOUDTWEAK":"CYGLOOP-SE-CLOUD-TWEAK"}
-    terms.update(archive_aliases.get(k,k) for k in regions)
+    terms.update(regions)
     clause=" AND target_name IN ("+",".join(target_sql(k) for k in sorted(terms))+")"
     def search(statement):
         r=requests.get(TAP,params=dict(REQUEST="doQuery",LANG="ADQL",FORMAT="csv",QUERY=statement),timeout=(6,55))

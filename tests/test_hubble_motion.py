@@ -61,3 +61,12 @@ def test_caldwell20_whole_frame_required_for_each_capture():
     x,y=plate["focus"]
     sky=hubble.plate_wcs(plate).pixel_to_world(x,plate["size"][1]-1-y)
     assert (sky.ra.deg,sky.dec.deg)==pytest.approx((314.714925,44.264741),abs=.00001)
+
+def test_caldwell20_prefers_published_plate_to_its_archive_observation():
+    from astroweb.archive_search import field_key
+    r={"width":500,"height":480,"metadata":{"target":"C 20"},"sha256":{"final":"example"},
+       "gaia":{"status":"solved","digest":"example","corners":[[315,42.6],[316.9,45.1],[314.9,45.9],[313.1,43.4]]}}
+    r["hst_search"]={"field":field_key(None,r),"options":[
+        {"id":"hst_08216_44_wfpc2_f606w_wf","relation":"region"},
+        {"id":"other-pointing","relation":"field"}]}
+    assert [f["id"] for f in hubble.fields(None,r)]==["c20-wfpc2","heic0510a","other-pointing"]

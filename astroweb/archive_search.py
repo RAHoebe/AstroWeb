@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import logging
+import math
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -45,9 +46,13 @@ def target_names(record):
     return sorted(terms)
 
 
-def esa_rows(terms):
-    values = ",".join("'" + term.replace("'", "''") + "'" for term in terms)
-    query = (f"SELECT TOP 400 {COLUMNS} FROM ivoa.ObsCore WHERE target_name IN ({values}) "
+def region_names(record):
+    target = key(canonical(record["metadata"]["target"]))
+    return hst_archive.REGIONS.get(target, ())
+
+
+def esa_search(condition):
+    query = (f"SELECT TOP 1000 {COLUMNS} FROM ivoa.ObsCore WHERE {condition} "
              "AND dataproduct_type='image' AND calib_level=3 AND obs_id LIKE 'hst_%' "
              "AND em_min>3.5e-7 AND em_max<1.05e-6 ORDER BY t_exptime DESC")
     reply = requests.get(hst_archive.TAP, params={"REQUEST":"doQuery","LANG":"ADQL",
@@ -59,10 +64,41 @@ def esa_rows(terms):
     return list(reader)
 
 
+def esa_rows(terms):
+    values = ",".join("'" + term.replace("'", "''") + "'" for term in terms)
+    return esa_search(f"target_name IN ({values})")
+
+
+def search_cone(corners):
+    sky = SkyCoord(*np.asarray(corners).T, unit="deg")
+    centre = SkyCoord(sky.cartesian.mean(), frame="icrs")
+    radius = float(centre.separation(sky).deg.max()) + .001
+    return centre.spherical.lon.deg, centre.spherical.lat.deg, radius
+
+
+def spatial_rows(corners):
+    ra, dec, radius = search_cone(corners)
+    return esa_search(f"1=INTERSECTS(s_region,CIRCLE('ICRS',{ra:.8f},{dec:.8f},{radius:.8f}))")
+
+
 def nasa_rows(terms):
-    filters = [{"paramName":name,"values":values} for name, values in (
-        ("obs_collection", ["HST","HLA"]), ("target_name", terms),
-        ("dataproduct_type", ["image"]), ("calib_level", ["3"]))]
+    return mast_search([{"paramName":"target_name","values":terms}])
+
+
+def mast_spatial_rows(corners):
+    ra, dec, radius = search_cone(corners)
+    bounds = [{"paramName":"s_dec","values":[{"min":max(-90.,dec-radius),"max":min(90.,dec+radius)}]}]
+    if abs(dec)+radius < 90:
+        delta = math.degrees(math.asin(math.sin(math.radians(radius))/math.cos(math.radians(dec))))
+        lo, hi = (ra-delta)%360, (ra+delta)%360
+        ranges = [{"min":lo,"max":hi}] if lo<=hi else [{"min":lo,"max":360.},{"min":0.,"max":hi}]
+        bounds.append({"paramName":"s_ra","values":ranges})
+    return mast_search(bounds)
+
+
+def mast_search(filters):
+    filters = filters + [{"paramName":name,"values":values} for name, values in (
+        ("obs_collection", ["HST","HLA"]), ("dataproduct_type", ["image"]), ("calib_level", ["3"]))]
     query = {"service":"Mast.Caom.Filtered","params":{"columns":COLUMNS,"filters":filters},
              "format":"json","pagesize":1000,"page":1}
     reply = requests.get(MAST, params={"request":json.dumps(query)}, timeout=(4,20))
@@ -113,12 +149,13 @@ def same_field(polygon, others):
 
 def ranked_entries(store, record, rows, terms):
     aliases = {key(canonical(term)) for term in terms}
+    regions = {key(name) for name in region_names(record)}
     entries = {}
     for row in rows:
         ident = row.get("obs_id") or ""
         match = hst_archive.FIELD_ID.fullmatch(ident)
         target = row.get("target_name") or ""
-        if not match or ident in entries or not target or key(canonical(target)) not in aliases:
+        if not match or ident in entries:
             continue
         # Only calibrated optical imaging products supported by the FITS renderer.
         if "_ir_" in ident or not 350 <= int(match[2]) <= 1000:
@@ -140,8 +177,16 @@ def ranked_entries(store, record, rows, terms):
         if cv2.contourArea(hull) <= 0:
             continue
         # Prefer a broad optical filter and longer exposures within that class.
-        score = (match[3] == "w", exposure, ident)
-        entries[ident] = (score, {"id":ident, "target":target, "relation":"target",
+        designation = key(target)
+        if target and key(canonical(target)) in aliases:
+            relation, priority = "target", 3
+        elif designation in regions:
+            relation, priority = "region", 2
+        else:
+            relation = "field"
+            priority = int(designation not in {"", "ANY", "NONE", "PAR", "PARALLEL"})
+        score = (priority, match[3] == "w", exposure, ident)
+        entries[ident] = (score, {"id":ident, "target":target or "ANY", "relation":relation,
                             "filter":"F"+match[2]+match[3].upper(), "ra":ra, "dec":dec,
                             "full_footprint":True, "footprint":hull.reshape(-1,2).tolist()})
     return [entry for _,entry in sorted(entries.values(), key=lambda item:item[0], reverse=True)]
@@ -150,8 +195,13 @@ def ranked_entries(store, record, rows, terms):
 def lookup(store, record):
     terms = target_names(record)
     rows, errors = [], []
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        searches = [pool.submit(fn, terms) for fn in (nasa_rows, esa_rows)]
+    corners = geometry(store,record).get("corners")
+    if not corners:
+        return []
+    names = sorted(set(terms).union(region_names(record)))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        searches = [pool.submit(fn, names) for fn in (nasa_rows, esa_rows)]
+        searches.extend(pool.submit(fn, corners) for fn in (spatial_rows, mast_spatial_rows))
         for search in searches:
             try:
                 rows.extend(search.result())
@@ -214,16 +264,16 @@ def discover(store, identifier):
     if signature is None:
         return
     prior = record.get("hst_search") or {}
-    if prior.get("field") == signature and "options" in prior and (prior["options"] or prior.get("retry",0)>time.time()):
+    if prior.get("field") == signature and prior.get("spatial") and (prior["options"] or prior.get("retry",0)>time.time()):
         return
     try:
         options = lookup(store,record)
-        result = {"field":signature, "options":options, "retry":time.time()+7*skymap.DAY}
+        result = {"field":signature, "spatial":True, "options":options, "retry":time.time()+7*skymap.DAY}
     except (requests.RequestException, OSError, ValueError):
         logging.warning("Hubble archive search incomplete for %s", identifier, exc_info=True)
         if prior.get("field")==signature and saved_options(prior):
             return
-        result = {"field":signature, "options":[], "unavailable":True, "retry":time.time()+3600}
+        result = {"field":signature, "spatial":True, "options":[], "unavailable":True, "retry":time.time()+3600}
     with store.lock:
         latest = store.get("objects",identifier)
         if latest and field_key(store,latest) == signature:

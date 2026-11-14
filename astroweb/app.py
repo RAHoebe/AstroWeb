@@ -625,7 +625,6 @@ def create_app(data_dir=None, testing=False):
             preview = gallery_preview_path(store.path(record["video"]))
             relative = preview if preview.is_file() else record["video"]
         elif kind == "original-view":
-            from PIL import Image
             # Browsers do not generally decode TIFF. Display the full-size raster
             # as JPEG while the download route retains the original bytes.
             image = read_rgb(store.path(record["assets"]["final"]))

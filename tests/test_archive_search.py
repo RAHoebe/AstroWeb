@@ -9,6 +9,12 @@ from astroweb.jobs import JobQueue
 from astroweb.store import Store
 
 
+@pytest.fixture
+def offline_spatial_catalogue(monkeypatch):
+    monkeypatch.setattr(archive_search, "spatial_rows", lambda corners: [])
+    monkeypatch.setattr(archive_search, "mast_spatial_rows", lambda corners: [])
+
+
 def capture():
     return {"id":"NGC_1300","metadata":{"target":"NGC 1300"},"width":640,"height":480,
             "sha256":{"final":"test"},"assets":{}, "versions":[], "video":None,
@@ -25,15 +31,14 @@ def row(region="POLYGON ICRS 359.9 .1 .1 .1 .1 -.1 359.9 -.1",target="NGC-1300")
     ("POLYGON 359.9 .1 .1 .1 .31 -.1 359.9 -.1","NGC1300"),
     ("","NGC1300"),("CIRCLE ICRS 0 0 .2","NGC1300"),
     ("POLYGON GALACTIC 1 1 2 1 2 2","NGC1300"),
-    ("POLYGON 359.9 .1 .1 .1 .1 -.1 359.9 -.1","NGC13001"),
-    ("POLYGON 359.9 .1 .1 .1 .1 -.1 359.9 -.1","ANY")])
-def test_unproven_footprints_and_other_targets_are_rejected(region,target):
+])
+def test_unproven_footprints_are_rejected(region,target):
     rec=capture()
     assert archive_search.ranked_entries(None,rec,[row(region,target)],archive_search.target_names(rec))==[]
 
 
 @pytest.mark.parametrize("skymap_hit",[False,True])
-def test_upload_pipeline_searches_both_catalogues_and_saves_only_full_match(tmp_path,monkeypatch,skymap_hit):
+def test_upload_pipeline_searches_both_catalogues_and_saves_only_full_match(tmp_path,monkeypatch,offline_spatial_catalogue,skymap_hit):
     st=Store(tmp_path)
     rec=capture()
     st.put("objects",rec["id"],rec)
@@ -87,7 +92,7 @@ def test_no_archive_network_without_registration(tmp_path,monkeypatch):
     assert "hst_search" not in st.get("objects",rec["id"])
 
 
-def test_partial_archive_match_leaves_skymap_first_and_only(tmp_path,monkeypatch):
+def test_partial_archive_match_leaves_skymap_first_and_only(tmp_path,monkeypatch,offline_spatial_catalogue):
     st=Store(tmp_path)
     rec=capture()
     photo={"id":"skymap-b0001","digest":"test","center":[0.,0.]}
@@ -115,7 +120,7 @@ def test_actual_fits_pixel_edges_must_fit_even_when_catalogue_polygon_fits(tmp_p
     with pytest.raises(ValueError,match="hubble_no_field"):
         hst_archive.registered_cutout(st,rec,entry)
 
-def test_spatial_selection_checks_both_footprints_and_upgrades_legacy_result(tmp_path,monkeypatch):
+def test_spatial_selection_checks_both_footprints_and_upgrades_legacy_result(tmp_path,monkeypatch,offline_spatial_catalogue):
     rec=capture()
     st=Store(tmp_path)
     def candidate(i,x,w=1.):
@@ -138,3 +143,41 @@ def test_spatial_selection_checks_both_footprints_and_upgrades_legacy_result(tmp
     monkeypatch.setattr(hst_archive,"registered_cutout",cutout)
     archive_search.discover(st,rec["id"])
     assert [o["id"] for o in hubble.fields(st,st.get("objects",rec["id"]))]==["1","5"]
+
+
+def test_coordinate_only_and_named_regions_keep_distinct_relations(tmp_path,monkeypatch,offline_spatial_catalogue):
+    st=Store(tmp_path)
+    rec=capture()
+    rec["metadata"]["target"]="Caldwell 20"
+    calls=[]
+    def nasa(terms):
+        assert "V1057-CYG" in terms
+        return []
+    def spatial(corners):
+        calls.append(corners)
+        return [row(target="V1057-CYG")]
+    monkeypatch.setattr(archive_search,"nasa_rows",nasa)
+    monkeypatch.setattr(archive_search,"esa_rows",lambda terms:[])
+    monkeypatch.setattr(archive_search,"spatial_rows",spatial)
+    monkeypatch.setattr(hst_archive,"registered_cutout",lambda *args:(None,np.eye(3),None))
+    region,=archive_search.lookup(st,rec)
+    assert region["relation"]=="region" and calls==[rec["gaia"]["corners"]]
+    for name in ("PN-G098.2+04.9","ANY","NGC13001"):
+        field,=archive_search.ranked_entries(st,rec,[row(target=name)],archive_search.target_names(rec))
+        assert field["relation"]=="field"
+
+
+def test_spatial_query_wraps_ra_and_checks_declination(monkeypatch):
+    queries=[]
+    monkeypatch.setattr(archive_search,"esa_search",queries.append)
+    archive_search.spatial_rows(capture()["gaia"]["corners"])
+    import re
+    ra,dec,radius=map(float,re.search(r"CIRCLE\('ICRS',([^,]+),([^,]+),([^)]*)\)",queries[0]).groups())
+    assert min(ra,360-ra)<.01 and abs(dec)<.01 and .35<radius<.38
+
+
+def test_mast_coordinate_query_spans_both_sides_of_ra_zero(monkeypatch):
+    monkeypatch.setattr(archive_search,"mast_search",lambda filters:filters)
+    filters={item["paramName"]:item["values"] for item in archive_search.mast_spatial_rows(capture()["gaia"]["corners"])}
+    assert filters["s_ra"][0]["max"]==360 and filters["s_ra"][1]["min"]==0
+    assert -.38<filters["s_dec"][0]["min"]<-.35

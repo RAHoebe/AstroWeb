@@ -105,6 +105,25 @@ def app(tmp_path):
     app.extensions["jobs"].shutdown()
 
 
+def test_gallery_portrait_poster_rotates_landscape_source(app, images):
+    store=app.extensions["store"]
+    for path in images.values():
+        with Image.open(path) as image:
+            rotated=image.transpose(Image.Transpose.ROTATE_90)
+        rotated.save(path)
+    record=import_object(store,"NGC_7000",images.values())
+    store.update("objects",record["id"],published=True)
+    client=app.test_client()
+    original=client.get("/media/NGC_7000/poster")
+    portrait=client.get("/media/NGC_7000/poster?rotation=90")
+    assert original.status_code==portrait.status_code==200
+    assert portrait.mimetype=="image/jpeg"
+    with Image.open(io.BytesIO(original.data)) as source, Image.open(io.BytesIO(portrait.data)) as result:
+        expected=source.transpose(Image.Transpose.ROTATE_270)
+        assert result.size==expected.size==(128,192)
+        assert np.mean(np.abs(np.asarray(result,dtype=float)-np.asarray(expected)))<2
+
+
 def sign_in(client):
     token = client.get("/api/session").json["csrf"]
     headers = {"X-CSRF-Token": token}

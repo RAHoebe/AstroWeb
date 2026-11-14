@@ -30,7 +30,7 @@ PLATES = {
     "c20-wfpc2": dict(target="NGC_7000", size=(1330,1452), focus=(803,558),
                       sky=(314.7059488841667,44.25845019444445), crpix=(762.99314,574.49945),
                       cd=((-1.68198893e-5,2.22780662e-5),(2.22980315e-5,1.68273093e-5)),
-                      telescope="HST/WFPC2",
+                      telescope="HST/WFPC2", archive_id="hst_08216_44_wfpc2_f606w_wf",
                       url="https://science.nasa.gov/wp-content/uploads/2023/04/ngc7000_wfpc2_2flat_final-jpg.webp",
                       source="https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-20/",
                       credit="NASA, ESA, K. Stapelfeldt (JPL); processing: Gladys Kober (NASA/CUA)"),
@@ -86,7 +86,12 @@ def fields(store,record):
         if search["field"] == field_key(store,record):
             archived = saved_options(search)
             if archived:
-                options = [*archived, *options]
+                # A published colour plate and its contributing archive product
+                # represent the same destination for a capture that contains both.
+                represented = {PLATES[o["id"]].get("archive_id") for o in options if o["id"] in PLATES}
+                additional = [e for e in archived if e["id"] not in represented]
+                options = ([e for e in additional if e.get("relation") != "field"] + options
+                           + [e for e in additional if e.get("relation") == "field"])
             elif search.get("unavailable") and not options and not preferred:
                 raise ValueError("hubble_unavailable")
     if not options and not search:
