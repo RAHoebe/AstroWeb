@@ -64,3 +64,5 @@ The catalogue is cached locally for subsequent offline rendering. Missing regist
 Gaia can leave unmatched stars with the nebula or estimate their motion locally. Estimates require at least four measured neighbours within 6% of the image diagonal and inside the measured stars' convex hull. Neighbourhoods with strongly conflicting distances are rejected. Weighted inverse distance supplies an artistic motion estimate. Estimated sprites are counted separately, with a maximum of 3000 additional sprites.
 
 Gaia stars now share the nebula's constrained camera and zoom. Additional parallax uses only camera travel actually applied after image-boundary constraints. Stars cannot continue independently along an axis whose camera travel has been stopped by the image boundary.
+
+Gaia parallax also responds to actual camera travel between zoom targets. A smoothly bounded displacement based on the applied camera centres preserves a visible effect with a small orbit setting. Parallax depth controls the artistic amplitude. A stationary constrained camera produces stationary relative stellar offsets.

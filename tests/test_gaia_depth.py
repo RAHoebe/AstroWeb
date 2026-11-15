@@ -123,3 +123,20 @@ def test_local_interpolation_rejects_mixed_depths_and_extrapolation():
     measured[0][1]["distance_pc"]=1
     measured[1][1]["distance_pc"]=1000
     assert not local_estimates(measured,np.arange(1,6),centers,boxes,stars,240,160)
+
+
+def test_zoom_target_travel_drives_parallax_without_an_orbit():
+    raw,data=inputs()
+    scene=Scene(raw,Parameters(method="gaia",orientation="original",depth=1.5,
+                               pan_x=0,pan_y=0),stellar_depth=data)
+    pose=(.15,-.1,1,.2)
+    moving=scene.gaia_frame(0,0,pose)
+    factors=[p["factor"] for p in scene.gaia_sprites]
+    for sprite in scene.gaia_sprites:sprite["factor"]=1
+    same_plane=scene.gaia_frame(0,0,pose)
+    assert np.max(np.abs(moving-same_plane))>.1
+    for sprite,factor in zip(scene.gaia_sprites,factors):sprite["factor"]=factor
+    scene.params.depth=0
+    no_depth=scene.gaia_frame(0,0,pose)
+    for sprite in scene.gaia_sprites:sprite["factor"]=1
+    np.testing.assert_allclose(no_depth,scene.gaia_frame(0,0,pose),atol=1e-6)

@@ -265,17 +265,19 @@ class Scene:
                         self.warp(self.rest, x, y, pose, factor), self.choice["blend"])
         sw, sh = self.star_size
         scale, center_x, center_y = self.camera_geometry(x, y, pose, factor)
-        _, neutral_x, neutral_y = self.camera_geometry(0, 0, pose, factor)
-        effective_x = scale*(neutral_x-center_x)
-        effective_y = scale*(neutral_y-center_y)
         cx, cy = (self.w-1)/2, (self.h-1)/2
+        # Use the actual camera centre, including travel between zoom targets.
+        # Bounded output-space offsets make the artistic strength independent
+        # of zoom magnification and prevent extreme foreground separations.
+        amplitude = .025*min(self.w,self.h)*depth
+        parallax_x = amplitude*math.tanh((cx-center_x)/(.12*self.w))
+        parallax_y = amplitude*math.tanh((cy-center_y)/(.12*self.h))
         for sprite in self.gaia_sprites:
-            # Only applied camera travel contributes parallax. At a constrained edge,
-            # the nebula and stars share the same stop and the same zoom.
-            relative = .65*depth*(sprite["factor"]-1)/factor
+            # A fixed, constrained camera produces a fixed offset for every star.
+            relative = sprite["factor"]-1
             ax, ay = scale*self.w/sw, scale*self.h/sh
-            tx = cx + scale*((sprite["x"]+.5)*self.w/sw-.5-center_x) + relative*effective_x
-            ty = cy + scale*((sprite["y"]+.5)*self.h/sh-.5-center_y) + relative*effective_y
+            tx = cx + scale*((sprite["x"]+.5)*self.w/sw-.5-center_x) + relative*parallax_x
+            ty = cy + scale*((sprite["y"]+.5)*self.h/sh-.5-center_y) + relative*parallax_y
             patch = sprite["pixels"]
             x0, y0 = max(0, math.floor(tx)-1), max(0, math.floor(ty)-1)
             x1 = min(self.w, math.ceil(tx+patch.shape[1]*ax)+1)
