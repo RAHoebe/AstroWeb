@@ -16,6 +16,8 @@
 - De geanimeerde Skykaart gebruikt Hipparcos-sterren, Stellarium-lijnen en Astropy-posities voor de echte locatie en vaste opnamenacht. Markeer ontbrekende locatie/tijd/coördinaten; bied handmatige aanvulling in beheer. Geen verzonnen sterren of landschapsnauwkeurigheid. Bewaar bronlicenties.
 - Test belangrijke render-, upload-, queue- en beveiligingspaden; controleer de UI in een browser. Documenteer beperkingen eerlijk. Geen deployment naar NAS of hosting tenzij gevraagd.
 
+- Voeg bij elke gepubliceerde stabiele web- of TV-release bovenaan in `pages/index.html#releases` een Engelstalig bericht toe met product, versie, publicatiedatum, één tot drie korte wijzigingen voor gebruikers en een link naar de GitHub-release. Bewaar eerdere berichten. De installatiehandleiding gebruikt de eerste releaselink per `data-product` (web of tv). Controleer de downloadlinks en het gepubliceerde bericht. Werk de overige paginatekst alleen bij als de wijziging daarom vraagt.
+
 ## English
 - Build locally first; prepare Docker deployment to a Synology NAS, following LeefRadar's portable approach. Gallery playback and rendering must work offline.
 - All public/admin UI, errors and documentation must support Dutch and English. Default to Dutch. Provide a persistent, visible NL/EN switch and matching translation keys.
@@ -28,3 +30,4 @@
 - Distinguish the capture label HIP_106890 from its editable IC 1396 nebula target. Mark artistic depth as an interpretation, not measured astrometry.
 - Require admin authentication and CSRF protection. Keep credentials and all runtime media/database/cache outside Git. Test critical behavior and verify the UI. Deploy only when requested.
 - Support an optional fifth final FITS file for real observation metadata and an animated Skykaart. Preserve originals, retain time provenance, distinguish integration from elapsed time, and keep exact site coordinates and HISTORY paths private by default. Use Hipparcos, Stellarium and Astropy with attribution; allow missing metadata to be completed in admin.
+- For every published stable web or TV release, prepend an English entry to the Release highlights section in `pages/index.html`. Include the product, version, publication date, one to three short user-facing changes and the GitHub release link. Keep previous entries. The installation guide reads the first release link for each `data-product` (web or tv). Verify the download links and the published entry. Update the rest of the showcase only where the release changes its content.

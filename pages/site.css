@@ -11,3 +11,8 @@ dialog{width:min(1100px,94vw);max-height:94vh;background:var(--deep);border:1px 
 @media(max-width:495px){.nav nav{width:100%;justify-content:space-between;margin:0}.hero{min-height:485px}.hero-content{padding-top:28px}.hero h1{font-size:78px}.hero-content>p{font-size:16px}.hero-caption{right:20px}.film-info{align-items:start}.film-info h3{font-size:27px}.layers{gap:12px}.layers p{font-size:13px}.hero .buttons{gap:8px}.hero .buttons>*{padding:9px 13px}.wrap{padding-inline:20px}footer.wrap{gap:10px;flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
 .prints{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.prints button{display:block;width:100%;border:none;padding:0;background:var(--deep);border-radius:8px;overflow:hidden;cursor:zoom-in}.prints img{width:100%;aspect-ratio:4/3;object-fit:cover}.prints figcaption{padding-top:10px}.prints small{display:block;color:var(--coral)}@media(max-width:650px){.prints{grid-template-columns:1fr}.prints img{aspect-ratio:16/9}}
+.release-history{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:clamp(24px,4vw,64px);margin-bottom:24px}
+.release-history article{border-top:1px solid var(--line);padding-top:16px}
+.release-history h3{font-size:1.25rem;margin:0 0 4px}
+.release-history time{font-size:.9rem;color:var(--muted)}
+.release-history ul{padding-left:1.2em}.release-history li+li{margin-top:.4em}

@@ -7,7 +7,7 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav"><div class="wrap nav-inner"><a href="#" class="brand"><img src="mark.svg" width="31" height="31" alt="">AstroWeb</a><nav aria-label="Primary"><a href="#cinema">Screening room</a><a href="#studio">Studio</a><a href="#screens">Web &amp; TV</a><a href="#install">Install</a></nav><a class="repo" href="https://github.com/RAHoebe/AstroWeb">GitHub ↗</a></div></header>
+<header class="nav"><div class="wrap nav-inner"><a href="#" class="brand"><img src="mark.svg" width="31" height="31" alt="">AstroWeb</a><nav aria-label="Primary"><a href="#cinema">Screening room</a><a href="#studio">Studio</a><a href="#screens">Web &amp; TV</a><a href="#install">Install</a><a href="#releases">Releases</a></nav><a class="repo" href="https://github.com/RAHoebe/AstroWeb">GitHub ↗</a></div></header>
 <main id="main">
 <section class="hero" aria-labelledby="hero-title"><img class="hero-photo" src="media/elephant.webp" alt="The dark tip of the Elephant’s Trunk silhouetted against red emission and a field of stars" fetchpriority="high">
 <div class="wrap hero-content"><h1 id="hero-title">Your sky<br><em>in motion.</em></h1><p>Turn your astrophotos into films. Travel from the Milky Way to your own field of view, then watch the journey on the big screen.</p>
@@ -34,9 +34,33 @@
 
 <section class="band" id="install"><div class="wrap section"><div class="section-head"><div><p class="kicker">Self-hosted</p><h2>Build your own collection</h2></div><p>The server stores the originals and renders the films. Browsers and the TV app read the published collection. Start on a private network or use an HTTPS host.</p></div>
 <div class="switches" id="install-tabs" aria-label="Installation options"></div><div id="install-content" class="install-content"></div>
-<div class="release-links"><a href="https://github.com/RAHoebe/AstroWeb/releases/tag/v1.2.0">Web release v1.2.0 ↗</a><a href="https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.5.5">TV release 0.5.5 ↗</a></div></div></section>
+</div></section>
+
+<section class="wrap section" id="releases" aria-labelledby="release-heading">
+  <div class="section-head"><h2 id="release-heading">Release highlights</h2></div>
+  <div class="release-history">
+    <article>
+      <h3><a data-product="web" href="https://github.com/RAHoebe/AstroWeb/releases/tag/v1.2.0">AstroWeb v1.2.0</a></h3>
+      <time datetime="2026-11-15">15 November 2026</time>
+      <ul>
+        <li>The gallery and Studio share the warm nebula colours of the TV app.</li>
+        <li>Solar System journeys fly to the object’s position at the time of your exposure.</li>
+        <li>A dedicated Compose setup supports local-network installation and offline viewing.</li>
+      </ul>
+    </article>
+    <article>
+      <h3><a data-product="tv" href="https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.5.5">AstroWeb TV 0.5.5</a></h3>
+      <time datetime="2026-11-15">15 November 2026</time>
+      <ul>
+        <li>Choose an HTTPS or local-network APK and enter your own server address on first launch.</li>
+        <li>Both editions can be installed side by side on the same Google TV.</li>
+      </ul>
+    </article>
+  </div>
+  <a href="https://github.com/RAHoebe/AstroWeb/releases">All releases on GitHub ↗</a>
+</section>
 
 
-</main><footer class="wrap"><a class="brand" href="#"><img width="23" src="mark.svg" alt="">AstroWeb</a><a href="credits.html">Image &amp; film credits</a><span>Web 1.2.0 · Google TV 0.5.5</span><a href="https://github.com/RAHoebe/AstroWeb">Source code ↗</a></footer>
+</main><footer class="wrap"><a class="brand" href="#"><img width="23" src="mark.svg" alt="">AstroWeb</a><a href="credits.html">Image &amp; film credits</a><a href="#releases">Release highlights</a><a href="https://github.com/RAHoebe/AstroWeb">Source code ↗</a></footer>
 <dialog id="lightbox"><button id="close" class="ghost">Close ×</button><div id="lightbox-content"></div></dialog>
 </body></html>
