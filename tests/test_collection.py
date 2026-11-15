@@ -44,8 +44,8 @@ def test_journey_labels_follow_final_pose_even_for_reflected_photo():
         matrix=np.asarray(data["frames"][-1][:9]).reshape(3,3)
         h=np.column_stack((quad,np.ones(4))) @ matrix.T
         pixels=h[:,:2]/h[:,2:3]
-        assert abs(pixels[0,1])<.2 and abs(pixels[1,1])<.2
-        assert abs(pixels[2,1]-journey.HEIGHT+1)<.2 and pixels[0,0]<pixels[1,0]
+        pose,mirror=journey.landing(quad,r["width"],r["height"],1)
+        np.testing.assert_allclose(pixels,pose[::-1] if mirror else pose,atol=.2)
 
 def test_gallery_uses_observation_date_and_keeps_each_session_addressable():
     from astroweb.collection import capture_groups,gallery

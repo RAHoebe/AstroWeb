@@ -17,6 +17,7 @@ import requests
 from astropy.coordinates import SkyCoord
 from PIL import Image
 
+from .camera import FocusZoom
 from .catalogue import canonical
 from .galaxy import key, target_entry
 
@@ -204,17 +205,16 @@ def render_frames(photo, destination, focus, width, height):
     back = np.zeros((height, width, 3), np.uint8)
     y, x = (height-dst.shape[0])//2, (width-dst.shape[1])//2
     back[y:y+dst.shape[0], x:x+dst.shape[1]] = dst
+    path=FocusZoom(middle,target,scale,scale*(2.2 if focus else 1),width,height)
     for i in range(288):
         t = np.clip((i/287 - .05)/.78, 0, 1)
         ease = t*t*(3-2*t)
-        zoom = scale * 2.2**ease if focus else scale
-        cx, cy = middle + ease*(target-middle)
-        camera = np.array([[zoom,0,(width-1)/2-zoom*cx],[0,zoom,(height-1)/2-zoom*cy]])
+        _,camera=path.at(ease)
         alpha = np.clip((i/287-.44)/.39, 0, 1)
         if alpha >= 1:
             yield back.copy()
             continue
-        frame = cv2.warpAffine(photo, camera, (width,height))
+        frame = cv2.warpAffine(photo, camera[:2], (width,height))
         alpha = alpha*alpha*(3-2*alpha)
         yield cv2.addWeighted(frame, 1-alpha, back, alpha, 0)
 
@@ -233,7 +233,7 @@ CALIBRATED_CORNERS = {
 def raster_corners(w,h):
     return np.float32([[0,0],[w-1,0],[w-1,h-1],[0,h-1]])
 
-def tv_registration(store,record,option):
+def image_registration(store,record,option):
     from .discovery import project
     path=image_file(store, option["id"][7:], option["digest"])
     corners=CALIBRATED_CORNERS.get((option["id"],option["digest"]))

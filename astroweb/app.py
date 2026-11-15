@@ -262,10 +262,10 @@ def create_app(data_dir=None, testing=False):
         except requests.RequestException:
             return jsonify(error="hubble_unavailable"),503
         if request.args.get("view")=="tv":
-            from .skymap import tv_registration
+            from .skymap import image_registration
+            options=[o for o in options if not o["id"].startswith("skymap-") or image_registration(store,record,o) is not None]
             options=[{**o,"tv_credit":tv_credit(o),
-                      "tv_video":url_for("hubble_movie",identifier=identifier,name=o["id"],view="tv")} for o in options
-                     if not o["id"].startswith("skymap-") or tv_registration(store,record,o) is not None]
+                      "tv_video":url_for("hubble_movie",identifier=identifier,name=o["id"],view="tv")} for o in options]
         return jsonify(fields=[o["id"] for o in options],observations=options)
 
     @app.get("/media/<identifier>/hubble/<name>")

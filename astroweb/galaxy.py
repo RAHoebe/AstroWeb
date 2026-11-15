@@ -116,6 +116,7 @@ def journey_labels(record, field):
         marker = journey.hammer((obj.l.radian-meridian+np.pi)%(2*np.pi)-np.pi,obj.b.radian)*[2,1]
     labels.insert(0, {"nl":record["metadata"]["name"]["nl"], "en":record["metadata"]["name"]["en"],
                       "xy":marker.tolist()})
+    quarter=journey.nearest_quarter(footprint) if "corners" in field else None
     frames = []
     # Reuse the movie renderer's actual per-frame camera, including the landing roll.
     for i in range(journey.FRAMES):
@@ -124,7 +125,7 @@ def journey_labels(record, field):
         matrix = np.array([[scale,0,offset[0]],[0,scale,offset[1]],[0,0,1]])
         if t>.59 and "corners" in field:
             quad = np.float32(footprint*scale+offset)
-            pose,mirrored = journey.landing(quad,record["width"],record["height"],journey.smooth((t-.59)/.32))
+            pose,mirrored = journey.landing(quad,record["width"],record["height"],journey.smooth((t-.59)/.32),quarter)
             # During the parity crossfade, follow the dominant sky image.
             if mirrored and t >= .89+.055/2:
                 pose=pose[[3,2,1,0]]

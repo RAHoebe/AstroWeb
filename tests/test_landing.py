@@ -14,10 +14,31 @@ def test_landing_keeps_all_four_corners():
             assert abs(np.linalg.det([pose[1]-pose[0], pose[3]-pose[0]])) > 1000
         if mirrored:
             pose = pose[[3, 2, 1, 0]]
-        np.testing.assert_allclose(pose[[0, 1], 1], 0, atol=.001)
-        np.testing.assert_allclose(pose[[2, 3], 1], HEIGHT-1, atol=.001)
-        assert 0 < pose[0, 0] < pose[1, 0] < WIDTH
-        assert abs((pose[1, 0]-pose[0, 0])/(HEIGHT-1) - 599/899) < .001
+        assert_fitted_quarter_turn(start, pose, 600, 900)
+
+
+def assert_fitted_quarter_turn(start, pose, width, height):
+    edge=pose[1]-pose[0]
+    heading=np.arctan2(edge[1], edge[0])
+    original=start[1]-start[0]
+    difference=np.angle(np.exp(1j*(heading-np.arctan2(original[1],original[0]))))
+    assert abs(difference)<=np.pi/4+1e-5
+    assert abs(np.sin(2*heading))<1e-5
+    np.testing.assert_allclose(pose.mean(axis=0),[(WIDTH-1)/2,(HEIGHT-1)/2],atol=.001)
+    spans=np.ptp(pose,axis=0)/[WIDTH-1,HEIGHT-1]
+    assert abs(max(spans)-1)<1e-5 and np.min(pose)>-.001
+    assert np.linalg.det([edge,pose[3]-pose[0]])>0
+    assert abs(np.linalg.norm(edge)/np.linalg.norm(pose[3]-pose[0])-(width-1)/(height-1))<1e-5
+
+
+def test_all_quarter_turns_and_mirrored_fields():
+    quad=np.array([[-40,-65],[40,-65],[40,65],[-40,65]],dtype=float)
+    for degrees in [-179,-136,-135,-134,-91,-46,-45,-44,0,44,45,46,89,135,179]:
+        a=np.deg2rad(degrees)
+        field=quad@np.array([[np.cos(a),np.sin(a)],[-np.sin(a),np.cos(a)]])
+        for start in [field,field[::-1]]:
+            end,flipped=landing(start,81,131,1)
+            assert_fitted_quarter_turn(start,end[::-1] if flipped else end,81,131)
 
 
 def test_eastern_veil_rejects_unrelated_caldwell_search_hits(monkeypatch):

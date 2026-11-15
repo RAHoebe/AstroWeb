@@ -48,9 +48,9 @@ PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afme
 | --- | --- |
 | Film | De geselecteerde film op renderresolutie, met objectinformatie en fullscreenbediening. De galerij zelf gebruikt kleine previews en past het aantal kolommen aan de schermbreedte aan. |
 | Origineel | De volledige foto. Zoom met het muiswiel of de schuifregelaar tot 10× de ingepaste weergave, versleep de foto of download het origineel. |
-| Hemelreis | Een vlucht van het hemelpanorama via fijnere hemelmozaïeken naar je foto. Gaia-matching of een bevestigde FITS-WCS levert het kader. Bij alleen een richtpunt zie je een markering. Objectnamen zijn apart inschakelbaar. |
+| Hemelreis | Een vlucht van het hemelpanorama via fijnere hemelmozaïeken naar je foto. Gaia-matching of een bevestigde FITS-WCS levert het kader. De eindstand is de kwartslag die het minste draaien vraagt. Bij alleen een richtpunt zie je een markering. Objectnamen zijn apart inschakelbaar. |
 | Melkweg | Een geanimeerd bovenaanzicht voor herkende Melkwegobjecten met een afstand. Toon objectnamen, pauzeer of verplaats de tijdschuif. Voor andere bevestigde Melkwegobjecten kun je de afstand in Studio invullen. De kaart projecteert de posities op het galactische vlak. |
-| Hubble | Vlieg vanuit je foto naar een benoemde structuur in een uitgelijnd optisch archiefbeeld. Bij elke bestemming staan de beeldbron en het instrument of archief. |
+| Hubble | Vlieg vanuit je foto naar een benoemde structuur in een uitgelijnd optisch archiefbeeld. Bij elke bestemming staan de beeldbron en het instrument of archief. Het zoomdoel blijft tijdens de hele vlucht in beeld, zowel op de website als op Google TV. |
 | Omgeving | Verken naburige sterrenstelsels en hun bekende relaties. |
 | Poolkaart | Cirkelvormige sterrenkaart rond de noordelijke of zuidelijke hemelpool, met sterrenbeeldlijnen, uurverdeling en een instelbare zoom naar het doel. |
 | Skykaart | Een kaart van de echte opnamenacht op basis van tijd, positie en locatie, met sterren, sterrenbeeldlijnen en de baan van het doel. |

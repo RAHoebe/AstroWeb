@@ -39,9 +39,9 @@ Use PNG, JPEG or single-frame TIFF. The four images must have the same dimension
 | --- | --- |
 | Film | The published movie at render resolution with object information and fullscreen controls. The responsive gallery uses smaller previews. |
 | Original | The full photo, smooth zoom to 10× fitted size, drag-to-pan and original download. |
-| Sky journey | A flight through the sky panorama and detailed survey mosaics into the photograph. Gaia registration or verified FITS WCS determines its footprint. A known pointing alone gives a marker. Object labels are optional. |
+| Sky journey | A flight through the sky panorama and detailed survey mosaics into the photograph. Gaia registration or verified FITS WCS determines its footprint. A known pointing alone gives a marker. Object labels are optional. The final photo uses the quarter-turn requiring the least camera roll. |
 | Milky Way | An animated face-on map for recognised Galactic targets with a distance. Toggle object names, pause or scrub the zoom. For other confirmed Galactic objects, enter a distance in Studio. Positions are projected onto the Galactic plane. |
-| Hubble | Fly into a named structure in a registered optical image with a link to its source. |
+| Hubble | Fly into a named structure in a registered optical image with a link to its source. The zoom target stays in the frame throughout the flight on both the website and Google TV. |
 | Galaxy environment | Explore nearby galaxies and their documented relationships. |
 | Polar sky chart | A circular equatorial chart centred on the northern or southern celestial pole, with constellation lines, hour divisions and a zoom to the target. |
 | Skykaart | A reconstruction of the observing night using the time, coordinates and site, with stars, constellation lines and the target track. |

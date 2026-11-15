@@ -90,3 +90,18 @@ def test_tv_destination_camera_aligns_both_layers(mirror,monkeypatch):
     a=frames[221][5:-5,5:-5].mean(2).ravel()
     b=dest[5:-5,5:-5].mean(2).ravel()
     assert np.corrcoef(a,b)[0,1]>.99
+
+
+@pytest.mark.parametrize("target", [(0,0),(998,748),(999,0),(-40,880)])
+@pytest.mark.parametrize("end", [.05, 2., 2500.])
+def test_hubble_target_stays_inside_every_frame(target,end):
+    from astroweb.camera import FocusZoom
+    width,height=1280,720
+    center=(np.array([width,height])-1)/2
+    camera=FocusZoom(np.array([500,375]),target,.96,end,width,height)
+    for t in np.linspace(0,1,288):
+        progress=t*t*(3-2*t)
+        _,matrix=camera.at(progress)
+        screen=(matrix@[*target,1])[:2]
+        assert np.all(screen>=0) and np.all(screen<=[width-1,height-1])
+        np.testing.assert_allclose(screen,center+(1-progress)*camera.initial_offset,atol=1e-7)

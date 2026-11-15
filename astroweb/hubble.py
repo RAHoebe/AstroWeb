@@ -13,6 +13,7 @@ import requests
 from astropy.wcs import WCS
 
 from . import skymap
+from .camera import FocusZoom
 from .catalogue import canonical
 from .discovery import project
 from .galaxy import key
@@ -200,10 +201,10 @@ def aligned_skymap_frames(photo,image,registration):
     basis=np.linalg.inv(registration)
     origin,start=capture_bounds(photo,basis)
     h,w=image.shape[:2]; target=np.array([(w-1)/2,(h-1)/2]); end=min(WIDTH/w,HEIGHT/h)
+    camera=FocusZoom(origin,target,start,end,WIDTH,HEIGHT)
     for i in range(288):
         t=np.clip((i/287-.04)/.72,0,1); ease=t*t*(3-2*t)
-        scale=start*(end/start)**ease; x,y=origin+(target-origin)*ease
-        cam=np.array([[scale,0,(WIDTH-1)/2-scale*x],[0,scale,(HEIGHT-1)/2-scale*y],[0,0,1.]])
+        _,cam=camera.at(ease)
         alpha=np.clip((i/287-.50)/.35,0,1); alpha=alpha*alpha*(3-2*alpha)
         if alpha<1:source=cv2.warpPerspective(photo,cam@basis,(WIDTH,HEIGHT))
         if alpha>0:dest=cv2.warpPerspective(image,cam,(WIDTH,HEIGHT))
@@ -265,12 +266,13 @@ def render(store,record,name,registration_matrix,path,archive=None,tv=False):
         image,registration_matrix,(x,y)=registered_cutout(store,record,archive)
         layers=[((image,np.eye(3)),8)]
         credit="NASA/ESA Hubble | STScI/HLA | "+archive["filter"]
-    basis=np.linalg.inv(registration_matrix) if tv else np.eye(3)
+    basis=np.linalg.inv(registration_matrix)
     plane=basis@registration_matrix
     centre=cv2.perspectiveTransform(np.float64([[[x,y],[x+1,y],[x,y+1]]]),plane)[0]
     origin,start=capture_bounds(photo,basis)
     sampling={"m32":.24,"nucleus":.21}.get(name,1.10 if archive else 1.05)
     end=sampling/min(np.linalg.norm(centre[i]-centre[0]) for i in (1,2))
+    camera=FocusZoom(origin,centre[0],start,end,WIDTH,HEIGHT)
     masks={}
     for (image,_),level in layers:
         h,w=image.shape[:2]
@@ -285,9 +287,7 @@ def render(store,record,name,registration_matrix,path,archive=None,tv=False):
         for i in range(288):
             t=min(1,max(0,(i/287-.05)/.87))
             ease=t*t*(3-2*t)
-            scale=start*(end/start)**ease
-            focus=(1-ease)*origin+ease*centre[0]
-            cam=np.array([[scale,0,(WIDTH-1)/2-scale*focus[0]],[0,scale,(HEIGHT-1)/2-scale*focus[1]],[0,0,1.]])
+            scale,cam=camera.at(ease)
             scene=cv2.warpPerspective(photo,cam@basis,(WIDTH,HEIGHT))
             for (image,transform),level in layers:
                 # Crossfade between real resolution levels while their native
@@ -335,10 +335,9 @@ def movie(store,record,name,tv=False):
         if focus is None:
             raise ValueError("hubble_no_field")
         signature = ["nasa-skymap-v1", record["sha256"]["final"], name, preferred["digest"], focus]
-        if tv:
-            matrix=skymap.tv_registration(store,record,preferred)
-            if matrix is None:raise ValueError("hubble_no_field")
-            signature.append(matrix.tolist())
+        matrix=skymap.image_registration(store,record,preferred)
+        if matrix is None and tv:raise ValueError("hubble_no_field")
+        signature.append(matrix.tolist() if matrix is not None else None)
     elif (name in WINDOWS and is_andromeda(record)) or (name in PLATES and any(v["id"]==name for v in fields(store,record))):
         matrix=window_geometry(store,record,name)
         if matrix is None:raise ValueError("hubble_no_field")
@@ -349,6 +348,7 @@ def movie(store,record,name,tv=False):
         from .journey import geometry
         matrix=None
         signature=["hst-optical-v6-structure",record["sha256"]["final"],geometry(store,record),name]
+    signature.append("destination-axes-visible-target-v1")
     if tv:signature.append("tv-destination-frame-v2")
     digest=hashlib.sha256(json.dumps(signature).encode()).hexdigest()[:20]
     folder=store.path(f"objects/{record.get('storage_id',record['id'])}/hubble")
@@ -363,7 +363,7 @@ def movie(store,record,name,tv=False):
                     photo = cv2.imdecode(np.fromfile(store.path(record["assets"]["final"]), np.uint8), cv2.IMREAD_COLOR)
                     if image is None or photo is None:
                         raise ValueError("hubble_unavailable")
-                    frames = (aligned_skymap_frames(photo,image,matrix) if tv else
+                    frames = (aligned_skymap_frames(photo,image,matrix) if matrix is not None else
                               skymap.render_frames(photo,image,focus,WIDTH,HEIGHT))
                     encode(frames, preferred["credit"] + " | " + name[7:].upper(), tmp, burn_credit=not tv)
                 else:

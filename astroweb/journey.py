@@ -168,25 +168,37 @@ def camera_at(t, points, start_scale, end_scale):
     return scale, screen_target-target*scale
 
 
-def landing(quad, width, height, progress):
+def nearest_quarter(quad):
+    edge = quad[1] - quad[0]
+    return round(math.atan2(edge[1], edge[0]) / (math.pi/2))
+
+
+def landing(quad, width, height, progress, quarter=None):
     """Level the registered photo around its centre, then fit all four corners."""
     center = quad.mean(axis=0)
     edge = quad[1] - quad[0]
-    angle = -math.atan2(edge[1], edge[0]) * progress
+    if quarter is None:
+        quarter = nearest_quarter(quad)
+    final_heading = quarter * math.pi/2
+    full_angle = math.remainder(final_heading - math.atan2(edge[1], edge[0]), math.tau)
+    angle = full_angle * progress
     cs, sn = math.cos(angle), math.sin(angle)
     rotation = np.array([[cs, -sn], [sn, cs]])
     upright = (quad-center) @ rotation.T
     # Interpolate shape in the levelled coordinate system so a 180-degree
     # camera roll never collapses the quadrilateral halfway through the shot.
-    full_angle = -math.atan2(edge[1], edge[0])
     cs, sn = math.cos(full_angle), math.sin(full_angle)
     full_rotation = np.array([[cs, -sn], [sn, cs]])
-    fit = min((WIDTH-1)/(width-1), (HEIGHT-1)/(height-1))
+    rw,rh = (height,width) if quarter%2 else (width,height)
+    fit = min((WIDTH-1)/(rw-1), (HEIGHT-1)/(rh-1))
     half = np.array([width-1, height-1]) * fit/2
     mirrored = np.linalg.det(np.stack((edge,quad[3]-quad[0]))) < 0
     dest = np.array([[-1,-1],[1,-1],[1,1],[-1,1]])*half
     if mirrored:
         dest[:,1] *= -1
+    # Use exact quarter-turn matrices so the final aspect and handedness survive.
+    c,s = round(math.cos(final_heading)), round(math.sin(final_heading))
+    dest = dest @ np.array([[c,s],[-s,c]])
     correction = (dest - (quad-center) @ full_rotation.T) @ full_rotation
     return np.float32(upright + progress*(correction @ rotation.T)
                       + (1-progress)*center + progress*np.array([(WIDTH-1)/2,(HEIGHT-1)/2])), mirrored
@@ -197,6 +209,7 @@ def render_journey(store, record, field, output, plates, progress=None):
     credit = "Pan-STARRS1 / CDS" if survey_for(field) == "PanSTARRS" else "DSS2 / STScI / CDS"
     has_frame = "corners" in field
     meridian, points, mean_lon, lat = field_projection(field)
+    quarter = nearest_quarter(points) if has_frame else None
     target = points.mean(axis=0)
     atlas = project_atlas(meridian)
     overview = cv2.resize(atlas,(1280,640),interpolation=cv2.INTER_AREA)
@@ -231,7 +244,7 @@ def render_journey(store, record, field, output, plates, progress=None):
             mirrored=False
             roll=None
             if has_frame and t>.59:
-                pose,mirrored=landing(quad,pw,ph,smooth((t-.59)/.32))
+                pose,mirrored=landing(quad,pw,ph,smooth((t-.59)/.32),quarter)
                 roll=cv2.getPerspectiveTransform(quad,pose)
             def background(transform):
                 # Project the full atlas and plates directly into the final
@@ -301,7 +314,7 @@ def render_journey(store, record, field, output, plates, progress=None):
 def movie(store, record, field, progress=None):
     from .survey import survey_for
     survey = survey_for(field)
-    digest = hashlib.sha256(json.dumps(["atlas-v8-surroundings",survey,record.get("sha256",{}).get("final"),field],
+    digest = hashlib.sha256(json.dumps(["atlas-v9-shortest-roll",survey,record.get("sha256",{}).get("final"),field],
                                        sort_keys=True).encode()).hexdigest()[:20]
     folder = store.path(f"objects/{record.get('storage_id', record['id'])}/journeys")
     if record.get("storage_id", record["id"]) != record["id"]:
