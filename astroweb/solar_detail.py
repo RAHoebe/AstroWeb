@@ -18,7 +18,7 @@ CASSINI = "NASA/JPL/Space Science Institute"
 # The focus is measured on the published mission image, never on the upload.
 FEATURES = {
     "SUN": [
-        ("GSFC_20171208_Archive_e001164","orig.jpg","Zonnevlam van 29 maart 2014","Solar flare of 29 March 2014","SDO/AIA · NASA",.51,.43)],
+        ("NHQ202404080107","orig.jpg","Protuberans aan de zonsrand · eclips van 8 april 2024","Solar limb prominence · eclipse of 8 April 2024","NASA / Keegan Barber",.214,.835)],
     "MOON": [
         ("PIA12909","orig.jpg","Landingsplaats Apollo 11","Apollo 11 landing site",LRO,.42,.43),
         ("PIA12922","orig.jpg","Landingsplaats Apollo 12","Apollo 12 landing site",LRO,.50,.50),
@@ -64,23 +64,27 @@ def mission_image(store, ident, file):
     return image
 
 
-def view(image, focus, amount):
+def view(image, focus, amount, keep_edges=False):
     h,w=image.shape[:2]
     scale=min(WIDTH/w,HEIGHT/h)*(1+amount)
     cx=(.5+(focus[0]-.5)*min(1,amount/.6))*w
     cy=(.5+(focus[1]-.5)*min(1,amount/.6))*h
+    if keep_edges:
+        half_w,half_h=WIDTH/(2*scale),HEIGHT/(2*scale)
+        cx=w/2 if 2*half_w>=w else np.clip(cx,half_w,w-half_w)
+        cy=h/2 if 2*half_h>=h else np.clip(cy,half_h,h-half_h)
     matrix=np.float32([[scale,0,WIDTH/2-scale*cx],[0,scale,HEIGHT/2-scale*cy]])
     return cv2.warpAffine(image,matrix,(WIDTH,HEIGHT),flags=cv2.INTER_LINEAR)
 
 
-def frames(photo, image, focus):
+def frames(photo, image, focus, keep_edges=False):
     for i in range(288):
         t=i/287
         fade=smooth((t-.22)/.23)
         if fade<1:
             source=view(photo,(.5,.5),.16*smooth(t/.45))
         if fade>0:
-            destination=view(image,focus,.6*smooth((t-.40)/.52))
+            destination=view(image,focus,(1.5 if keep_edges else .6)*smooth((t-.40)/.52),keep_edges)
         if fade<=0:
             yield source
         elif fade>=1:
@@ -94,7 +98,8 @@ def movie(store,record,ident):
     if not item:
         raise ValueError("solarDetailMissing")
     _,file,_,_,credit,x,y=item
-    key=hashlib.sha256(str(("solar-tour-v1",item,record["sha256"]["final"])).encode()).hexdigest()[:20]
+    limb=ident=="NHQ202404080107"
+    key=hashlib.sha256(str(("limb-tour-v2" if limb else "solar-tour-v1",item,record["sha256"]["final"])).encode()).hexdigest()[:20]
     folder=store.path(f"objects/{record.get('storage_id',record['id'])}/solar-system")
     output=folder/(key+".mp4")
     with LOCK:
@@ -106,7 +111,7 @@ def movie(store,record,ident):
             folder.mkdir(parents=True,exist_ok=True)
             tmp=folder/(uuid.uuid4().hex+".part.mp4")
             try:
-                encode(frames(photo,image,(x,y)),credit.replace(" · "," / "),tmp)
+                encode(frames(photo,image,(x,y),keep_edges=limb),credit.replace(" · "," / "),tmp)
                 tmp.replace(output)
             finally:
                 tmp.unlink(missing_ok=True)

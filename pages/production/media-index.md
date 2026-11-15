@@ -18,13 +18,13 @@ Dust lanes line up as the wide-field capture dissolves into the Hubble mosaic. T
 
 [Download clip](../media/hubble.mp4) · Capture: Ron Hoebe. Hubble image: NASA, ESA, J. Dalcanton, B. F. Williams, L. C. Johnson, the PHAT team and R. Gendler.
 
-## From disk to solar flare
+## At the solar limb
 
-Journeys · Sun · mission detail
+Journeys · Sun · total eclipse
 
-Leave a visible-light solar disk for an ultraviolet image of the flare on 29 March 2014. The second image is a mission observation from a different date.
+Start with Ron Hoebe’s visible-light Sun and approach a pink prominence on the limb during totality in Dallas on 8 April 2024. These are separate observations.
 
-[Download clip](../media/solar.mp4) · Capture: Ron Hoebe. Mission image: SDO/AIA · NASA.
+[Download clip](../media/solar.mp4) · Solar capture: Ron Hoebe. Eclipse photograph: NASA / Keegan Barber.
 
 ## Apollo 11 landing site
 

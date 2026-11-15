@@ -18,10 +18,10 @@ const films = [
  [
   "solar",
   "Journeys",
-  "From disk to solar flare",
-  "Sun · mission detail",
-  "Leave a visible-light solar disk for an ultraviolet image of the flare on 29 March 2014. The second image is a mission observation from a different date.",
-  "Capture: Ron Hoebe. Mission image: SDO/AIA · NASA."
+  "At the solar limb",
+  "Sun · total eclipse",
+  "Start with Ron Hoebe’s visible-light Sun and approach a pink prominence on the limb during totality in Dallas on 8 April 2024. These are separate observations.",
+  "Solar capture: Ron Hoebe. Eclipse photograph: NASA / Keegan Barber."
  ],
  [
   "moon",
