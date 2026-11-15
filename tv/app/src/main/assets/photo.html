@@ -1,0 +1,32 @@
+<!doctype html><html lang="__LANG__" data-capture="__CAPTURE__">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'">
+<style>*{margin:0}body{background:#020203;color:#ffefe6;font:16px Roboto,sans-serif;overflow:hidden}canvas{display:block}#hud{position:fixed;left:4vw;bottom:5vh;background:#24151bec;border-left:3px solid #ed998a;padding:8px 14px;border-radius:6px;white-space:pre-wrap}</style>
+<canvas></canvas><div id="hud" role="status"></div>
+<script>__PHOTO_CAMERA__</script><script>
+const en=document.documentElement.lang==='en',id=decodeURIComponent(document.documentElement.dataset.capture);
+const camera=new PhotoCamera(),canvas=document.querySelector('canvas'),hud=document.querySelector('#hud'),ctx=canvas.getContext('2d');
+camera.turns=__ROTATION__;
+let im=null,failed=false,timer;
+function draw(){
+  const w=innerWidth,h=innerHeight,r=Math.min(2,devicePixelRatio);
+  if(!w||!h)return;
+  canvas.style.width=w+'px';canvas.style.height=h+'px';
+  if(canvas.width!==Math.round(w*r)||canvas.height!==Math.round(h*r)){canvas.width=Math.round(w*r);canvas.height=Math.round(h*r);}
+  ctx.setTransform(r,0,0,r,0,0);ctx.fillStyle='#020203';ctx.fillRect(0,0,w,h);camera.draw(ctx,im,w,h);
+}
+function hint(){
+  hud.hidden=false;hud.textContent=camera.scaleLabel(en)+'    '+camera.help(en)+'    '+(en?'Hold OK  Rotate':'Lang OK  Draaien')+'  '+(90*camera.turns)+'°'+'    '+(en?'Back  Viewer':'Terug  Viewer');
+  clearTimeout(timer);timer=setTimeout(()=>hud.hidden=true,3500);
+}
+async function load(){
+  failed=false;hud.textContent=en?'Loading original…':'Origineel laden…';
+  try{
+    const r=await fetch('/api/objects/'+encodeURIComponent(id));if(!r.ok)throw Error();
+    const o=await r.json(),path=o.original_view||o.final;if(!path?.startsWith('/media/'))throw Error();
+    const img=new Image();img.src=path;await img.decode();im=img;draw();hint();
+  }catch{failed=true;hud.textContent=en?'Original unavailable · OK to retry':'Origineel niet beschikbaar · OK om opnieuw te proberen';}
+}
+window.mapKey=k=>{if(!im){if(failed&&k==='reset')load();return;}camera.key(k);draw();hint();};
+addEventListener('resize',draw);load();
+</script></html>

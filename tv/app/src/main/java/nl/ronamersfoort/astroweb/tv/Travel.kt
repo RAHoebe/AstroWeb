@@ -30,12 +30,12 @@ private data class Choices(val items: List<Trip> = emptyList(), val busy: Boolea
     }.value
 }
 
-@Composable internal fun Travel(p: Photo, en: Boolean, foreground: Boolean, leave: () -> Unit) {
+@Composable internal fun Travel(p: Photo, en: Boolean, foreground: Boolean, openSky:Boolean=false, leave: () -> Unit) {
     var attempt by remember { mutableIntStateOf(0) }
     val sky=choices(p.id,attempt) { listOfNotNull(skyTrip(p.id)) }
     val hubble=choices(p.id,attempt) { if(p.hasHubble) hubbleTrips(p.id) else emptyList() }
     var selection by rememberSaveable(p.id) { mutableStateOf("journey") }
-    var watching by rememberSaveable(p.id) { mutableStateOf(false) }
+    var watching by rememberSaveable(p.id) { mutableStateOf(openSky) }
     val list=sky.items+hubble.items
     val active=list.find { it.id==selection }
     val fallback=remember { FocusRequester() }
@@ -55,7 +55,7 @@ private data class Choices(val items: List<Trip> = emptyList(), val busy: Boolea
         Row(Modifier.fillMaxSize().padding(horizontal=42.dp,vertical=24.dp),
             horizontalArrangement=Arrangement.spacedBy(30.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                Text(p.name.get(en),color=light,fontSize=24.sp)
+                Text(p.posterName(en),color=light,fontSize=24.sp)
                 Text(dateLabel(p.date,en),color=quiet,fontSize=15.sp)
                 Spacer(Modifier.height(12.dp))
                 val context=LocalContext.current
@@ -89,15 +89,20 @@ private data class Choices(val items: List<Trip> = emptyList(), val busy: Boolea
 
 @Composable private fun JourneyPlayer(trip: Trip,en:Boolean,foreground:Boolean,leave:()->Unit) {
     var playing by rememberSaveable(trip.id) { mutableStateOf(true) }
+    val manualRotation=trip.id=="journey"
+    var turns by rememberSaveable(trip.id) { mutableIntStateOf(0) }
     var hint by remember(trip.id) { mutableStateOf(true) }
     var failed by remember(trip.id) { mutableStateOf(false) }
     val focus=remember { FocusRequester() }
     BackHandler { leave() }
-    LaunchedEffect(trip.id,failed) { if(failed) return@LaunchedEffect; focus.requestFocus();delay(2500);hint=false }
+    LaunchedEffect(trip.id,failed,turns) { hint=true; if(failed) return@LaunchedEffect; focus.requestFocus();delay(2500);hint=false }
     Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)
         .focusRequester(focus).onPreviewKeyEvent { event ->
             val ev=event.nativeKeyEvent
-            if(!failed && ev.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER,
+            if(manualRotation && !failed && ev.keyCode in listOf(KeyEvent.KEYCODE_DPAD_LEFT,KeyEvent.KEYCODE_DPAD_RIGHT)) {
+                if(ev.action==KeyEvent.ACTION_UP)turns=(turns+if(ev.keyCode==KeyEvent.KEYCODE_DPAD_RIGHT) 1 else 3)%4
+                true
+            } else if(!failed && ev.keyCode in listOf(KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER,
                     KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,KeyEvent.KEYCODE_MEDIA_PLAY,KeyEvent.KEYCODE_MEDIA_PAUSE)) {
                 if(ev.action==KeyEvent.ACTION_UP) playing=when(ev.keyCode) {
                     KeyEvent.KEYCODE_MEDIA_PLAY -> true
@@ -107,9 +112,11 @@ private data class Choices(val items: List<Trip> = emptyList(), val busy: Boolea
                 true
             } else false
         }.focusable(),contentAlignment=Alignment.Center) {
-        Movie(trip.url,playing,foreground,false,en) { failed=it }
-        if(!failed && (hint || !playing)) Text(trip.name.get(en)+"   ·   "+(if(playing) (if(en) "OK: pause" else "OK: pauze")
-            else (if(en) "OK: resume" else "OK: verder")),Modifier.align(Alignment.BottomStart).padding(28.dp)
+        Movie(trip.url,playing,foreground,en,if(manualRotation) turns else 0,trip.name.get(en),{ playing=it }) { failed=it }
+        if(trip.overlayCredit) Text(trip.credit,Modifier.align(Alignment.BottomEnd).padding(horizontal=18.dp,vertical=10.dp)
+            .background(ink.copy(alpha=.72f)).padding(3.dp),color=light,fontSize=11.sp,maxLines=2)
+        if(!failed && (hint || !playing)) Text(trip.name.get(en)+(if(manualRotation) "   ·   ← → "+(if(en) "Rotate " else "Draai ")+turns*90+"°" else "")+"   ·   "+(if(playing) (if(en) "OK: pause" else "OK: pauze")
+            else (if(en) "OK: resume" else "OK: verder")),Modifier.align(Alignment.TopStart).padding(28.dp)
             .background(ink.copy(alpha=.9f)).padding(8.dp),color=light,fontSize=16.sp)
     }
 }

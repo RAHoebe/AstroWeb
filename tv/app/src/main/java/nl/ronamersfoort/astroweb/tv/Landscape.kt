@@ -19,11 +19,12 @@ object LandscapePhoto : Transformation {
     }
 }
 
-fun Modifier.landscapeVideo(tall: Boolean): Modifier = if (!tall) this else layout { measurable, limits ->
+fun Modifier.quarterTurns(turns: Int): Modifier = if (turns%4==0) this else layout { measurable, limits ->
     val w = limits.maxWidth
     val h = limits.maxHeight
-    val portrait = measurable.measure(Constraints.fixed(h, w))
+    val swap=turns%2!=0
+    val layer = measurable.measure(if(swap) Constraints.fixed(h,w) else Constraints.fixed(w,h))
     layout(w, h) {
-        portrait.placeWithLayer((w-h)/2, (h-w)/2) { rotationZ = -90f }
+        layer.placeWithLayer((w-layer.width)/2,(h-layer.height)/2) { rotationZ = turns*90f }
     }
 }

@@ -70,3 +70,23 @@ def test_caldwell20_prefers_published_plate_to_its_archive_observation():
         {"id":"hst_08216_44_wfpc2_f606w_wf","relation":"region"},
         {"id":"other-pointing","relation":"field"}]}
     assert [f["id"] for f in hubble.fields(None,r)]==["c20-wfpc2","heic0510a","other-pointing"]
+
+
+@pytest.mark.parametrize("mirror", [1,-1])
+def test_tv_destination_camera_aligns_both_layers(mirror,monkeypatch):
+    import cv2
+    monkeypatch.setattr(hubble,"WIDTH",96)
+    monkeypatch.setattr(hubble,"HEIGHT",64)
+    rng=np.random.default_rng(17)
+    dest=rng.integers(20,250,(64,96,3),dtype=np.uint8)
+    # A non-quarter-turn pose exercises parity, rotation and translation.
+    affine=cv2.getRotationMatrix2D((48,32),31,.95)
+    affine[:,2]+=[35,35]
+    matrix=np.vstack((affine,[0,0,1]))@np.array([[mirror,0,95 if mirror<0 else 0],[0,1,0],[0,0,1]])
+    own=cv2.warpPerspective(dest,matrix,(168,144))
+    frames=list(hubble.aligned_skymap_frames(own,dest,matrix))
+    assert np.array_equal(frames[-1],dest)
+    # At 77% the camera is settled and both sources still contribute.
+    a=frames[221][5:-5,5:-5].mean(2).ravel()
+    b=dest[5:-5,5:-5].mean(2).ravel()
+    assert np.corrcoef(a,b)[0,1]>.99

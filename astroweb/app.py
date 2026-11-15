@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 import requests
 from PIL import Image
-from flask import redirect, Flask, abort, jsonify, request, send_file, session
+from flask import url_for, redirect, Flask, abort, jsonify, request, send_file, session
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
@@ -255,12 +255,17 @@ def create_app(data_dir=None, testing=False):
 
     @app.get("/api/objects/<identifier>/hubble")
     def hubble_fields(identifier):
-        from .hubble import fields
+        from .hubble import fields, tv_credit
         record=get_object(identifier)
         try:
             options=fields(store,record)
         except requests.RequestException:
             return jsonify(error="hubble_unavailable"),503
+        if request.args.get("view")=="tv":
+            from .skymap import tv_registration
+            options=[{**o,"tv_credit":tv_credit(o),
+                      "tv_video":url_for("hubble_movie",identifier=identifier,name=o["id"],view="tv")} for o in options
+                     if not o["id"].startswith("skymap-") or tv_registration(store,record,o) is not None]
         return jsonify(fields=[o["id"] for o in options],observations=options)
 
     @app.get("/media/<identifier>/hubble/<name>")
@@ -268,7 +273,7 @@ def create_app(data_dir=None, testing=False):
         from .hubble import movie
         record=get_object(identifier)
         try:
-            path=movie(store,record,name)
+            path=movie(store,record,name,tv=request.args.get("view")=="tv")
         except requests.RequestException:
             return jsonify(error="hubble_unavailable"),503
         return send_file(path,mimetype="video/mp4",conditional=True,max_age=0)

@@ -26,9 +26,9 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
     SKY("sky","Skykaart","Sky chart"), POLAR("polar","Poolkaart","Polar chart"), GALAXY("galaxy","Melkweg","Milky Way")
 }
 
-@Composable internal fun Maps(photo: Photo,en: Boolean,foreground:Boolean,leave: ()->Unit) {
-    var selected by rememberSaveable(photo.id) { mutableStateOf(Chart.SKY) }
-    var full by rememberSaveable(photo.id) { mutableStateOf(false) }
+@Composable internal fun Maps(photo: Photo,en: Boolean,foreground:Boolean,entry:String="maps",leave: ()->Unit) {
+    var selected by rememberSaveable(photo.id) { mutableStateOf(Chart.entries.firstOrNull { it.slug==entry && (it!=Chart.GALAXY || photo.milkyWay) } ?: Chart.SKY) }
+    var full by rememberSaveable(photo.id) { mutableStateOf(photo.maps && selected.slug==entry) }
     val focus=remember { FocusRequester() }
     BackHandler { if(full) full=false else leave() }
     if(full) {
@@ -43,7 +43,7 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
                 Text(if(en) "Maps" else "Kaarten",color=coral,fontSize=17.sp)
             }
             Spacer(Modifier.height(8.dp))
-            Text(photo.name.get(en),color=light,fontSize=32.sp,lineHeight=36.sp)
+            Text(photo.posterName(en),color=light,fontSize=32.sp,lineHeight=36.sp)
             Text(dateLabel(photo.date,en),color=quiet,fontSize=15.sp)
             Spacer(Modifier.height(15.dp))
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -60,10 +60,14 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
 }
 
 @SuppressLint("SetJavaScriptEnabled")
-@Composable internal fun RemoteCanvas(asset:String,id:String,mode:String,en:Boolean,foreground:Boolean=true,leave:(()->Unit)?=null) {
+@Composable internal fun RemoteCanvas(asset:String,id:String,mode:String,en:Boolean,foreground:Boolean=true,turns:Int=0,onRotate:()->Unit={},leave:(()->Unit)?=null) {
     val context=LocalContext.current
     val page=remember(asset,id,mode,en) {
-        context.assets.open(asset).bufferedReader().use { it.readText() }
+        fun read(name:String)=context.assets.open(name).bufferedReader().use { it.readText() }
+        val html=read(asset)
+        val scripts=if(asset=="map.html") html.replace("__MAP_MOTION__",read("map-motion.js"))
+                    else html.replace("__PHOTO_CAMERA__",read("photo-camera.js"))
+        scripts.replace("__ROTATION__",turns.toString())
             .replace("__CAPTURE__",Uri.encode(id)).replace("__MAP__",mode).replace("__LANG__",if(en) "en" else "nl")
     }
     var web by remember { mutableStateOf<WebView?>(null) }
@@ -84,13 +88,20 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
             KeyEvent.KEYCODE_DPAD_DOWN -> "out"
             KeyEvent.KEYCODE_DPAD_LEFT -> "previous"
             KeyEvent.KEYCODE_DPAD_RIGHT -> "next"
-            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER -> if(asset=="map.html") "toggle" else "reset"
+            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER -> if(asset=="map.html") "toggle" else "select"
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> if(asset=="map.html") "toggle" else return@onPreviewKeyEvent false
             KeyEvent.KEYCODE_MEDIA_PLAY -> if(asset=="map.html") "play" else return@onPreviewKeyEvent false
             KeyEvent.KEYCODE_MEDIA_PAUSE -> if(asset=="map.html") "pause" else return@onPreviewKeyEvent false
             else -> return@onPreviewKeyEvent false
         }
-        if(command=="toggle") {
+        if(command=="select") {
+            if(ev.action==KeyEvent.ACTION_UP){
+                val rotate=ev.eventTime-ev.downTime>=android.view.ViewConfiguration.getLongPressTimeout()
+                if(rotate)onRotate()
+                val action=if(rotate) "rotate" else "reset"
+                web?.evaluateJavascript("window.mapKey?.('$action')",null)
+            }
+        } else if(command=="toggle") {
             if(ev.action==KeyEvent.ACTION_UP) {
                 val action=if(ev.eventTime-ev.downTime>=android.view.ViewConfiguration.getLongPressTimeout() && ev.keyCode!=KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) "reset" else "toggle"
                 web?.evaluateJavascript("window.mapKey?.('$action')",null)

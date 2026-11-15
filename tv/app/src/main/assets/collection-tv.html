@@ -11,14 +11,15 @@ body{position:relative}canvas{display:block;width:100%}
 </style>
 <canvas></canvas><div id="hud"><div id="title"></div><div id="meta"></div><div id="help"></div></div>
 <div id="credit"></div><div id="status" role="status"></div>
-<script type="module">
+<script>__PHOTO_CAMERA__</script><script type="module">
+const photoCamera=new PhotoCamera();
 const root=document.documentElement, nl=root.lang==='nl', text=(a,b)=>nl?a:b;
 const atlas=root.dataset.mode==='atlas', initial=decodeURIComponent(root.dataset.initial);
 const canvas=document.querySelector('canvas'), ctx=canvas.getContext('2d');
 const $=id=>document.getElementById(id), wrap=x=>x-Math.round(x), clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const mapName=atlas?text('Hemelatlas','Sky atlas'):text('Nachtpanorama','Night panorama');
 let frames=[],index=0,stars=[],lines=[],skyImage,photo,preview,drawPhoto,posterFor;
-let cx=.5,cy=.5,z=1,angle=0,blend=0,photoZoom=1,phase='loading',origin=null,token=0;
+let cx=.5,cy=.5,z=1,angle=0,blend=0,phase='loading',origin=null,token=0;
 let pending=0,animation=0,hideTimer=0,originalError=false;
 const current=()=>frames[index];
 function phaseTo(value){phase=value;root.dataset.phase=value;}
@@ -30,7 +31,7 @@ function feedback(){
   $('title').textContent=f.name;
   $('meta').textContent=[f.label,f.date,index+1+' / '+frames.length].filter(Boolean).join('   ·   ');
   $('help').textContent=phase==='photo'
-    ? text('↑ ↓  Fotozoom','↑ ↓  Photo zoom')+'  '+photoZoom+'×   ·   '+text('Terug  Naar kader','Back  To frame')
+    ? photoCamera.help(!nl)+'  '+photoCamera.scaleLabel(!nl)+'   ·   '+text('Lang OK  Draaien','Hold OK  Rotate')+'  '+90*photoCamera.turns+'°   ·   '+text('Terug  Naar kader','Back  To frame')
     : text('← →  Kies opname    ↑ ↓  Kaartzoom    OK  Open foto','← →  Select capture    ↑ ↓  Map zoom    OK  Open photo');
   clearTimeout(hideTimer);$('hud').style.opacity='1';
   if(phase==='photo')hideTimer=setTimeout(()=>$('hud').style.opacity='0',2500);
@@ -52,7 +53,7 @@ function renderPhoto(img,w,h,zoom){
 function draw(){
   const {w,h,r,sw,sh}=layout();if(!w||!h)return;
   ctx.setTransform(r,0,0,r,0,0);ctx.fillStyle='#1b121a';ctx.fillRect(0,0,w,h);
-  if(phase==='photo'){ctx.fillStyle='#030509';ctx.fillRect(0,0,w,h);renderPhoto(photo||preview,w,h,photoZoom);return;}
+  if(phase==='photo'){ctx.fillStyle='#030509';ctx.fillRect(0,0,w,h);photoCamera.draw(ctx,photo||preview,w,h);return;}
   if(!frames.length)return;
   const width=sw*z,height=sh*z,centerY=clamp(cy,h/(2*height),1-h/(2*height));
   const project=([u,v])=>[w/2+wrap(u-cx)*width,h/2+(v-centerY)*height];
@@ -147,7 +148,7 @@ async function original(id,serial){
   }catch{if(serial===token){originalError=true;message(text('Origineel laden mislukt · OK om opnieuw te proberen','Original unavailable · OK to retry'));}}
 }
 function visit(){
-  const f=current(),serial=++token;originalError=false;photoZoom=1;preview=posterFor(f.id);original(f.id,serial);
+  const f=current(),serial=++token;originalError=false;photoCamera.reset();preview=posterFor(f.id);original(f.id,serial);
   origin=[cx,cy,z];phaseTo('flight');$('hud').style.opacity='0';
   const {w,h,sw,sh}=layout(), q=f.quad?.map(([u,v])=>[wrap(u-f.center[0])*sw,(v-f.center[1])*sh]);
   let end=z*4,turn=0;
@@ -172,13 +173,13 @@ function visit(){
 window.collectionBack=()=>{
   if(!origin)return false;
   ++token;cancelAnimationFrame(animation);[cx,cy,z]=origin;origin=null;preview=null;photo=null;delete root.dataset.original;
-  angle=blend=0;photoZoom=1;message('');phaseTo('map');$('credit').hidden=false;feedback();draw();return true;
+  angle=blend=0;photoCamera.reset();message('');phaseTo('map');$('credit').hidden=false;feedback();draw();return true;
 };
 window.mapKey=key=>{
   if(phase==='error'){if(key==='reset')load();return;}
   if(phase==='photo'){
     if(key==='reset'&&originalError){originalError=false;message(text('Origineel laden…','Loading original…'));original(current().id,token);}
-    if(key==='in'||key==='out'||key==='reset'){photoZoom=key==='reset'?1:clamp(photoZoom+(key==='in'?1:-1),1,10);feedback();schedule();}
+    else {photoCamera.key(key);feedback();schedule();}
     return;
   }
   if(phase!=='map')return;

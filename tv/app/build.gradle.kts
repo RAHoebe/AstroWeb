@@ -10,8 +10,8 @@ android {
         applicationId = "nl.ronamersfoort.astroweb.tv"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 8
+        versionName = "0.5.3"
     }
     buildFeatures { compose = true }
 }

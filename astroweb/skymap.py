@@ -1,4 +1,6 @@
 """Discover the uploaded object in NASA's Hubble Skymap and cache its photograph."""
+from functools import lru_cache
+
 import hashlib
 import io
 import logging
@@ -215,3 +217,61 @@ def render_frames(photo, destination, focus, width, height):
         frame = cv2.warpAffine(photo, camera, (width,height))
         alpha = alpha*alpha*(3-2*alpha)
         yield cv2.addWeighted(frame, 1-alpha, back, alpha, 0)
+
+# ICRS at the four corners (top left clockwise) of these specific NASA JPEGs.
+# Matched to calibrated ESA/Hubble AVM reference rasters, not to the Skymap pin.
+# M031: heic1502a, 765 inliers; C033: heic0712c, 1573 inliers.
+CALIBRATED_CORNERS = {
+    ("skymap-m031", "13d122946078e3c56936"): (
+        (11.120894241,40.989126903),(12.087797649,42.240422007),
+        (11.483697012,42.499583311),(10.524611888,41.243294242)),
+    ("skymap-c033", "8b5033e8b28e21c3f0e9"): (
+        (314.102317885,30.367090182),(314.057985435,30.382795348),
+        (314.048824857,30.363535340),(314.093150048,30.347833266)),
+}
+
+def raster_corners(w,h):
+    return np.float32([[0,0],[w-1,0],[w-1,h-1],[0,h-1]])
+
+def tv_registration(store,record,option):
+    from .discovery import project
+    path=image_file(store, option["id"][7:], option["digest"])
+    corners=CALIBRATED_CORNERS.get((option["id"],option["digest"]))
+    if corners:
+        _,uv=project(store, record, SkyCoord(*np.asarray(corners).T,unit="deg"))
+        if uv is not None and np.isfinite(uv).all():
+            with Image.open(path) as im:
+                source=raster_corners(*im.size)
+            return cv2.getPerspectiveTransform(source,np.float32(uv*[record["width"],record["height"]]-.5))
+    return match_images(str(store.path(record["assets"]["final"])),str(path),record["sha256"]["final"])
+
+@lru_cache(maxsize=32)
+def match_images(upload_path,destination_path,upload_digest):
+    """Use only well-distributed, consistent matches, including mirrored captures."""
+    def reduced(path):
+        image=cv2.imread(path,cv2.IMREAD_GRAYSCALE)
+        if image is None:return None,None
+        h,w=image.shape;scale=min(1,1600/max(w,h))
+        small=cv2.resize(image,(max(1,round(w*scale)),max(1,round(h*scale))),interpolation=cv2.INTER_AREA)
+        sx,sy=small.shape[1]/w,small.shape[0]/h
+        return small,np.array([[sx,0,(sx-1)/2],[0,sy,(sy-1)/2],[0,0,1.]])
+    upload,uf=reduced(upload_path);dest,df=reduced(destination_path)
+    if upload is None or dest is None:return None
+    sift=cv2.SIFT_create(nfeatures=4000,contrastThreshold=.015)
+    uk,ud=sift.detectAndCompute(upload,None)
+    if ud is None or len(ud)<12:return None
+    for flip in (False,True):
+        dk,dd=sift.detectAndCompute(cv2.flip(dest,1) if flip else dest,None)
+        if dd is None:continue
+        pairs=cv2.BFMatcher().knnMatch(dd,ud,k=2)
+        good={a.trainIdx:a for a,b in pairs if a.distance<.7*b.distance}
+        if len(good)<12:continue
+        src=np.float32([dk[m.queryIdx].pt for m in good.values()])
+        dst=np.float32([uk[m.trainIdx].pt for m in good.values()])
+        affine,mask=cv2.estimateAffinePartial2D(src,dst,method=cv2.RANSAC,ransacReprojThreshold=2.)
+        if affine is None:continue
+        use=mask.ravel().astype(bool)
+        if use.sum()<max(12,.5*len(src)) or cv2.contourArea(cv2.convexHull(src[use]))<.08*dest.size:continue
+        mirror=np.array([[-1,0,dest.shape[1]-1],[0,1,0],[0,0,1.]]) if flip else np.eye(3)
+        return np.linalg.inv(uf)@np.vstack((affine,[0,0,1]))@mirror@df
+    return None

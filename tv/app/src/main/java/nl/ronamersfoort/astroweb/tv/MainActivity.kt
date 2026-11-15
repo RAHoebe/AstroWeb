@@ -35,6 +35,23 @@ internal fun dateLabel(date: String, en: Boolean): String = try {
 } catch (_: java.time.DateTimeException) { "" }
 
 class MainActivity : ComponentActivity() {
+    private var spoken by mutableStateOf<Spoken?>(null)
+    private val microphone=registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        if(result.resultCode==RESULT_OK)result.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()?.let { spoken=Spoken(it) }
+    }
+    private fun listen(en:Boolean) {
+        val intent=android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE,if(en) "en-US" else "nl-NL")
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT,if(en) "Try: Play M31" else "Bijvoorbeeld: Speel M31 af")
+        try { microphone.launch(intent) }
+        catch (_:android.content.ActivityNotFoundException) { android.widget.Toast.makeText(this,
+            if(en) "Speech recognition unavailable" else "Spraakherkenning niet beschikbaar",android.widget.Toast.LENGTH_LONG).show() }
+    }
+    override fun onNewIntent(intent:android.content.Intent) {
+        super.onNewIntent(intent);setIntent(intent);spokenIntent(intent)?.let { spoken=it }
+    }
     private val foreground = mutableStateOf(false)
     override fun onResume() { super.onResume(); foreground.value = true }
     override fun onPause() { foreground.value = false; super.onPause() }
@@ -42,7 +59,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        setContent { MaterialTheme { App(foreground.value) } }
+        if(savedInstanceState==null)spoken=spokenIntent(intent)
+        setContent { MaterialTheme { App(foreground.value,spoken,{ spoken=null },::listen) } }
     }
 }
 
@@ -63,7 +81,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun App(foreground: Boolean) {
+@Composable private fun App(foreground:Boolean,spoken:Spoken?,handled:()->Unit,listen:(Boolean)->Unit) {
     val prefs = LocalContext.current.getSharedPreferences("viewing", 0)
     var en by remember { mutableStateOf(prefs.getBoolean("english", false)) }
     var selected by rememberSaveable { mutableStateOf("") }
@@ -82,13 +100,33 @@ class MainActivity : ComponentActivity() {
             kotlinx.coroutines.delay(60_000)
         }
     }
+    val context=LocalContext.current
+    var entry by rememberSaveable { mutableStateOf("film") }
+    var invocation by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(spoken) {
+        if(spoken==null)return@LaunchedEffect
+        try {
+            val list=photos ?: gallery().also { photos=it }
+            val dest=destination(spoken.text,list,opened ?: selected.ifBlank { list.firstOrNull()?.id })
+            if(dest==null){
+                android.widget.Toast.makeText(context,if(en) "No matching object or command" else "Geen passend object of opdracht",android.widget.Toast.LENGTH_LONG).show()
+            } else {
+                opened=dest.objectId;survey=dest.view.takeIf { it=="atlas" || it=="panorama" }
+                if(dest.objectId!=null)selected=dest.objectId
+                lastSurvey=null;entry=dest.view;invocation++
+            }
+        } catch(e:CancellationException){throw e} catch(_:Exception){
+            android.widget.Toast.makeText(context,if(en) "Collection unavailable" else "Collectie niet beschikbaar",android.widget.Toast.LENGTH_LONG).show()
+        }
+        handled()
+    }
     Box(Modifier.fillMaxSize().background(ink)) {
         val list = photos
         val current = opened
         val mode=survey
         when {
             mode != null -> RemoteCanvas("collection-tv.html",selected,mode,en) { lastSurvey=mode;survey=null }
-            current != null -> key(current) { Viewer(current, en, foreground) { opened = null } }
+            current != null -> key(current,invocation) { Viewer(current, en, foreground,entry) { opened = null } }
             failed || list?.isEmpty() == true -> {
                 val focus = remember { FocusRequester() }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -99,14 +137,14 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) { focus.requestFocus() }
             }
             list == null -> Text(if (en) "Loading gallery…" else "Galerij laden…", Modifier.align(Alignment.Center), color = light)
-            else -> Gallery(list, selected, en, lastSurvey, { selected = it }, { lastSurvey=null; opened = it }, { survey=it }) {
+            else -> Gallery(list, selected, en, lastSurvey, { listen(en) }, { selected = it }, { lastSurvey=null;entry="film"; opened = it }, { survey=it }) {
                 en = !en; prefs.edit().putBoolean("english", en).apply()
             }
         }
     }
 }
 
-@Composable private fun Gallery(photos: List<Photo>, selected: String, en: Boolean, lastSurvey: String?, select: (String)->Unit,
+@Composable private fun Gallery(photos: List<Photo>, selected: String, en: Boolean, lastSurvey: String?, voice:()->Unit, select: (String)->Unit,
                                 open: (String)->Unit, openSurvey: (String)->Unit, toggleLanguage: ()->Unit) {
     val current = photos.find { it.id == selected } ?: photos.first()
     val ids=remember(photos) { photos.map { it.id } }
@@ -132,7 +170,6 @@ class MainActivity : ComponentActivity() {
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val posterHeight = maxHeight * .46f
         val backdrop=remember(photos) { photos.firstOrNull { it.catalog=="IC_1396" }?.poster
             ?: photos.firstOrNull { it.catalog=="NGC_7000" }?.poster }
         NebulaBackdrop(backdrop ?: current.poster)
@@ -144,40 +181,42 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.width(14.dp))
                 Text((if (en) "Gallery" else "Galerij")+"   "+(photos.indexOf(current)+1)+" / "+photos.size, color = quiet, fontSize = 17.sp)
                 Spacer(Modifier.weight(1f))
+                Action(if(en) "Speak" else "Spreken",icon=R.drawable.ic_mic,run=voice)
+                Spacer(Modifier.width(8.dp))
                 Action(if(en) "Sky atlas" else "Hemelatlas",Modifier.focusRequester(atlasFocus),icon=R.drawable.ic_atlas) { openSurvey("atlas") }
                 Spacer(Modifier.width(8.dp))
                 Action(if(en) "Night panorama" else "Nachtpanorama",Modifier.focusRequester(panoramaFocus),icon=R.drawable.ic_panorama) { openSurvey("panorama") }
                 Spacer(Modifier.width(8.dp))
                 Action(if (en) "NL" else "EN", icon=R.drawable.ic_language, run = toggleLanguage)
             }
-            Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(Modifier.weight(1f).padding(end=6.dp)) {
-                    Text(current.catalog.replace('_',' '), color = coral, fontSize = 16.sp, letterSpacing = 2.sp)
-                    Spacer(Modifier.height(8.dp))
-                    Text(current.name.get(en), color = light, fontSize = 32.sp, lineHeight = 36.sp,
-                         maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(12.dp))
-                    Text(current.summary.get(en), color = quiet, fontSize = 16.sp, lineHeight = 21.sp,
-                         maxLines = 5, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(12.dp))
-                    Text(dateLabel(current.date,en), color = coral, fontSize = 14.sp)
-                }
-                LazyRow(Modifier.weight(1.45f),state=rail,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
+            Spacer(Modifier.height(15.dp))
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text(current.catalog.replace('_',' '),color=coral,fontSize=15.sp,letterSpacing=1.sp)
+                Text(dateLabel(current.date,en),color=quiet,fontSize=14.sp)
+            }
+            Text(current.posterName(en),color=light,fontSize=28.sp,lineHeight=31.sp)
+            Text(current.gallerySummary(en),color=light,fontSize=16.sp,lineHeight=20.sp)
+            Spacer(Modifier.height(10.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f),contentAlignment=Alignment.CenterStart) {
+                val gap=10.dp
+                val cardWidth=minOf((maxWidth-4*gap)/5,(maxHeight-41.dp).coerceAtLeast(1.dp)*.72f)
+                val posterHeight=minOf(maxHeight-41.dp,cardWidth*1.7f).coerceAtLeast(1.dp)
+                LazyRow(Modifier.fillMaxWidth(),state=rail,horizontalArrangement=Arrangement.spacedBy(gap)) {
                     items(photos,key={ it.id }) { photo ->
                         var active by remember(photo.id) { mutableStateOf(false) }
                         val frame = RoundedCornerShape(10.dp)
-                        Column(Modifier.width(posterHeight*.58f)) {
+                        Column(Modifier.width(cardWidth)) {
                             Box(Modifier.fillMaxWidth().height(posterHeight).focusRequester(focus.getValue(photo.id))
                                 .onFocusChanged { active = it.isFocused; if (active) select(photo.id) }
                                 .clip(frame).background(Color(0xff150f13)).border(if (active) 3.dp else 1.dp,
                                     if (active) coral else Color(0xff754f50), frame).clickable { open(photo.id) }
                                 .padding(4.dp)) {
-                                AsyncImage(photo.poster, photo.name.get(en), Modifier.fillMaxSize().clip(frame),
+                                AsyncImage(photo.poster, photo.posterName(en), Modifier.fillMaxSize().clip(frame),
                                     contentScale = ContentScale.Fit)
                             }
                             Spacer(Modifier.height(7.dp))
-                            Text(photo.catalog.replace('_',' '), color = if (active) coral else quiet, fontSize = 14.sp)
+                            Text(photo.posterName(en), color=if(active) coral else light, fontSize=14.sp, lineHeight=16.sp, maxLines=2, overflow=TextOverflow.Ellipsis)
                         }
                     }
                 }

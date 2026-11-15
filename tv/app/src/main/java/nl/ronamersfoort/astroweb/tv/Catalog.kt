@@ -16,8 +16,35 @@ data class Capture(val id: String, val date: String)
 data class Photo(
     val id: String, val catalog: String, val name: Words, val summary: Words,
     val date: String, val poster: String?, val original: String?, val film: String?,
-    val hasHubble: Boolean, val maps: Boolean, val milkyWay: Boolean, val captures: List<Capture>
+    val hasHubble: Boolean, val maps: Boolean, val milkyWay: Boolean, val captures: List<Capture>, val aliases: List<String> = emptyList()
 )
+
+// Prefer the human title, even when metadata prefixes or appends the catalogue ID.
+internal fun Photo.posterName(en: Boolean): String {
+    fun compact(value:String)=value.filter { it.isLetterOrDigit() }.lowercase()
+    val title=name.get(en).trim()
+    val words=title.split('·').map { it.trim() }.filter { it.isNotEmpty() && compact(it)!=compact(catalog) }
+    val short=words.firstOrNull() ?: title.ifBlank { catalog.replace('_',' ') }
+    return when(short) {
+        "Het gebied van de Slurfnevel" -> "Slurfnevelgebied"
+        "The Elephant’s Trunk region" -> "Elephant’s Trunk region"
+        else -> short
+    }
+}
+
+internal fun Photo.gallerySummary(en:Boolean):String {
+    val summaryText=summary.get(en)
+    val id=Regex("""([A-Za-z]+)[ _-]*(\d+)""").matchEntire(catalog) ?: return summaryText
+    val exact=Regex("""(?i)\b${id.groupValues[1]}[ _-]*${id.groupValues[2]}\b""")
+    val short=posterName(en)
+    val replacement=when {
+        exact.containsMatchIn(short) -> if(en) "this object" else "dit object"
+        en -> "the "+short.removePrefix("The ")
+        catalog=="IC_1396" || catalog=="M_31" -> "het $short"
+        else -> "de $short"
+    }
+    return exact.replace(summaryText) { if(it.range.first==0) replacement.replaceFirstChar(Char::uppercase) else replacement }
+}
 
 private suspend fun json(path: String): JSONObject = withContext(Dispatchers.IO) {
     val connection = URL(server + path).openConnection() as HttpsURLConnection
@@ -43,14 +70,15 @@ private fun photo(o: JSONObject): Photo {
         info.words("name"), info.words("summary"), o.optString("capture_date").take(10),
         o.media("poster"), o.media("original_view") ?: o.media("final"), o.media("video"),
         o.optBoolean("hubble_available"), o.isNull("capture_kind") || o.optString("capture_kind").isBlank(),
-        o.optJSONObject("galaxy") != null, o.optJSONArray("captures").entries().map { Capture(it.getString("id"), it.optString("date").take(10)) })
+        o.optJSONObject("galaxy") != null, o.optJSONArray("captures").entries().map { Capture(it.getString("id"), it.optString("date").take(10)) },
+        info.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty())
 }
 suspend fun gallery(): List<Photo> {
     return json("/api/objects").getJSONArray("objects").entries().map(::photo)
 }
 suspend fun detail(id: String) = photo(json("/api/objects/" + android.net.Uri.encode(id)))
 
-data class Trip(val id: String, val name: Words, val credit: String, val url: String)
+data class Trip(val id: String, val name: Words, val credit: String, val url: String,val overlayCredit:Boolean=false)
 
 suspend fun skyTrip(id: String): Trip? {
     val data = json("/api/objects/" + android.net.Uri.encode(id) + "/journey")
@@ -71,7 +99,7 @@ private val fieldNames = mapOf(
 suspend fun hubbleTrips(capture: String): List<Trip> {
     val path = android.net.Uri.encode(capture)
     var fieldNumber = 0
-    return json("/api/objects/$path/hubble").optJSONArray("observations").entries().map { obj ->
+    return json("/api/objects/$path/hubble?view=tv").optJSONArray("observations").entries().map { obj ->
         val id = obj.getString("id")
         val target = obj.optString("target").takeUnless { it.uppercase() in setOf("ANY","NONE","PAR","PARALLEL") }.orEmpty()
         val description = obj.optString("title").ifBlank {
@@ -81,7 +109,8 @@ suspend fun hubbleTrips(capture: String): List<Trip> {
         val name = fieldNames[id] ?: if (obj.optBoolean("full_footprint"))
             Words("$description · veld $fieldNumber", "$description · field $fieldNumber")
         else Words(description, description)
-        Trip(id, name, obj.optString("credit").ifBlank { "NASA / ESA · Hubble" },
-            "$server/media/$path/hubble/" + android.net.Uri.encode(id))
+        val tvVideo=obj.media("tv_video")
+        Trip(id,name,obj.optString("tv_credit").ifBlank { obj.optString("credit").ifBlank { "NASA / ESA · Hubble" } },
+            tvVideo ?: ("$server/media/$path/hubble/"+android.net.Uri.encode(id)),overlayCredit=tvVideo!=null)
     }
 }
