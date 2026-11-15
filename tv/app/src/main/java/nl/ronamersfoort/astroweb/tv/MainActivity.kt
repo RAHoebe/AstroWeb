@@ -21,7 +21,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.tv.material3.LocalTextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.tv.material3.MaterialTheme
@@ -170,6 +175,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
+        val infoLimit=maxHeight*.4f
         val backdrop=remember(photos) { photos.firstOrNull { it.catalog=="IC_1396" }?.poster
             ?: photos.firstOrNull { it.catalog=="NGC_7000" }?.poster }
         NebulaBackdrop(backdrop ?: current.poster)
@@ -190,19 +196,13 @@ class MainActivity : ComponentActivity() {
                 Action(if (en) "NL" else "EN", icon=R.drawable.ic_language, run = toggleLanguage)
             }
             Spacer(Modifier.height(15.dp))
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                Text(current.catalog.replace('_',' '),color=coral,fontSize=15.sp,letterSpacing=1.sp)
-                Text(dateLabel(current.date,en),color=quiet,fontSize=14.sp)
-            }
-            Text(current.posterName(en),color=light,fontSize=28.sp,lineHeight=31.sp)
-            Text(current.gallerySummary(en),color=light,fontSize=16.sp,lineHeight=20.sp)
+            GalleryInfo(photos,current,en,infoLimit)
             Spacer(Modifier.height(10.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f),contentAlignment=Alignment.CenterStart) {
                 val gap=10.dp
-                val cardWidth=minOf((maxWidth-4*gap)/5,(maxHeight-41.dp).coerceAtLeast(1.dp)*.72f)
-                val posterHeight=minOf(maxHeight-41.dp,cardWidth*1.7f).coerceAtLeast(1.dp)
-                LazyRow(Modifier.fillMaxWidth(),state=rail,horizontalArrangement=Arrangement.spacedBy(gap)) {
+                val cardWidth=minOf((maxWidth-4*gap)/5*.96f,(maxHeight-41.dp).coerceAtLeast(1.dp)*.65f)
+                val posterHeight=minOf(maxHeight-41.dp,cardWidth*1.62f).coerceAtLeast(1.dp)
+                LazyRow(Modifier.fillMaxWidth(),state=rail,horizontalArrangement=Arrangement.spacedBy(maxOf(gap,(maxWidth-5*cardWidth)/4))) {
                     items(photos,key={ it.id }) { photo ->
                         var active by remember(photo.id) { mutableStateOf(false) }
                         val frame = RoundedCornerShape(10.dp)
@@ -216,13 +216,49 @@ class MainActivity : ComponentActivity() {
                                     contentScale = ContentScale.Fit)
                             }
                             Spacer(Modifier.height(7.dp))
-                            Text(photo.posterName(en), color=if(active) coral else light, fontSize=14.sp, lineHeight=16.sp, maxLines=2, overflow=TextOverflow.Ellipsis)
+                            Text(photo.posterName(en), color=if(active) coral else light, fontSize=14.sp, lineHeight=16.sp, minLines=2, maxLines=2, overflow=TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
             Text(if (en) "← →   Choose an object     ·     OK   Open" else "← →   Kies een object     ·     OK   Openen",
                  color=quiet, fontSize=14.sp)
+        }
+    }
+}
+
+@Composable private fun GalleryInfo(photos:List<Photo>, current:Photo, en:Boolean, available:Dp) {
+    val measurer=rememberTextMeasurer()
+    val density=LocalDensity.current
+    val base=LocalTextStyle.current
+    val meta=base.copy(fontSize=14.sp)
+    val title=base.copy(fontSize=28.sp,lineHeight=31.sp)
+    val body=base.copy(fontSize=16.sp,lineHeight=20.sp)
+    fun details(p:Photo)=androidx.compose.ui.text.buildAnnotatedString {
+        pushStyle(androidx.compose.ui.text.SpanStyle(color=coral,fontSize=15.sp,letterSpacing=1.sp))
+        append(p.catalog.replace('_',' '));pop()
+        append("   ");append(dateLabel(p.date,en))
+    }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val width=constraints.maxWidth
+        // Measure once per collection, language and viewport, outside the focus path.
+        val tallest=remember(photos,en,width,measurer,density,meta,title,body) {
+            val limit=Constraints(maxWidth=width)
+            fun height(text:AnnotatedString,style:TextStyle)=measurer.measure(text,style=style,constraints=limit).size.height
+            val px=photos.maxOf { p ->
+                height(details(p),meta)+height(AnnotatedString(p.posterName(en)),title)+
+                    height(AnnotatedString(p.gallerySummary(en)),body)
+            }
+            with(density){px.toDp()}
+        }
+        // Extra-large system fonts or unusually long descriptions can scroll
+        // inside the reserved space without pushing the poster row off screen.
+        key(current.id) {
+            Column(Modifier.fillMaxWidth().height(minOf(available,tallest)).verticalScroll(rememberScrollState())) {
+                Text(details(current),style=meta,color=quiet)
+                Text(current.posterName(en),style=title,color=light)
+                Text(current.gallerySummary(en),style=body,color=light)
+            }
         }
     }
 }
