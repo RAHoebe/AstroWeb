@@ -29,6 +29,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.tv.material3.LocalTextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
@@ -79,20 +81,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable internal fun Action(label: String, modifier: Modifier = Modifier, selected: Boolean = false, icon:Int? = null, run: () -> Unit) {
+@Composable internal fun Action(label: String, modifier: Modifier = Modifier, selected: Boolean = false, icon:Int? = null, iconOnly:Boolean = false, run: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val shape=RoundedCornerShape(7.dp)
     val fg=if(focused) ink else light
-    Row(modifier.onFocusChanged { focused=it.isFocused }.clip(shape)
+    val description=if(iconOnly) Modifier.semantics { contentDescription=label } else Modifier
+    Row(modifier.then(description).onFocusChanged { focused=it.isFocused }.clip(shape)
         .background(if(focused) coral else if(selected) copper else surface.copy(alpha=.94f))
         .border(if(focused) 1.5.dp else 1.dp,if(focused) light else copper.copy(alpha=.62f),shape)
         .clickable(onClick=run).heightIn(min=29.dp).padding(horizontal=9.dp,vertical=4.dp),
         verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.Center) {
         if(icon!=null) {
-            Glyph(icon,if(focused) ink else quiet,14.dp)
-            Spacer(Modifier.width(5.dp))
+            Glyph(icon,if(focused) ink else quiet,if(iconOnly) 18.dp else 14.dp)
+            if(!iconOnly) Spacer(Modifier.width(5.dp))
         }
-        Text(label,color=fg,fontSize=13.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+        if(!iconOnly) Text(label,color=fg,fontSize=13.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
     }
 }
 
@@ -140,7 +143,7 @@ class MainActivity : ComponentActivity() {
         val current = opened
         val mode=survey
         when {
-            mode != null -> RemoteCanvas("collection-tv.html",selected,mode,en) { lastSurvey=mode;survey=null }
+            mode != null -> RemoteCanvas(if(mode=="modes") "viewing.html" else "collection-tv.html",selected,mode,en,foreground=foreground) { lastSurvey=mode;survey=null }
             current != null -> key(current,invocation) { Viewer(current, en, foreground,entry) { opened = null } }
             failed || list?.isEmpty() == true -> {
                 val focus = remember { FocusRequester() }
@@ -149,7 +152,7 @@ class MainActivity : ComponentActivity() {
                     Spacer(Modifier.height(16.dp))
                     Action(if (en) "Try again" else "Opnieuw proberen", Modifier.focusRequester(focus)) { retry++ }
                 }
-                Action("Server",run=configure)
+                Action("Server",icon=R.drawable.ic_server,iconOnly=true,run=configure)
                 LaunchedEffect(Unit) { focus.requestFocus() }
             }
             list == null -> Text(if (en) "Loading gallery…" else "Galerij laden…", Modifier.align(Alignment.Center), color = light)
@@ -167,6 +170,7 @@ class MainActivity : ComponentActivity() {
     val focus = remember(ids) { ids.associateWith { FocusRequester() } }
     val rail=rememberLazyListState(initialFirstVisibleItemIndex=photos.indexOf(current))
     val atlasFocus=remember { FocusRequester() }
+    val modesFocus=remember { FocusRequester() }
     val panoramaFocus=remember { FocusRequester() }
     var initialFocus by remember { mutableStateOf(true) }
     val ready=androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
@@ -178,6 +182,7 @@ class MainActivity : ComponentActivity() {
             rail.scrollToItem(photos.indexOf(current))
             withFrameNanos { }
             val target=when {
+                initialFocus && lastSurvey=="modes" -> modesFocus
                 initialFocus && lastSurvey=="atlas" -> atlasFocus
                 initialFocus && lastSurvey=="panorama" -> panoramaFocus
                 else -> focus.getValue(current.id)
@@ -198,13 +203,15 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.width(14.dp))
                 Text((if (en) "Gallery" else "Galerij")+"   "+(photos.indexOf(current)+1)+" / "+photos.size, color = quiet, fontSize = 17.sp)
                 Spacer(Modifier.weight(1f))
-                Action("Server",run=configure)
+                Action("Server",icon=R.drawable.ic_server,iconOnly=true,run=configure)
                 Spacer(Modifier.width(8.dp))
                 Action(if(en) "Speak" else "Spreken",icon=R.drawable.ic_mic,run=voice)
                 Spacer(Modifier.width(8.dp))
                 Action(if(en) "Sky atlas" else "Hemelatlas",Modifier.focusRequester(atlasFocus),icon=R.drawable.ic_atlas) { openSurvey("atlas") }
                 Spacer(Modifier.width(8.dp))
                 Action(if(en) "Night panorama" else "Nachtpanorama",Modifier.focusRequester(panoramaFocus),icon=R.drawable.ic_panorama) { openSurvey("panorama") }
+                Spacer(Modifier.width(8.dp))
+                Action(if(en) "Viewing modes" else "Kijkmodi",Modifier.focusRequester(modesFocus),icon=R.drawable.ic_viewing_modes) { openSurvey("modes") }
                 Spacer(Modifier.width(8.dp))
                 Action(if (en) "NL" else "EN", icon=R.drawable.ic_language, run = toggleLanguage)
             }

@@ -40,7 +40,7 @@ Open de [lokale galerij](http://127.0.0.1:8090/). Kies [Studio](http://127.0.0.1
    ```
 
 3. Kies sterrenparallax, nevelreliëf of klassieke pan/zoom. Stel **Aantal zoompunten** in op 1–8. Selecteer een nummer, versleep het kader en trek aan een hoek om de uitsnede te bepalen. Elk punt heeft een eigen zoomfactor tot 8×. De film bezoekt de punten op volgorde en keert terug naar het begin.
-4. Kies **Maak film**. Elke geslaagde H.264-film wordt automatisch de galerijversie. Tijdens het renderen blijft de huidige film beschikbaar. Met **Render annuleren** stop je een wachtende of lopende taak. Je kunt een eerdere versie opnieuw selecteren. In Studio kun je ook een ongepubliceerde versie verwijderen of de object-ID en bijbehorende objectteksten wijzigen.
+4. Kies **Maak film**. Elke geslaagde H.264-film wordt automatisch de galerijversie en verschijnt direct in de Studio-speler. De beeldstand van de film is instelbaar bij liggende bronfoto’s. Tijdens het renderen blijft de huidige film beschikbaar. Met **Render annuleren** stop je een wachtende of lopende taak. Je kunt een eerdere versie opnieuw selecteren. In Studio kun je ook een ongepubliceerde versie verwijderen of de object-ID en bijbehorende objectteksten wijzigen.
 
 PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afmetingen hebben. De limieten zijn 40 megapixels en 100 MiB per beeld, 512 MiB voor FITS en 600 MiB voor de hele upload. De vier originelen krijgen een SHA-256-controlesom. Voor lokale batchimport: stop de server en voer `python -m astroweb import --source AstroPhotos --render` uit, met één submap per object.
 

@@ -352,7 +352,7 @@ def render_journey(store, record, field, output, plates, progress=None):
         process.stderr.close()
 
 
-def movie(store, record, field, progress=None):
+def movie(store, record, field, progress=None, cached_only=False):
     from .survey import survey_for
     survey = survey_for(field)
     digest = hashlib.sha256(json.dumps(["atlas-v9-shortest-roll",survey,record.get("sha256",{}).get("final"),field],
@@ -363,6 +363,9 @@ def movie(store, record, field, progress=None):
     target = folder / f"{digest}.mp4"
     if target.is_file():
         return target
+    if cached_only:
+        fallback = target.with_suffix(".overview.mp4")
+        return fallback if fallback.is_file() else None
     with RENDER_LOCK:
         if target.is_file():
             return target

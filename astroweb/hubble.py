@@ -73,7 +73,7 @@ def eligible(record):
     return bool(has_destination or is_andromeda(record) or record.get("fits") or (record.get("gaia") or {}).get("corners"))
 
 
-def fields(store,record):
+def fields(store,record, local_only=False):
     if record.get("capture_kind"):
         return []
     options=[]
@@ -100,7 +100,7 @@ def fields(store,record):
                            + [e for e in additional if e.get("relation") == "field"])
             elif search.get("unavailable") and not options and not preferred:
                 raise ValueError("hubble_unavailable")
-    if not options and not search:
+    if not options and not search and not local_only:
         from .hst_archive import find_fields
         try:
             options = find_fields(store,record)
@@ -325,7 +325,9 @@ def encode(frames, credit, path, burn_credit=True):
         if not process.stdin.closed:process.stdin.close()
 
 
-def movie(store,record,name,tv=False):
+def movie(store,record,name,tv=False, cached_only=False, options=None):
+    def available():
+        return options if options is not None else fields(store,record,local_only=cached_only)
     archive=None
     preferred = None
     if name.startswith("skymap-"):
@@ -339,12 +341,12 @@ def movie(store,record,name,tv=False):
         matrix=skymap.image_registration(store,record,preferred)
         if matrix is None and tv:raise ValueError("hubble_no_field")
         signature.append(matrix.tolist() if matrix is not None else None)
-    elif (name in WINDOWS and is_andromeda(record)) or (name in PLATES and any(v["id"]==name for v in fields(store,record))):
+    elif (name in WINDOWS and is_andromeda(record)) or (name in PLATES and any(v["id"]==name for v in available())):
         matrix=window_geometry(store,record,name)
         if matrix is None:raise ValueError("hubble_no_field")
         signature=["registered-feature-v3",record["sha256"]["final"],matrix.tolist(),name]
     else:
-        archive=next((v for v in fields(store,record) if v["id"]==name),None)
+        archive=next((v for v in available() if v["id"]==name),None)
         if not archive:raise ValueError("hubble_no_field")
         from .journey import geometry
         matrix=None
@@ -354,6 +356,8 @@ def movie(store,record,name,tv=False):
     digest=hashlib.sha256(json.dumps(signature).encode()).hexdigest()[:20]
     folder=store.path(f"objects/{record.get('storage_id',record['id'])}/hubble")
     output=folder/f"{digest}.mp4"
+    if cached_only:
+        return output if output.is_file() else None
     with LOCK:
         if not output.is_file():
             folder.mkdir(parents=True,exist_ok=True)

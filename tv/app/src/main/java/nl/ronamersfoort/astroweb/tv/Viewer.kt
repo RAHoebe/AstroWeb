@@ -33,6 +33,8 @@ import kotlinx.coroutines.CancellationException
     var maps by rememberSaveable { mutableStateOf(entry in listOf("sky","polar","galaxy")) }
     val mapsButton=remember { FocusRequester() }
     val tripsButton = remember { FocusRequester() }
+    var explore by rememberSaveable { mutableStateOf(false) }
+    val exploreButton=remember { FocusRequester() }
     var choosingDate by remember { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
     var photo by remember(capture) { mutableStateOf<Photo?>(null) }
@@ -59,13 +61,14 @@ import kotlinx.coroutines.CancellationException
     }
     val p = photo
     val currentDate = remember { FocusRequester() }
-    LaunchedEffect(p, full, choosingDate, failed, trips, maps) {
-        if (trips || maps) return@LaunchedEffect
+    LaunchedEffect(p, full, choosingDate, failed, trips, maps, explore) {
+        if (trips || maps || explore) return@LaunchedEffect
         if (p != null) {
             when {
                 full && film && p.film!=null -> canvas
                 full -> return@LaunchedEffect
                 choosingDate -> currentDate
+                focusReturn == "explore" -> exploreButton
                 focusReturn == "maps" -> mapsButton
                 focusReturn == "trips" -> tripsButton
                 focusReturn == "full" -> fullButton
@@ -76,6 +79,10 @@ import kotlinx.coroutines.CancellationException
     }
     if(full && p!=null && (!film || p.film==null)) {
         RemoteCanvas("photo.html",p.id,"photo",en,turns=turns,onRotate={ turns=(turns+1)%4 })
+        return
+    }
+    if (explore && p != null) {
+        RemoteCanvas("viewing.html",p.id,"explore",en,foreground=foreground) { focusReturn="explore";explore=false }
         return
     }
     if (maps && p != null) {
@@ -149,6 +156,7 @@ import kotlinx.coroutines.CancellationException
                                 if (p.captures.size>1) Action(if(en) "Capture date" else "Opnamedatum",Modifier.focusRequester(dates),icon=R.drawable.ic_date) { choosingDate=true }
                                 Action(if(en) "Rotate 90°" else "Draai 90°",icon=R.drawable.ic_rotate) { turns=(turns+1)%4 }
                                 Action(if(en) "Full screen" else "Volledig scherm", Modifier.focusRequester(fullButton),icon=R.drawable.ic_full) { full=true }
+                                Action(if(en) "Explore" else "Verkennen", Modifier.focusRequester(exploreButton)) { explore=true }
                                 Action(if(en) "Gallery" else "Galerij",icon=R.drawable.ic_gallery, run=leave)
                             }
                         }

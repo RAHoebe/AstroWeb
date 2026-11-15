@@ -111,7 +111,7 @@ export const words = {
   scaleUnmeasured:["Beeldmaat onbekend: geen gemeten beeldveld.","Image size unknown: no measured footprint."],
   viewCaptureDate:["Opnamedatum","Capture date"],manualCaptureDate:["Opnamedatum (optioneel, overschrijft FITS-datum)","Capture date (optional, overrides FITS date)"],unknownDate:["Opnamedatum onbekend","Capture date unknown"],captureNumber:["Opname","Capture"],
   hubble_target:["Object zelf","Target itself"],hubble_region:["Deelgebied van het object","Region of target"],hubble_field:["Ander veld in jouw opname","Other field in your capture"],
-  orientation:["Beeldstand","Orientation"],orientPortrait:["Portret · draai liggende beelden","Portrait · rotate landscape images"],orientOriginal:["Originele stand","Original orientation"],
+  orientation:["Beeldstand van de film","Rendered film orientation"],orientPortrait:["Portret · draai liggende beelden","Portrait · rotate landscape images"],orientOriginal:["Originele stand","Original orientation"],
   deleteVersion:["Verwijder versie","Delete version"],deletePrompt:["Deze filmversie en de bijbehorende preview definitief verwijderen?","Permanently delete this film version and its preview?"],
   versionDeleted:["Filmversie verwijderd.","Film version deleted."],version_published:["Kies eerst een andere versie voor de galerij.","Select another gallery version first."],
   deleteDeferred:["Versie verwijderd. Een bezet bestand wordt later opgeruimd.","Version removed. A file still in use will be cleaned up later."],

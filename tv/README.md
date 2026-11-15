@@ -12,6 +12,16 @@ Lokale, alleen-lezen proef voor Google TV. De galerij toont alle gepubliceerde o
 - **Terug** brengt de knoppen terug. Nogmaals **Terug** gaat naar dezelfde poster in de galerij. Bij een film werken de pauzeknop en de afspeel-/pauzetoets.
 - **EN / NL** wisselt de taal en onthoudt de keuze.
 
+Open **Kijkmodi** boven de galerij of **Verkennen** bij een opname. Kies eerst de modus en daarna de opname of startfoto. De galerijselectie is alvast gemarkeerd. Bij vergelijking kies je ook de tweede datum.
+
+| Kijkmodus | Bediening |
+|---|---|
+| Avondvoorstelling | Kies 5 of 15 minuten. De voorstelling begint bij de geselecteerde opname. ←/→ wisselt hoofdstuk en OK pauzeert. Hemel- en archiefreizen spelen mee zodra hun film lokaal klaarstaat. |
+| Vergelijk opnamen | Kies de tweede datum voor hetzelfde object. De tweede foto wordt met Gaia- of FITS-kalibratie op de eerste gelegd. OK wisselt tussen scheidslijn, knipperen, zoomen en schuiven. Buiten het overlappende deel blijft de eerste foto staan. |
+| Wat zie ik? | ←/→ kiest een cataloguscentrum op de originele foto. OK wisselt tussen uitsnede en overzicht. ↑/↓ kiest een andere foto. Na het laatste onderdeel gaat → door naar de volgende foto. Houd OK vast voor een bijbehorende archiefreis als die beschikbaar is. |
+| Fotolijst | Toon alle opnamen gedurende één uur, stilstaand of met langzame beweging. OK opent de huidige foto om te zoomen. Terug keert naar dezelfde foto in de lijst. |
+| Opnamenacht en vanavond | ↑/↓ wisselt datum op de opnamelocatie. ←/→ gaat tien minuten terug of vooruit. OK speelt de tijd af. De kaart toont de hemelbaan, hoogte en tijd van de hoogste stand op het bemonsterde traject. Voor de Zon gebruikt de kaart de lokale kalenderdag. |
+
 **Nieuwe ontwikkelomgeving:** installeer JDK 17 en Android Studio met Android SDK Platform 36, Build Tools 36.0.0, Platform-Tools en Android Emulator. Maak via Device Manager een *Android TV (1080p)* met een **Google TV**-systeemimage. De Windows-starter verwacht de AVD-naam `AstroWeb_Google_TV`. Open de map `tv` als Android-project en kies Run, of voer in deze map `gradlew.bat assembleDebug` en daarna de starter uit. Na codewijzigingen installeert Android Studio de nieuwe build met Run.
 
 **Persoonlijke hemelatlas en Nachtpanorama:** open ze bovenaan de galerij. Met ←/→ selecteer je een opname; het gouden kader en de naam volgen je keuze. ↑/↓ zoomt op de kaart. OK vliegt naar de geselecteerde opname en opent het origineel liggend op volledig scherm. In de foto zoom je met ↑/↓ tot 10×; OK wisselt naar schuiven met alle vier de pijlen. Terug herstelt het gekozen kader en de vorige kaartschaal, ook als je de vlucht onderweg afbreekt. Twee opnamen van hetzelfde object blijven afzonderlijk selecteerbaar.
@@ -26,6 +36,16 @@ De tv draait staande foto’s en films bij weergave 90° linksom. De galerij beh
 
 A read-only local Google TV prototype for the NAS gallery. Browse every published NAS object with the D-pad. The gallery refreshes on entry, on return and every minute while visible. Opening a capture plays its gallery film first, falling back to the photo when no film is available. **Full screen** fits the complete frame, Use up/down for 1–10× photo zoom in steps of 0.2× and OK to switch to four-way panning or back to zoom. Back restores the controls. Back again restores gallery focus. The language button remembers your preference.
 
+Choose **Viewing modes** above the gallery, or **Explore** inside a capture. Choose a mode, then a capture or starting photo. The gallery selection is highlighted. Comparison also asks for a second date.
+
+| Viewing mode | Remote controls |
+|---|---|
+| Evening programme | Pick 5 or 15 minutes, starting with the selected capture. Left/right skips chapters and OK pauses. Sky and archive journeys join the programme when their movies are already available locally. |
+| Compare captures | Choose a second date for the same object. Gaia or FITS calibration aligns the second image to the first. OK cycles through wipe, blink, shared zoom and pan. Beyond the overlap, the first photo remains visible. |
+| What am I seeing? | Left/right selects a catalogue centre in your original. OK switches between the detail and the overview. Up/down changes capture. Right after the last feature continues to the next photograph. Hold OK to open a related archive journey when available. |
+| Photo frame | Show every capture for one hour, either still or drifting slowly. OK opens the current photo for zooming. Back returns to the same slide. |
+| Capture night and tonight | Up/down changes the date at the capture site. Left/right changes the time by ten minutes. OK animates the track. The chart shows altitude and the time of the highest sampled point. Solar captures use the local calendar day. |
+
 Open this directory in Android Studio with JDK 17, SDK 36, Build Tools 36.0.0 and a 1080p Google TV AVD. Use Run to install and launch. On the configured Windows PC, **Start-AstroWeb-TV.cmd** opens the app in the **AstroWeb_Google_TV** emulator. Arrow keys, Enter and Esc simulate the remote. The APK requires network access to the AstroWeb NAS.
 
 Choose **Journeys** and select the sky journey or a Hubble destination for the active capture. OK starts, pauses or resumes fullscreen playback. Back returns to the selected destination. Portrait photos and films turn counterclockwise for landscape viewing. Gallery posters retain their orientation. The Windows starter enables hardware keyboard input on this AVD so its clickable **Extended Controls → Directional pad** works after a cold boot.
@@ -38,7 +58,7 @@ Bij het zoomen op de Poolkaart en Melkweg blijft de objectnaam in beeld. Pauzeer
 
 **Rotatie / Rotation:** kies **Draai 90°** in de viewer. Op de foto in volledig scherm draait lang OK een kwartslag. Bij gewone films draaien ←/→ het beeld tijdens het afspelen. Hubble-reizen gebruiken de geregistreerde oriëntatie van het bestemmingsbeeld tijdens de hele vlucht. De NAS maakt per bestemming een aparte liggende tv-versie; de tv toont de credit rechtop. / Use **Rotate 90°** in the viewer, hold OK on fullscreen photos, or use left/right during ordinary fullscreen films. Hubble journeys have a fixed orientation determined by the destination image. With TV landscape rendering on the NAS, credits stay upright on the TV.
 
-De volledige objectinformatie staat boven de posterrij. Onder elke poster staat de korte objectnaam. De app gebruikt de HTTPS-reverse-proxy van de NAS (astroweb.ronamersfoort.synology.me). / The gallery places the full capture details above the posters and uses short object names beneath them. The app connects through the NAS HTTPS reverse proxy.
+De volledige objectinformatie staat boven de posterrij. Onder elke poster staat de korte objectnaam. De HTTPS-editie gebruikt het eigen serveradres dat je bij de eerste start invoert. / The gallery places the full capture details above the posters and uses short object names beneath them. The HTTPS edition uses the server address you enter at first launch.
 
 ### Spraak / Voice
 

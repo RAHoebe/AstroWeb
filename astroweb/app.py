@@ -273,7 +273,9 @@ def create_app(data_dir=None, testing=False):
         from .hubble import movie
         record=get_object(identifier)
         try:
-            path=movie(store,record,name,tv=request.args.get("view")=="tv")
+            path=movie(store,record,name,tv=request.args.get("view")=="tv", cached_only=request.args.get("cached")=="1")
+            if path is None:
+                abort(404)
         except requests.RequestException:
             return jsonify(error="hubble_unavailable"),503
         return send_file(path,mimetype="video/mp4",conditional=True,max_age=0)
@@ -304,7 +306,9 @@ def create_app(data_dir=None, testing=False):
         field = geometry(store, record)
         if field["kind"] == "missing":
             abort(404)
-        target = movie(store, record, field)
+        target = movie(store, record, field, cached_only=request.args.get("cached")=="1")
+        if target is None:
+            abort(404)
         return send_file(target, mimetype="video/mp4", conditional=True, max_age=0)
 
     @app.get("/atlas")
@@ -648,6 +652,24 @@ def create_app(data_dir=None, testing=False):
             record = attach_fits(store, record, path, observation)
             queue.request_alignment(identifier)
         return jsonify(object=present(record, True))
+
+    @app.get("/api/objects/<identifier>/tv-program")
+    def tv_program(identifier):
+        from .tv_modes import program
+        return jsonify(program(store, get_object(identifier)))
+
+    @app.get("/api/objects/<identifier>/night-tracks")
+    def night_tracks(identifier):
+        from .tv_modes import night_comparison
+        return jsonify(night_comparison(get_object(identifier)))
+
+    @app.get("/media/<identifier>/aligned/<other>")
+    def aligned_capture(identifier, other):
+        from .tv_modes import aligned_photo
+        first, second = get_object(identifier), get_object(other)
+        if first["id"] == second["id"] or group_id(first) != group_id(second):
+            abort(404)
+        return send_file(aligned_photo(store, first, second), mimetype="image/webp", conditional=True, max_age=0)
 
     @app.get("/api/objects/<identifier>/sky")
     def sky(identifier):

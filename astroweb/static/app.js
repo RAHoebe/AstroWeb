@@ -400,13 +400,39 @@ async function openStudio(){
 }
 $('login-form').addEventListener('submit',async event=>{event.preventDefault();$('login-submit').disabled=true;try{const setup=!state.session.initialized;const result=await api(setup?'/api/setup':'/api/login',{method:'POST',body:{password:$('password').value}});state.session={...state.session,csrf:result.csrf,authenticated:true,initialized:true};$('password').value='';message('login-error','');await openStudio();}catch(e){message('login-error',errorText(e),true);}finally{$('login-submit').disabled=false;}});
 $('logout').addEventListener('click',async()=>{try{const result=await api('/api/logout',{method:'POST'});state.session={...state.session,csrf:result.csrf,authenticated:false};newObject();await openStudio();}catch(e){toast(errorText(e));}});
-async function refreshAdmin(){const response=await api('/api/admin/objects');state.adminObjects=response.objects;state.jobs=response.jobs;renderAdminList();renderJobs();
+let adminRequest=0, lastAdminResponse=0;
+async function refreshAdmin(){
+  const request=++adminRequest;
+  const response=await api('/api/admin/objects');
+  if(request<lastAdminResponse)return;
+  lastAdminResponse=request;
+  state.adminObjects=response.objects;state.jobs=response.jobs;renderAdminList();renderJobs();
   if(state.selected){
     const updated=state.adminObjects.find(o=>o.id===state.selected.id);
     if(updated){state.selected=updated;showVersions();renderChoice();}
   }
 }
-function renderAdminList(){const list=$('admin-object-list');list.replaceChildren();for(const object of state.adminObjects){const button=node('button','admin-object'+(state.selected?.id===object.id?' selected':''),captureLabel(object));const name=local(object.metadata.name);if(name&&name!==captureLabel(object))button.append(node('span','admin-name',name));if(object.capture_date)button.append(node('small','admin-name',object.capture_date.slice(0,10)));button.addEventListener('click',()=>selectObject(object.id));list.append(button);}}
+function studioLabel(object){
+  const seen=new Set();
+  function distinct(value){
+    return (value||'').split('·').map(part=>part.trim()).filter(part=>{
+      const key=part.toLowerCase().replace(/[\s_]+/g,'');
+      if(!key||seen.has(key))return false;
+      seen.add(key);return true;
+    }).join(' · ');
+  }
+  return [distinct(captureLabel(object)),distinct(local(object.metadata.name))].filter(Boolean);
+}
+function renderAdminList(){
+  const list=$('admin-object-list');list.replaceChildren();
+  for(const object of state.adminObjects){
+    const [label,name]=studioLabel(object);
+    const button=node('button','admin-object'+(state.selected?.id===object.id?' selected':''),label);
+    if(name)button.append(node('span','admin-name',name));
+    if(object.capture_date)button.append(node('small','admin-name',object.capture_date.slice(0,10)));
+    button.addEventListener('click',()=>selectObject(object.id));list.append(button);
+  }
+}
 function renderJobs(){const list=$('job-list');list.replaceChildren();if(!state.jobs.length){list.append(node('p','small muted',t('noJobs')));return;}const active=j=>['running','queued','cancelling'].includes(j.status);for(const job of [...state.jobs.filter(active),...state.jobs.filter(j=>!active(j)).slice(0,8)]){const row=node('div','job-item');row.append(node('strong','',job.object_id.replace('_',' ')),node('span','',t(job.status==='running'&&job.stage==='journey'?'journeyPreparing':job.status)+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));if(['running','queued'].includes(job.status)){const p=node('progress');p.max=100;p.value=job.progress;row.append(p);
     const cancel=node('button','button secondary cancel-render',t('cancelRender'));
     cancel.addEventListener('click',async()=>{cancel.disabled=true;try{await api('/api/admin/jobs/'+job.id+'/cancel',{method:'POST'});await refreshAdmin();}catch(e){toast(errorText(e));cancel.disabled=false;}});
@@ -493,6 +519,7 @@ $('solar-body').addEventListener('change',updateCaptureKind);
 function newObject(){clearImportControls();state.selected=null;setFocusImage(null);showVersions();state.files=[];$('upload-form').reset();$('upload-section').hidden=false;$('edit-section').hidden=true;$('metadata-section').hidden=true;$('preview-button').hidden=true;$('preview-image').hidden=true;$('render-button').querySelector('[data-i18n]').dataset.i18n='createFilm';$('render-button').querySelector('[data-i18n]').textContent=t('createFilm');fillParams();updateCaptureKind();renderFileList();renderAdminList();message('studio-message','');}
 $('new-object').addEventListener('click',newObject);
 function renderChoice(){
+  $('edit-object-title').textContent=studioLabel(state.selected).join(' · ');
   const g=state.selected?.gaia||{};
   $('gaia-status').textContent=g.status&&!state.selected?.capture_kind?t('gaia_'+g.status)+(g.matches?' · '+g.matches+' '+t('gaiaStars')+' · '+g.median_arcsec+'″':''):'';
   $('gaia-retry').hidden=['pending','running','solved','not_applicable'].includes(g.status);
@@ -501,7 +528,7 @@ $('gaia-retry').addEventListener('click',async()=>{
   try{await api('/api/admin/objects/'+state.selected.id+'/align',{method:'POST'});await refreshAdmin();}
   catch(e){toast(errorText(e));}
 });
-function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;editPanorama(object,state.adminObjects,api);$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'?discover=1#original';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;$('edit-object-title').textContent=captureLabel(object)+' · '+local(object.metadata.name);setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);updateCaptureKind();const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
+function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;editPanorama(object,state.adminObjects,api);$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'?discover=1#original';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);updateCaptureKind();const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
 let pendingLandmark=null;
 const draftKey=id=>'astroweb-discovery-draft-'+id;
 function clearImportControls(){
@@ -618,6 +645,7 @@ $('observation-form').addEventListener('submit',async event=>{event.preventDefau
 let focusGeneration=0;
 async function setFocusImage(source){
   const generation=++focusGeneration;
+  $('film-orientation').hidden=true;
   resetAutoRoute();$('auto-tools').hidden=true;
   if(uploadPosterUrl){URL.revokeObjectURL(uploadPosterUrl);uploadPosterUrl=null;}
   const img=$('edit-poster');
@@ -639,7 +667,9 @@ async function setFocusImage(source){
 function drawFocusImage(){
   const img=$('edit-poster'), canvas=$('rotated-focus');
   if(!img.complete||!img.naturalWidth)return;
-  const rotate=img.naturalWidth>img.naturalHeight && $('parameters-form').elements.orientation.value==='portrait';
+  const landscape=img.naturalWidth>img.naturalHeight;
+  $('film-orientation').hidden=!landscape;
+  const rotate=landscape && $('parameters-form').elements.orientation.value==='portrait';
   img.hidden=rotate;canvas.hidden=!rotate;
   if(rotate){
     const ratio=Math.min(1,1400/img.naturalWidth);
@@ -666,7 +696,7 @@ $('parameters-form').elements.orientation.addEventListener('change',()=>{
   }
   drawFocusImage();updateFocusMarker();
 });
-$('edit-poster').addEventListener('error',()=>{$('focus-image').hidden=true;$('auto-tools').hidden=true;resetAutoRoute();});
+$('edit-poster').addEventListener('error',()=>{$('film-orientation').hidden=true;$('focus-image').hidden=true;$('auto-tools').hidden=true;resetAutoRoute();});
 function clamp(value,low,high){return Math.max(low,Math.min(high,value));}
 
 // Background-plane geometry at peak zoom (Scene.camera/warp at phase 0.5).
@@ -818,9 +848,12 @@ function showVersions(){
   const versions=state.selected?.versions||[];
   const list=$('version-list');
   const previous=list.value;
-  const signature=JSON.stringify([language,...versions.map(v=>[v.id,v.selected])]);
+  const capture=state.selected?.id||'';
+  const signature=JSON.stringify([capture,language,...versions.map(v=>[v.id,v.selected])]);
   if(list.dataset.signature===signature)return;
-  list.dataset.signature=signature;
+  const newest=versions[0];
+  const newlyRendered=list.dataset.capture===capture && newest && !Array.from(list.options).some(option=>option.value===newest.id);
+  list.dataset.signature=signature;list.dataset.capture=capture;
   $('versions-section').hidden=!versions.length;
   list.replaceChildren();
   versions.forEach((v,i)=>{
@@ -828,7 +861,7 @@ function showVersions(){
     const label=t('version')+' '+(versions.length-i)+' · '+date+(v.selected?' · '+t('inGallery'):'');
     list.add(new Option(label,v.id));
   });
-  const preferred=versions.find(v=>v.id===previous)||versions.find(v=>v.selected)||versions[0];
+  const preferred=newlyRendered?newest:versions.find(v=>v.id===previous)||versions.find(v=>v.selected)||newest;
   if(preferred)list.value=preferred.id;
   reviewVersion();
 }

@@ -67,12 +67,15 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
         val html=read(asset)
         val scripts=if(asset=="map.html") html.replace("__MAP_MOTION__",read("map-motion.js"))
                     else html.replace("__PHOTO_CAMERA__",read("photo-camera.js"))
-        scripts.replace("__ROTATION__",turns.toString())
+        val source=if(asset=="viewing.html") scripts.replace("__VIEWING__",read("viewing.js"))
+            .replace("__NIGHT_CHART__",read("night-chart.js")) else scripts
+        source.replace("__ROTATION__",turns.toString())
             .replace("__CAPTURE__",Uri.encode(id)).replace("__MAP__",mode).replace("__LANG__",if(en) "en" else "nl")
     }
     var web by remember { mutableStateOf<WebView?>(null) }
     val focus=remember { FocusRequester() }
     LaunchedEffect(web,foreground) {
+        if(asset=="viewing.html") web?.evaluateJavascript("window.viewActive?.($foreground)",null)
         if(!foreground && asset=="map.html") web?.evaluateJavascript("window.mapKey?.('pause')",null)
     }
     if(leave!=null) BackHandler {
@@ -89,9 +92,9 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
             KeyEvent.KEYCODE_DPAD_LEFT -> "previous"
             KeyEvent.KEYCODE_DPAD_RIGHT -> "next"
             KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER -> if(asset=="map.html") "toggle" else "select"
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> if(asset=="map.html") "toggle" else return@onPreviewKeyEvent false
-            KeyEvent.KEYCODE_MEDIA_PLAY -> if(asset=="map.html") "play" else return@onPreviewKeyEvent false
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> if(asset=="map.html") "pause" else return@onPreviewKeyEvent false
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> if(asset=="map.html" || asset=="viewing.html") "toggle" else return@onPreviewKeyEvent false
+            KeyEvent.KEYCODE_MEDIA_PLAY -> if(asset=="map.html" || asset=="viewing.html") "play" else return@onPreviewKeyEvent false
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> if(asset=="map.html" || asset=="viewing.html") "pause" else return@onPreviewKeyEvent false
             else -> return@onPreviewKeyEvent false
         }
         if(command=="select") {
@@ -111,10 +114,16 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
         true
     }.focusable()) {
         AndroidView(factory={ ctx -> WebView(ctx).apply {
+            // WebView treats a wrap-content height as document-driven, even when Compose
+            // measures it fullscreen. Give viewport units the actual display height.
+            layoutParams=android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+            keepScreenOn=asset=="viewing.html"
             isFocusable=false; isFocusableInTouchMode=false
             setBackgroundColor(android.graphics.Color.rgb(8,15,25))
             settings.javaScriptEnabled=true
             settings.domStorageEnabled=true
+            if(asset=="viewing.html") settings.mediaPlaybackRequiresUserGesture=false
             settings.allowFileAccess=false;settings.allowContentAccess=false
             webViewClient=object:WebViewClient() {
                 override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest)=true
