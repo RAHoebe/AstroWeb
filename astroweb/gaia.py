@@ -10,6 +10,7 @@ import astropy.units as u
 import cv2
 import numpy as np
 import requests
+from . import external_http
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.wcs.utils import fit_wcs_from_points
@@ -136,7 +137,7 @@ def catalog_stars(store, ra, dec, radius):
     query = (f"SELECT TOP 10000 ra,dec,phot_g_mean_mag FROM gaiadr3.gaia_source WHERE "
              f"1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.7f},{dec:.7f},{radius:.6f})) "
              "AND phot_g_mean_mag<14 ORDER BY phot_g_mean_mag")
-    response = requests.get("https://gaia.aip.de/tap/sync", params={"REQUEST":"doQuery","LANG":"ADQL",
+    response = external_http.get("https://gaia.aip.de/tap/sync", params={"REQUEST":"doQuery","LANG":"ADQL",
                             "QUERY":query, "FORMAT":"votable"}, timeout=(5,35))
     response.raise_for_status()
     table = Table.read(io.BytesIO(response.content), format="votable")
@@ -152,7 +153,7 @@ def pointing(record):
     if obs.get("ra") is not None and obs.get("dec") is not None:
         return float(obs["ra"]), float(obs["dec"])
     name = record["metadata"].get("target") or record["id"].replace("_", " ")
-    response = requests.get("https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/SNV?"+quote(name,safe=""), timeout=(4,12))
+    response = external_http.get("https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/SNV?"+quote(name,safe=""), timeout=(4,12))
     response.raise_for_status()
     for resolver in ET.fromstring(response.content).iter("Resolver"):
         ra, dec = resolver.findtext("jradeg"), resolver.findtext("jdedeg")

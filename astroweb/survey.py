@@ -10,6 +10,7 @@ import astropy.units as u
 import cv2
 import numpy as np
 import requests
+from . import external_http
 from astropy.coordinates import SkyCoord
 from astropy_healpix import HEALPix
 
@@ -34,7 +35,7 @@ def tile(store, order, index, survey):
         if image is not None and image.shape[:2] == (512,512):
             return image
     url = f"{SURVEYS[survey]}/Norder{order}/Dir{index//10000*10000}/Npix{index}.jpg"
-    response = requests.get(url, timeout=(4, 10))
+    response = external_http.get(url, timeout=(4, 10))
     response.raise_for_status()
     image = cv2.imdecode(np.frombuffer(response.content,np.uint8), cv2.IMREAD_COLOR)
     if image is None or image.shape[:2] != (512,512):

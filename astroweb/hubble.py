@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import cv2
 import numpy as np
 import requests
+from . import external_http
 from astropy.wcs import WCS
 
 from . import skymap
@@ -161,7 +162,7 @@ def tile(store,level,col,row):
             return image
     prefix=sum(math.ceil(a/256)*math.ceil(b/256) for a,b in sizes[:level])
     group=(prefix+row*math.ceil(w/256)+col)//256
-    response=requests.get(f"{TILES}/TileGroup{group}/{level}-{col}-{row}.jpg",timeout=(5,20))
+    response=external_http.get(f"{TILES}/TileGroup{group}/{level}-{col}-{row}.jpg",timeout=(5,20))
     response.raise_for_status()
     image=cv2.imdecode(np.frombuffer(response.content,np.uint8),cv2.IMREAD_COLOR)
     if image is None or image.shape[:2]!=expected:
@@ -239,7 +240,7 @@ def render(store,record,name,registration_matrix,path,archive=None,tv=False):
                 payload=encoded.tobytes()
             else:
                 url=plate.get("url",f"https://cdn.esahubble.org/archives/images/large/{name}.jpg")
-                reply=requests.get(url,timeout=(5,30))
+                reply=external_http.get(url,timeout=(5,30))
                 reply.raise_for_status()
                 payload=reply.content
                 decoded=cv2.imdecode(np.frombuffer(payload,np.uint8),cv2.IMREAD_COLOR)

@@ -65,7 +65,17 @@ class MainActivity : ComponentActivity() {
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         if(savedInstanceState==null)spoken=spokenIntent(intent)
-        setContent { MaterialTheme { App(foreground.value,spoken,{ spoken=null },::listen) } }
+        val settings=getSharedPreferences("viewing",0)
+        server=settings.getString("server","").orEmpty()
+        setContent { MaterialTheme {
+            var setup by rememberSaveable { mutableStateOf(server.isEmpty()) }
+            if(setup){
+                BackHandler(enabled=server.isNotEmpty()) { setup=false }
+                ServerSetup(server,settings.getBoolean("english",resources.configuration.locales[0].language!="nl")) { origin ->
+                    server=origin;settings.edit().putString("server",origin).apply();setup=false
+                }
+            } else key(server) { App(foreground.value,spoken,{ spoken=null },::listen) {setup=true} }
+        } }
     }
 }
 
@@ -86,7 +96,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun App(foreground:Boolean,spoken:Spoken?,handled:()->Unit,listen:(Boolean)->Unit) {
+@Composable private fun App(foreground:Boolean,spoken:Spoken?,handled:()->Unit,listen:(Boolean)->Unit,configure:()->Unit) {
     val prefs = LocalContext.current.getSharedPreferences("viewing", 0)
     var en by remember { mutableStateOf(prefs.getBoolean("english", false)) }
     var selected by rememberSaveable { mutableStateOf("") }
@@ -139,17 +149,18 @@ class MainActivity : ComponentActivity() {
                     Spacer(Modifier.height(16.dp))
                     Action(if (en) "Try again" else "Opnieuw proberen", Modifier.focusRequester(focus)) { retry++ }
                 }
+                Action("Server",run=configure)
                 LaunchedEffect(Unit) { focus.requestFocus() }
             }
             list == null -> Text(if (en) "Loading gallery…" else "Galerij laden…", Modifier.align(Alignment.Center), color = light)
-            else -> Gallery(list, selected, en, lastSurvey, { listen(en) }, { selected = it }, { lastSurvey=null;entry="film"; opened = it }, { survey=it }) {
+            else -> Gallery(list, selected, en, lastSurvey, configure, { listen(en) }, { selected = it }, { lastSurvey=null;entry="film"; opened = it }, { survey=it }) {
                 en = !en; prefs.edit().putBoolean("english", en).apply()
             }
         }
     }
 }
 
-@Composable private fun Gallery(photos: List<Photo>, selected: String, en: Boolean, lastSurvey: String?, voice:()->Unit, select: (String)->Unit,
+@Composable private fun Gallery(photos: List<Photo>, selected: String, en: Boolean, lastSurvey: String?, configure:()->Unit, voice:()->Unit, select: (String)->Unit,
                                 open: (String)->Unit, openSurvey: (String)->Unit, toggleLanguage: ()->Unit) {
     val current = photos.find { it.id == selected } ?: photos.first()
     val ids=remember(photos) { photos.map { it.id } }
@@ -187,6 +198,8 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.width(14.dp))
                 Text((if (en) "Gallery" else "Galerij")+"   "+(photos.indexOf(current)+1)+" / "+photos.size, color = quiet, fontSize = 17.sp)
                 Spacer(Modifier.weight(1f))
+                Action("Server",run=configure)
+                Spacer(Modifier.width(8.dp))
                 Action(if(en) "Speak" else "Spreken",icon=R.drawable.ic_mic,run=voice)
                 Spacer(Modifier.width(8.dp))
                 Action(if(en) "Sky atlas" else "Hemelatlas",Modifier.focusRequester(atlasFocus),icon=R.drawable.ic_atlas) { openSurvey("atlas") }

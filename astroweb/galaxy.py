@@ -100,7 +100,7 @@ def journey_labels(record, field):
         name,ra,dec = rows[index][:3]
         candidates.append({"id":name,"nl":name,"en":name,"ra":ra,"dec":dec,"detail":True})
     target = key(record["metadata"].get("target") or record["id"])
-    known = target_entry(target)
+    known = None if field.get("solar") else target_entry(target)
     if known:
         candidates = [r for r in candidates if r["id"] != known["id"]]
     candidates = [r for r in candidates if key(r["id"]) != target]

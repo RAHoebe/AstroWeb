@@ -57,3 +57,48 @@ def test_existing_sun_gets_bilingual_facts_and_retains_personal_text():
     assert value["description"]["en"]=="My own observing notes."
     assert value["sources"][0]["url"]=="https://science.nasa.gov/sun/facts/"
     assert old["description"]["nl"]=="Zon in ons zonnestelsel."
+
+
+@pytest.mark.parametrize("body,ra,dec,diameter",[
+    ("SUN",160.395204384,8.273883003,1901.093),
+    ("MOON",28.938347837,16.046291066,1894.095),
+    ("MARS",104.601943361,23.302013159,5.071),
+    ("JUPITER",136.075371056,17.289956419,31.840),
+])
+def test_journey_matches_topocentric_horizons(body,ra,dec,diameter):
+    # Horizons observer table: coord@399, east 5.38, north 52.15, sea level;
+    # 2026-Sep-01 13:54:25.201 UTC. Q1 astrometric ICRF, Q13 angular diameter.
+    # Built-in ephemerides and a mean rather than equatorial radius are approximate.
+    field=geometry(None,capture(body,ra=0,dec=0))
+    from astropy.coordinates import SkyCoord
+    assert SkyCoord(*field["center"],unit="deg").separation(SkyCoord(ra,dec,unit="deg")).deg<.04
+    assert field["diameter_deg"]*3600==pytest.approx(diameter,rel=.035)
+    assert field["utc"].startswith("2026-09-01T13:54:25.201")
+    if body=="SUN":assert field["constellation"]=="Leo"
+
+
+def test_date_only_fits_and_manual_time_override(tmp_path):
+    from astropy.io import fits
+    from astroweb.observation import read_observation,observation_overrides
+    hdu=fits.PrimaryHDU(np.zeros((20,20),dtype=np.uint8));hdu.header["DATE-OBS"]="2026-09-01"
+    path=tmp_path/"moon.fits";hdu.writeto(path)
+    obs=read_observation(path);r=capture("MOON",**obs)
+    assert geometry(None,r)["day_only"] and geometry(None,r)["utc"].startswith("2026-09-01T10:00")
+    r["observation"]=observation_overrides(obs,{"date_obs":"2026-09-01T19:00:00+02:00"})
+    assert not geometry(None,r)["day_only"]
+    assert geometry(None,r)["utc"].startswith("2026-09-01T17:00")
+
+
+def test_off_centre_solar_disk_lands_on_projected_position():
+    import cv2
+    from astroweb import journey
+    photo=np.zeros((160,200,3),np.uint8);cv2.circle(photo,(62,89),43,(220,220,220),-1)
+    anchor,r=journey.disk_in_photo(photo);np.testing.assert_allclose(anchor,[62,89],atol=.5)
+    assert r==pytest.approx(43,abs=.6)
+    for t in [.66,.75,.9,1]:
+        scene=np.zeros((journey.HEIGHT,journey.WIDTH,3),np.uint8)
+        target=np.array([580.0,317.0])
+        journey.solar_inset(scene,photo,anchor,r,22,target,t)
+        y,x=np.nonzero(scene[:,:,0]>50)
+        np.testing.assert_allclose([x.mean(),y.mean()],target,atol=1.7)
+    _,r=journey.disk_in_photo(photo[:85]);assert r is None

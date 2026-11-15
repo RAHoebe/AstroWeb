@@ -204,6 +204,47 @@ def landing(quad, width, height, progress, quarter=None):
                       + (1-progress)*center + progress*np.array([(WIDTH-1)/2,(HEIGHT-1)/2])), mirrored
 
 
+def disk_in_photo(photo):
+    """Centre and radius only for an isolated, nearly circular, fully visible disk."""
+    gray=cv2.cvtColor(photo,cv2.COLOR_BGR2GRAY)
+    _,mask=cv2.threshold(gray,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    contours,_=cv2.findContours(mask,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        outline=max(contours,key=cv2.contourArea)
+        x,y,w,h=cv2.boundingRect(outline)
+        center,radius=cv2.minEnclosingCircle(outline)
+        if (min(w,h)>=10 and x>0 and y>0 and x+w<gray.shape[1] and y+h<gray.shape[0]
+                and cv2.contourArea(outline)>.89*math.pi*radius**2):
+            return np.array(center),radius
+    return (np.array(gray.shape[::-1])-1)/2,None
+
+
+def projected_disk(field,meridian):
+    body=SkyCoord(*field["center"],unit="deg")
+    limb=body.directional_offset_by(np.arange(0,360,90)*u.deg,field["diameter_deg"]*.5*u.deg).galactic
+    xy=hammer((limb.l.radian-meridian+np.pi)%(2*np.pi)-np.pi,limb.b.radian)*[2,1]
+    return math.sqrt(abs(np.linalg.det([xy[0]-xy[2],xy[1]-xy[3]])))
+
+
+def solar_inset(scene,photo,anchor,radius,diameter_px,target,t):
+    # The disk itself stays on the ephemeris ray. Off-centre photos keep their
+    # margins; a crescent or detail without a measured limb opens as a close-up.
+    x,y=anchor
+    h,w=photo.shape[:2]
+    final=min(.44*WIDTH/max(1,x,w-1-x),.44*HEIGHT/max(1,y,h-1-y))
+    start=min(final,diameter_px/(2*radius) if radius else 18/max(w,h))
+    progress=smooth((t-.56)/.36)
+    factor=max(1e-6,start)*(final/max(1e-6,start))**progress
+    iw,ih=max(1,round(w*factor)),max(1,round(h*factor))
+    left,top=np.rint(target-(anchor+.5)*[iw/w,ih/h]+.5).astype(int)
+    x0,y0=max(0,left),max(0,top);x1,y1=min(WIDTH,left+iw),min(HEIGHT,top+ih)
+    if x1<=x0 or y1<=y0:return
+    inset=cv2.resize(photo,(iw,ih),interpolation=cv2.INTER_AREA if factor<1 else cv2.INTER_LINEAR)
+    alpha=smooth((t-.47)/.20)
+    roi=scene[y0:y1,x0:x1]
+    roi[:]=cv2.addWeighted(roi,1-alpha,inset[y0-top:y1-top,x0-left:x1-left],alpha,0)
+
+
 def render_journey(store, record, field, output, plates, progress=None):
     from .survey import blend_details, survey_for
     credit = "Pan-STARRS1 / CDS" if survey_for(field) == "PanSTARRS" else "DSS2 / STScI / CDS"
@@ -216,10 +257,8 @@ def render_journey(store, record, field, output, plates, progress=None):
     photo = cv2.imread(str(store.path(record["poster"])))
     ph,pw = photo.shape[:2]
     if field.get("solar"):
-        scale = min(WIDTH*.88/pw, HEIGHT*.88/ph)
-        inset = cv2.resize(photo, (max(1,round(pw*scale)), max(1,round(ph*scale))))
-        ih, iw = inset.shape[:2]
-        iy, ix = (HEIGHT-ih)//2, (WIDTH-iw)//2
+        anchor,radius=disk_in_photo(photo)
+        sky_diameter=projected_disk(field,meridian)
     src = np.float32([[0,0],[pw-1,0],[pw-1,ph-1],[0,ph-1]])
     start_scale = WIDTH*.46
     extent = np.ptp(points,axis=0)
@@ -279,7 +318,7 @@ def render_journey(store, record, field, output, plates, progress=None):
                     framed = scene.copy()
                     cv2.polylines(framed,[polygon],True,(140,204,244),1,cv2.LINE_AA)
                     scene = cv2.addWeighted(framed,border,scene,1-border,0)
-            if .06<t<.53 or not has_frame:
+            if (.06<t<.53 or not has_frame) and not (field.get("solar") and t>.62):
                 radius=round(9+10*(1-smooth((t-.06)/.32)))
                 for angle in (0,90,180,270):
                     cv2.ellipse(scene,(cx,cy),(radius,radius),0,angle+12,angle+74,(165,214,238),1,cv2.LINE_AA)
@@ -290,15 +329,17 @@ def render_journey(store, record, field, output, plates, progress=None):
                 draw_label(labelled,record.get("catalog_id",record["id"]).replace("_"," "),(32,47),.82)
                 draw_label(labelled,f"l {np.rad2deg(mean_lon)%360:06.2f}   b {np.rad2deg(lat.mean()):+.2f}",
                            (33,70),.44,(177,190,202))
+                if field.get("solar"):
+                    ra,dec=field["center"]
+                    day="~ " if field["day_only"] else ""
+                    draw_label(labelled,f'{field["constellation"]}   RA {ra:.3f}   Dec {dec:+.3f}',(33,93),.48)
+                    draw_label(labelled,day+field["utc"][:16].replace("T"," ")+" UTC",(33,116),.45)
                 if detailed:
                     draw_label(labelled,credit,(32,HEIGHT-25),.5)
                 draw_label(labelled,"ESO/S. Brunier",(WIDTH-163,HEIGHT-25),.5)
                 scene = cv2.addWeighted(labelled,opacity,scene,1-opacity,0)
-            if field.get("solar") and t>.69:
-                # The disk has no measured orientation relative to the star field.
-                region = scene[iy:iy+ih,ix:ix+iw]
-                alpha = smooth((t-.69)/.22)
-                region[:] = cv2.addWeighted(region,1-alpha,inset,alpha,0)
+            if field.get("solar") and t>.47:
+                solar_inset(scene,photo,anchor,radius,sky_diameter*scale,quad[0],t)
             process.stdin.write(scene.tobytes())
         process.stdin.close()
         if process.wait(timeout=60):

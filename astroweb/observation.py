@@ -66,7 +66,7 @@ def read_observation(path):
     if integration is None and exposure is not None and frames is not None:
         integration = exposure * frames
         integration_source = "EXPTIME × NCOMBINE"
-    return {"source": "FITS", "filename": path.name, "date_obs": date_obs, "time_source": "DATE-OBS", "time_comment": date_comment, "time_scale": scale.upper(), "time_scale_assumed": "TIMESYS" not in raw, "ra": ra, "dec": dec, "coordinate_source": coord_source, "latitude": finite(raw.get("SITELAT", raw.get("OBSGEO-B")), -90, 90), "longitude": finite(raw.get("SITELONG", raw.get("OBSGEO-L")), -180, 180), "elevation": finite(raw.get("SITEELEV", raw.get("OBSGEO-H", 0)), -500, 9000), "timezone": "Europe/Amsterdam", "exposure": exposure, "frames": int(frames) if frames else None, "integration": integration, "integration_source": integration_source, "telescope": str(raw.get("TELESCOP", "")).split("_")[0], "filter": str(raw.get("FILTER", "")).strip(), "mosaic": str(raw.get("WZNOTE", "")), "publish_location": False, "header": raw, "read_at": now()}
+    return {"source": "FITS", "filename": path.name, "date_obs": date_obs, "date_only": bool(date_obs and len(str(raw["DATE-OBS"]).strip())==10), "time_source": "DATE-OBS", "time_comment": date_comment, "time_scale": scale.upper(), "time_scale_assumed": "TIMESYS" not in raw, "ra": ra, "dec": dec, "coordinate_source": coord_source, "latitude": finite(raw.get("SITELAT", raw.get("OBSGEO-B")), -90, 90), "longitude": finite(raw.get("SITELONG", raw.get("OBSGEO-L")), -180, 180), "elevation": finite(raw.get("SITEELEV", raw.get("OBSGEO-H", 0)), -500, 9000), "timezone": "Europe/Amsterdam", "exposure": exposure, "frames": int(frames) if frames else None, "integration": integration, "integration_source": integration_source, "telescope": str(raw.get("TELESCOP", "")).split("_")[0], "filter": str(raw.get("FILTER", "")).strip(), "mosaic": str(raw.get("WZNOTE", "")), "publish_location": False, "header": raw, "read_at": now()}
 
 
 def attach_fits(store, record, source, observation=None):
@@ -107,6 +107,7 @@ def observation_overrides(original, raw):
             if stamp.tzinfo is None:
                 raise ValueError()
             result["date_obs"] = stamp.isoformat()
+            result["date_only"] = False
         except (ValueError, TypeError, AttributeError):
             raise ValueError("invalid_observation") from None
     if "publish_location" in raw:

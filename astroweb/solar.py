@@ -1,7 +1,9 @@
 """Supported Solar System capture identifiers and bilingual catalogue metadata."""
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from functools import lru_cache
 from zoneinfo import ZoneInfo
+
+import math
 
 import astropy.units as u
 from astropy.coordinates import EarthLocation, SkyCoord, get_body
@@ -91,6 +93,11 @@ def displayed_metadata(body, metadata):
     return value
 
 
+# Mean body radii in km (JPL planetary/satellite physical parameters; nominal solar radius).
+RADIUS_KM = dict(SUN=695700, MOON=1737.4, MERCURY=2439.4, VENUS=6051.8, MARS=3389.5,
+                 JUPITER=69911, SATURN=58232, URANUS=25362, NEPTUNE=24622)
+
+
 def observing_site(obs):
     if obs.get("latitude") is None or obs.get("longitude") is None:
         return (*CENTRAL_NL, 0., True)
@@ -99,23 +106,26 @@ def observing_site(obs):
 
 def observing_time(record):
     obs = record.get("observation") or {}
-    if obs.get("date_obs"):
-        return obs["date_obs"], False
-    if record.get("capture_date"):
-        day = date.fromisoformat(record["capture_date"])
+    stamp = obs.get("date_obs")
+    if stamp and not obs.get("date_only") and len(stamp)>10:
+        return stamp, False
+    value = stamp or record.get("capture_date")
+    if value:
+        day = date.fromisoformat(value[:10])
         return datetime.combine(day, time(12), ZoneInfo(obs.get("timezone") or "Europe/Amsterdam")).isoformat(), True
     return None, False
 
 
 @lru_cache(maxsize=128)
-def apparent_direction(body, stamp, lat, lon, height):
+def apparent_disk(body, stamp, lat, lon, height):
     when = Time(datetime.fromisoformat(stamp))
     site = EarthLocation.from_geodetic(lon*u.deg, lat*u.deg, height*u.m)
     with iers.conf.set_temp("auto_download", False), iers.conf.set_temp("auto_max_age", None):
         apparent = get_body(body.lower(), when, location=site, ephemeris="builtin")
         # Transform a unit direction so the origin change retains the observed line of sight.
         ray = SkyCoord(apparent.ra, apparent.dec, frame=apparent.frame.replicate_without_data()).icrs
-    return float(ray.ra.deg), float(ray.dec.deg)
+    diameter = 2*math.degrees(math.asin(RADIUS_KM[body.upper()]/apparent.distance.to_value(u.km)))
+    return float(ray.ra.deg), float(ray.dec.deg), diameter
 
 
 def pointing(record):
@@ -123,5 +133,8 @@ def pointing(record):
     if not stamp:
         return {"kind":"missing"}
     lat, lon, height, assumed = observing_site(record.get("observation") or {})
-    return {"kind":"point", "center":list(apparent_direction(record["body"],stamp,lat,lon,height)),
+    ra,dec,diameter=apparent_disk(record["body"],stamp,lat,lon,height)
+    return {"kind":"point", "center":[ra,dec], "diameter_deg":diameter,
+            "utc":datetime.fromisoformat(stamp).astimezone(timezone.utc).isoformat(),
+            "constellation":SkyCoord(ra*u.deg,dec*u.deg).get_constellation(short_name=True),
             "solar":True, "default_site":assumed, "day_only":approximate}

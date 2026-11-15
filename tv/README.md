@@ -1,5 +1,7 @@
 # AstroWeb TV
 
+[English installation guide and APK downloads](https://rahoebe.github.io/AstroWeb/#install). The HTTPS edition asks for your server at first launch. The LAN edition connects directly to the server on a trusted private network. Build the LAN app with `gradlew.bat assembleLan` or download the signed package from the TV release.
+
 ## Nederlands
 
 Lokale, alleen-lezen proef voor Google TV. De galerij toont alle gepubliceerde objecten in de volgorde van de NAS. Ze ververst bij openen, terugkeer naar de galerij en iedere minuut zolang de galerij zichtbaar is. De viewer begint met de galerijfilm en speelt die direct af. Zonder film opent de foto. Bij meerdere opnamen wisselt **Opnamedatum** zowel de foto als de film. De app gebruikt HTTPS en heeft geen Studio-account nodig.

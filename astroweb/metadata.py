@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 
 import requests
+from . import external_http
 
 from .store import now
 from .solar import BODIES,body_metadata
@@ -180,7 +181,7 @@ def refresh_metadata(metadata, force=False):
     external = None
     for query in queries:
         try:
-            response = requests.get("https://images-api.nasa.gov/search", params={"q": query, "media_type": "image", "page_size": 30}, headers={"User-Agent": "AstroWeb/0.1"}, timeout=(4, 12))
+            response = external_http.get("https://images-api.nasa.gov/search", params={"q": query, "media_type": "image", "page_size": 30}, headers={"User-Agent": "AstroWeb/0.1"}, timeout=(4, 12))
             response.raise_for_status()
         except requests.RequestException:
             break
@@ -204,7 +205,7 @@ def refresh_metadata(metadata, force=False):
                     "credit":"AstroWeb · NASA Science", "url":known["sources"][0]["url"]}
     if external is None:
         url = "https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/S?"+requests.utils.quote(target, safe="")
-        response = requests.get(url, timeout=(4,12))
+        response = external_http.get(url, timeout=(4,12))
         response.raise_for_status()
         try:
             resolver = ET.fromstring(response.content).find(".//Resolver")
@@ -224,7 +225,7 @@ def refresh_metadata(metadata, force=False):
     translate_url = os.environ.get("ASTROWEB_TRANSLATE_URL", "").rstrip("/")
     if translate_url and description and not external["text"]["nl"]:
         try:
-            translated = requests.post(translate_url + "/translate", json={"q": description, "source": "en", "target": "nl", "format": "text", "api_key": os.environ.get("ASTROWEB_TRANSLATE_KEY", "")}, timeout=(5, 60))
+            translated = external_http.post(translate_url + "/translate", json={"q": description, "source": "en", "target": "nl", "format": "text", "api_key": os.environ.get("ASTROWEB_TRANSLATE_KEY", "")}, timeout=(5, 60))
             translated.raise_for_status()
             value = translated.json().get("translatedText", "")
             if isinstance(value, str) and value.strip():

@@ -3,6 +3,6 @@ services:
   astroweb:
     environment:
       ASTROWEB_HTTPS: "1"
-      ASTROWEB_HOSTS: "localhost,127.0.0.1,astroweb.ronamersfoort.synology.me"
+      ASTROWEB_HOSTS: "localhost,127.0.0.1,${ASTROWEB_PUBLIC_HOST:-astro.example.org}"
     volumes:
       - /volume1/docker/astroweb/data:/data

@@ -10,10 +10,19 @@ android {
         applicationId = "nl.ronamersfoort.astroweb.tv"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.5.4"
+        versionCode = 10
+        versionName = "0.5.5"
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
+    defaultConfig { buildConfigField("boolean", "LAN_ONLY", "false") }
+    buildTypes {
+        create("lan") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".lan"
+            matchingFallbacks += "debug"
+            buildConfigField("boolean", "LAN_ONLY", "true")
+        }
+    }
 }
 
 dependencies {

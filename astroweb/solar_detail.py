@@ -6,6 +6,7 @@ import uuid
 import cv2
 import numpy as np
 import requests
+from . import external_http
 
 from .hubble import HEIGHT, WIDTH, encode
 from .journey import smooth
@@ -48,7 +49,7 @@ def mission_image(store, ident, file):
         if cached is not None:
             return cached
     url = f"https://images-assets.nasa.gov/image/{ident}/{ident}~{file}"
-    reply = requests.get(url, timeout=(5, 25))
+    reply = external_http.get(url, timeout=(5, 25))
     reply.raise_for_status()
     image = cv2.imdecode(np.frombuffer(reply.content, np.uint8), cv2.IMREAD_COLOR)
     if image is None:

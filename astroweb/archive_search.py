@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import cv2
 import numpy as np
 import requests
+from . import external_http
 from astropy.coordinates import SkyCoord
 
 from . import hst_archive, skymap
@@ -55,7 +56,7 @@ def esa_search(condition):
     query = (f"SELECT TOP 1000 {COLUMNS} FROM ivoa.ObsCore WHERE {condition} "
              "AND dataproduct_type='image' AND calib_level=3 AND obs_id LIKE 'hst_%' "
              "AND em_min>3.5e-7 AND em_max<1.05e-6 ORDER BY t_exptime DESC")
-    reply = requests.get(hst_archive.TAP, params={"REQUEST":"doQuery","LANG":"ADQL",
+    reply = external_http.get(hst_archive.TAP, params={"REQUEST":"doQuery","LANG":"ADQL",
                          "FORMAT":"csv","QUERY":query}, timeout=(4,20))
     reply.raise_for_status()
     reader = csv.DictReader(io.StringIO(reply.text))
@@ -101,7 +102,7 @@ def mast_search(filters):
         ("obs_collection", ["HST","HLA"]), ("dataproduct_type", ["image"]), ("calib_level", ["3"]))]
     query = {"service":"Mast.Caom.Filtered","params":{"columns":COLUMNS,"filters":filters},
              "format":"json","pagesize":1000,"page":1}
-    reply = requests.get(MAST, params={"request":json.dumps(query)}, timeout=(4,20))
+    reply = external_http.get(MAST, params={"request":json.dumps(query)}, timeout=(4,20))
     reply.raise_for_status()
     result = reply.json()
     if result.get("status") != "COMPLETE" or not isinstance(result.get("data"), list):

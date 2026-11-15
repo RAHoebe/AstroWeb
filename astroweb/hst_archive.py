@@ -11,6 +11,7 @@ import astropy.units as u
 import cv2
 import numpy as np
 import requests
+from . import external_http
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -62,7 +63,7 @@ def registered_cutout(store,record,entry):
     ident=entry["id"]
     path=folder/f"{ident}.fits"
     if not path.exists():
-        r=requests.get(CUTOUT,params={"red":ident,"format":"fits","size":SIZE,
+        r=external_http.get(CUTOUT,params={"red":ident,"format":"fits","size":SIZE,
                                      "RA":entry["ra"],"DEC":entry["dec"]},timeout=(5,35))
         r.raise_for_status()
         if len(r.content)>20*1024**2 or not r.content.startswith(b"SIMPLE"):
@@ -156,7 +157,7 @@ def find_fields(store,record):
     terms.update(regions)
     clause=" AND target_name IN ("+",".join(target_sql(k) for k in sorted(terms))+")"
     def search(statement):
-        r=requests.get(TAP,params=dict(REQUEST="doQuery",LANG="ADQL",FORMAT="csv",QUERY=statement),timeout=(6,55))
+        r=external_http.get(TAP,params=dict(REQUEST="doQuery",LANG="ADQL",FORMAT="csv",QUERY=statement),timeout=(6,55))
         r.raise_for_status()
         reader=csv.DictReader(r.text.splitlines())
         if not reader.fieldnames or 'obs_id' not in reader.fieldnames:raise ValueError("hubble_unavailable")

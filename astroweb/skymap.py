@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 import cv2
 import numpy as np
 import requests
+from . import external_http
 from astropy.coordinates import SkyCoord
 from PIL import Image
 
@@ -36,7 +37,7 @@ def catalogue(store):
     if saved and time.time() - saved["checked"] < 7 * DAY:
         return saved["rows"]
     try:
-        reply = requests.get(BASE + "data/data.json", timeout=(4, 10))
+        reply = external_http.get(BASE + "data/data.json", timeout=(4, 10))
         reply.raise_for_status()
         rows = reply.json()
         if not isinstance(rows, list):
@@ -85,7 +86,7 @@ def image_file(store, ident, digest):
 def fetch_image(store, ident):
     # NASA also supplies a lightbox image for entries without a full-size JPEG.
     for folder in ("full_size_image", "lightbox_images"):
-        with requests.get(f"{BASE}{folder}/{ident.lower()}.jpg", stream=True, timeout=(4, 12)) as reply:
+        with external_http.get(f"{BASE}{folder}/{ident.lower()}.jpg", stream=True, timeout=(4, 12)) as reply:
             if reply.status_code in (404, 410):
                 continue
             reply.raise_for_status()

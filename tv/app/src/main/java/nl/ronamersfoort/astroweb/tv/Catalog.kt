@@ -5,9 +5,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URL
-import javax.net.ssl.HttpsURLConnection
+import java.net.HttpURLConnection
 
-internal const val server = "https://astroweb.ronamersfoort.synology.me"
+internal var server: String = ""
 
 data class Words(val nl: String, val en: String) {
     fun get(english: Boolean) = if (english) en.ifBlank { nl } else nl.ifBlank { en }
@@ -47,7 +47,8 @@ internal fun Photo.gallerySummary(en:Boolean):String {
 }
 
 private suspend fun json(path: String): JSONObject = withContext(Dispatchers.IO) {
-    val connection = URL(server + path).openConnection() as HttpsURLConnection
+    val connection = URL(server + path).openConnection() as HttpURLConnection
+    connection.instanceFollowRedirects = false
     connection.connectTimeout = 8000
     connection.readTimeout = 15000
     try {

@@ -2,6 +2,8 @@
 
 [English](README.en.md) · [Nederlands](README.md) · [Credits and licences](THIRD_PARTY.md)
 
+[Screening room, example films and installation guide](https://rahoebe.github.io/AstroWeb/). For a NAS and Google TV on the same trusted network, this release includes standalone `compose.lan.yaml` and a LAN APK. Set `ASTROWEB_LAN_IP` to the private address of the server. This configuration defaults to `ASTROWEB_OFFLINE=1`, allowing local processing and playback of previously downloaded material.
+
 Turn your astrophotographs into a local film gallery. Animate stars and nebulosity separately, direct the camera through the photograph and publish your favourite version. Visitors can explore the original image, fly from an all-sky panorama to the actual field, and replay the sky on the night of the observation.
 
 ## Quick start
@@ -88,7 +90,7 @@ For other registered captures, Hubble searches the ESA Hubble Science Archive fo
 
 The collection atlas and polar chart draw the original-orientation poster inside the measured corners. Toggle the photo layer or compare two capture thumbnails. Original displays the estimated distance and visible projected width and height in light-years at the target distance.
 
-Choose **Solar System** to upload the Sun, Moon or a planet as a single PNG, JPEG or TIFF with optional FITS. Sky journey approaches the calculated sky direction and ends on your photograph. The Milky Way map marks the Solar System. Skykaart tracks the body through its local calendar day. With only a date, the reference time is local noon. When the observing location is missing, the maps use central Netherlands (52.15° N, 5.38° E). Detail flight offers credited mission imagery from SDO, LRO, Juno, Cassini and other missions. A recorded capture time allows an approximate geocentric distance. Surface dimensions require additional image calibration.
+Choose **Solar System** to upload the Sun, Moon or a planet as a single PNG, JPEG or TIFF with optional FITS. Sky journey follows the line of sight from the observing site at capture time and displays UTC, constellation and sky coordinates. A detected full disk grows from the target using its apparent diameter; a detail photograph appears as a close-up. The Milky Way map marks the Solar System. Skykaart tracks the body through its local calendar day. With only a date, the reference time is local noon. When the observing location is missing, the maps use central Netherlands (52.15° N, 5.38° E). Detail flight offers credited mission imagery from SDO, LRO, Juno, Cassini and other missions. A recorded capture time allows an approximate geocentric distance. Surface dimensions require additional image calibration.
 
 ### Multiple captures of one target
 

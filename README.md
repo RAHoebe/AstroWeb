@@ -2,6 +2,8 @@
 
 [Nederlands](README.md) · [English](README.en.md) · [Bronnen en licenties](THIRD_PARTY.md)
 
+[Demonstratie, voorbeeldfilms en installatiegids](https://rahoebe.github.io/AstroWeb/). Voor de NAS en Google TV op hetzelfde vertrouwde netwerk bevat deze release een zelfstandig `compose.lan.yaml` en een LAN-APK. Stel `ASTROWEB_LAN_IP` in op het privé-adres van de server. De LAN-configuratie gebruikt standaard `ASTROWEB_OFFLINE=1` voor lokale verwerking en weergave van eerder opgehaalde beelden.
+
 AstroWeb maakt van je eigen astrofoto’s een lokale filmgalerij. Geef de sterren en de nevel elk een eigen beweging, kies waar de camera naartoe vliegt en publiceer je favoriete versie. Bezoekers kunnen de originele opname bekijken, vanuit de Melkweg naar het beeldveld reizen en de hemel van de opnamenacht verkennen.
 
 ## Aan de slag
@@ -99,7 +101,7 @@ Bij andere geregistreerde opnamen zoekt **Hubble** naar openbare optische beeldv
 
 De hemelatlas en Poolkaart tekenen de ongedraaide poster tussen de gemeten fotohoeken. Je kunt deze laag uitschakelen. Selecteer één of twee opnamen in de hemelatlas om de bijbehorende thumbnails te bekijken. Het tabblad Origineel toont de geschatte afstand en de zichtbare breedte en hoogte in lichtjaren op de afstand van het doel.
 
-Kies bij upload **Zonnestelsel** voor de zon, maan of een planeet. Eén PNG, JPEG of TIFF is voldoende; een FITS met opnamedatum is optioneel. De Hemelreis zoomt naar de berekende richting en eindigt op je eigen opname. De Melkwegkaart wijst het zonnestelsel aan. De Skykaart volgt het hemellichaam van middernacht tot middernacht. Met alleen een datum gebruikt AstroWeb 12.00 uur lokale tijd. Ontbreekt de waarneemlocatie, dan geldt Midden-Nederland (52,15° N, 5,38° O). Bij **Detailreis** kies je missiebeelden van onder meer SDO, LRO, Juno en Cassini, met de bron bij de film. Met een bekende opnametijd kan de viewer de geocentrische afstand schatten. Een oppervlaktemaat vraagt aanvullende beeldkalibratie.
+Kies bij upload **Zonnestelsel** voor de zon, maan of een planeet. Eén PNG, JPEG of TIFF is voldoende; een FITS met opnamedatum is optioneel. De Hemelreis volgt de richting vanaf de waarneemlocatie op het opnametijdstip. De film toont UTC, sterrenbeeld en hemelcoördinaten. Een herkenbare volledige schijf groeit vanuit het richtpunt op basis van de schijnbare diameter; een detailopname verschijnt als close-up. De Melkwegkaart wijst het zonnestelsel aan. De Skykaart volgt het hemellichaam van middernacht tot middernacht. Met alleen een datum gebruikt AstroWeb 12.00 uur lokale tijd. Ontbreekt de waarneemlocatie, dan geldt Midden-Nederland (52,15° N, 5,38° O). Bij **Detailreis** kies je missiebeelden van onder meer SDO, LRO, Juno en Cassini, met de bron bij de film. Met een bekende opnametijd kan de viewer de geocentrische afstand schatten. Een oppervlaktemaat vraagt aanvullende beeldkalibratie.
 
 ### Meerdere opnamen per object
 
