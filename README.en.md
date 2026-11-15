@@ -1,6 +1,6 @@
 # AstroWeb
 
-[English](README.en.md) · [Nederlands](README.md) · [Credits and licences](THIRD_PARTY.md)
+[English](README.en.md) · [Nederlands](README.md) · [Credits and licences](THIRD_PARTY.md) · [Watch the AstroWeb film on YouTube](https://youtu.be/RyY0zOAQZl4)
 
 [Screening room, example films and installation guide](https://rahoebe.github.io/AstroWeb/). For a NAS and Google TV on the same trusted network, this release includes standalone `compose.lan.yaml` and a LAN APK. Set `ASTROWEB_LAN_IP` to the private address of the server. This configuration defaults to `ASTROWEB_OFFLINE=1`, allowing local processing and playback of previously downloaded material.
 

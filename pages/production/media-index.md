@@ -34,13 +34,13 @@ A demonstration moves from a NASA lunar globe to the LRO view of the landing are
 
 [Download clip](../media/moon.mp4) · NASA/JPL/USGS (Galileo); NASA/GSFC/Arizona State University (LRO).
 
-## Jupiter’s atmosphere
+## Into the Elephant’s Trunk
 
-Journeys · Jupiter · mission detail
+Journeys · IC 1396 · nebula detail
 
-A Cassini portrait introduces a Juno view of Jupiter’s storm system. This example uses mission images for both ends of the flight.
+Start in Ron Hoebe’s wide-field capture of IC 1396 and follow the dark trunk into a registered Pan-STARRS1 detail of IC 1396A.
 
-[Download clip](../media/jupiter.mp4) · NASA/JPL/Space Science Institute; NASA/JPL-Caltech/SwRI/MSSS/Kevin M. Gill (CC BY).
+[Download clip](../media/elephants-trunk.mp4) · Capture: Ron Hoebe. Detail: Pan-STARRS1 Surveys (PS1) / STScI / CDS.
 
 ## Stellar parallax
 
