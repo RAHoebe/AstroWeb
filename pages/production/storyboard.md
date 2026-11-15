@@ -1,75 +1,55 @@
-# AstroWeb — English YouTube storyboard
+# Your sky in motion — English montage
 
-Web v1.2.0 · TV 0.5.5 · 1920 × 1080 · 24 fps. The overview is silent. Record the following English voice-over or edit it for the final cut.
+95 seconds, including 16 seconds of end credits.
 
-## 00:00:00 — Your sky in motion
+## 00:00 · Your sky in motion
 
-Picture: Footage/cover.mp4, first 4 seconds.
+AstroWeb brings your night sky photographs to life.
 
-An exposure can become more than a single still. AstroWeb turns a personal sky collection into a cinema.
+## 00:04 · Four AstroWizard exports
 
-## 00:00:04 — Four AstroWizard exports
+From AstroWizard, export the final image, the starless background, and both star layers.
 
-Picture: Footage/layers.mp4, first 6 seconds.
+## 00:10 · Choose the camera path
 
-Start in AstroWizard. Export the final image, the starless background and both star layers at identical dimensions.
+In Studio, place zoom frames over the details you want to visit.
 
-## 00:00:10 — Choose the camera path
+## 00:15 · Depth from layers
 
-Picture: Footage/studio.mp4, first 5 seconds.
+Separate layers let the stars drift across the glowing gas.
 
-In Studio, arrange zoom frames over the details you want to visit and select your favourite render.
+## 00:19 · Find the field
 
-## 00:00:15 — Depth from layers
+A sky journey starts with the whole Milky Way, then follows the sky coordinates to your photograph.
 
-Picture: Footage/parallax.mp4, first 4 seconds.
+## 00:27 · Enter Andromeda
 
-The star field and glowing gas move independently. This is an artistic parallax effect.
+Here in Andromeda, dust lanes line up as your own image dissolves into a much deeper Hubble mosaic.
 
-## 00:00:19 — Find the field
+## 00:36 · Into the Elephant’s Trunk
 
-Picture: Footage/journey.mp4, first 8 seconds.
+In Ron Hoebe’s own exposure of the Elephant’s Trunk, the dark dust column lines up with a deeper Pan-STARRS survey image.
 
-A sky journey starts with the full Milky Way and follows the sky coordinates towards the capture.
+## 00:44 · Solar System detail
 
-## 00:00:27 — Enter Andromeda
+From Ron’s visible-light Sun, we travel to Dallas during the April twenty twenty-four eclipse. A pink prominence rises above the solar limb.
 
-Picture: Footage/hubble.mp4, first 9 seconds.
+## 00:53 · Trace the sky
 
-Aligned Hubble imagery takes the camera beyond the detail visible in the original photograph.
+The polar chart puts your photograph among the constellations.
 
-## 00:00:36 — Solar System detail
+## 00:57 · Look down on the Galaxy
 
-Picture: Footage/solar.mp4, first 5 seconds.
+Seen from above, the nebula lies near our Sun.
 
-For nearby worlds, mission images reveal flares, lunar landing sites and storms.
+## 01:01 · Explore the collection
 
-## 00:00:41 — Trace the sky
+Find your photo in the night panorama.
 
-Picture: Footage/polar.mp4, first 4 seconds.
+## 01:04 · Watch on Google TV
 
-On the polar chart, the capture retains its measured position and rotation.
+On Google TV, browse with the remote. Open a film, choose a destination, or zoom into a map.
 
-## 00:00:45 — Look down on the Galaxy
+## 01:14 · Keep it local
 
-Picture: Footage/milky-map.mp4, first 4 seconds.
-
-A face-on reconstruction shows where selected objects sit relative to the Sun.
-
-## 00:00:49 — Explore the collection
-
-Picture: Footage/panorama.mp4, first 3 seconds.
-
-The panorama connects sky positions to individual photographs.
-
-## 00:00:52 — Watch on Google TV
-
-Picture: Footage/tv-tour.mp4, first 10 seconds.
-
-Browse with the remote. The TV reads the collection from the server and opens the chosen film.
-
-## 00:01:02 — Keep it local
-
-Picture: Footage/local.mp4, first 5 seconds.
-
-A private home network is enough. The NAS and Google TV can connect directly without publishing the gallery.
+Your server and TV can share the collection on a private home network.
