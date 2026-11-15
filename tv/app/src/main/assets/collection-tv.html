@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="__LANG__" data-mode="__MAP__" data-initial="__CAPTURE__">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; object-src 'none'">
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#180f14;color:#ffefe6;overflow:hidden;font:16px Roboto,sans-serif}
+body{position:relative}canvas{display:block;width:100%}
+#hud,#credit,#status{position:absolute}#hud{bottom:6%;left:4%;max-width:80%;background:#28181bed;border-left:3px solid #ed998a;border-radius:4px;padding:9px 16px;transition:opacity .2s}
+#title{font-size:19px;font-weight:600}#meta{color:#e6bcb3;margin:3px 0}#help,#credit{font-size:13px}#help{white-space:pre-wrap}
+#credit{top:4%;right:4%;color:#dcc0b8;background:#23171bc9;padding:4px 8px}#status{top:4%;left:4%;background:#23171be6;padding:6px 10px}#status:empty{display:none}
+</style>
+<canvas></canvas><div id="hud"><div id="title"></div><div id="meta"></div><div id="help"></div></div>
+<div id="credit"></div><div id="status" role="status"></div>
+<script type="module">
+const root=document.documentElement, nl=root.lang==='nl', text=(a,b)=>nl?a:b;
+const atlas=root.dataset.mode==='atlas', initial=decodeURIComponent(root.dataset.initial);
+const canvas=document.querySelector('canvas'), ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id), wrap=x=>x-Math.round(x), clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const mapName=atlas?text('Hemelatlas','Sky atlas'):text('Nachtpanorama','Night panorama');
+let frames=[],index=0,stars=[],lines=[],skyImage,photo,preview,drawPhoto,posterFor;
+let cx=.5,cy=.5,z=1,angle=0,blend=0,photoZoom=1,phase='loading',origin=null,token=0;
+let pending=0,animation=0,hideTimer=0,originalError=false;
+const current=()=>frames[index];
+function phaseTo(value){phase=value;root.dataset.phase=value;}
+function schedule(){if(!pending)pending=requestAnimationFrame(()=>{pending=0;draw();});}
+function message(s){$('status').textContent=s;}
+function feedback(){
+  const f=current();if(!f)return;
+  root.dataset.selected=f.id;
+  $('title').textContent=f.name;
+  $('meta').textContent=[f.label,f.date,index+1+' / '+frames.length].filter(Boolean).join('   ·   ');
+  $('help').textContent=phase==='photo'
+    ? text('↑ ↓  Fotozoom','↑ ↓  Photo zoom')+'  '+photoZoom+'×   ·   '+text('Terug  Naar kader','Back  To frame')
+    : text('← →  Kies opname    ↑ ↓  Kaartzoom    OK  Open foto','← →  Select capture    ↑ ↓  Map zoom    OK  Open photo');
+  clearTimeout(hideTimer);$('hud').style.opacity='1';
+  if(phase==='photo')hideTimer=setTimeout(()=>$('hud').style.opacity='0',2500);
+}
+function layout(){
+  const w=innerWidth,h=innerHeight,r=Math.min(2,devicePixelRatio);
+  canvas.style.height=document.body.style.height=h+'px';
+  if(canvas.width!==Math.round(w*r)||canvas.height!==Math.round(h*r)){canvas.width=Math.round(w*r);canvas.height=Math.round(h*r);}
+  const scale=skyImage?Math.max(w/skyImage.naturalWidth,h/skyImage.naturalHeight):1;
+  return {w,h,r,sw:skyImage?skyImage.naturalWidth*scale:w,sh:skyImage?skyImage.naturalHeight*scale:h};
+}
+function renderPhoto(img,w,h,zoom){
+  if(!img?.naturalWidth)return;
+  const portrait=img.naturalHeight>img.naturalWidth;
+  const scale=Math.min(w/(portrait?img.naturalHeight:img.naturalWidth),h/(portrait?img.naturalWidth:img.naturalHeight))*zoom;
+  ctx.save();ctx.translate(w/2,h/2);if(portrait)ctx.rotate(-Math.PI/2);ctx.scale(scale,scale);
+  ctx.drawImage(img,-img.naturalWidth/2,-img.naturalHeight/2);ctx.restore();
+}
+function draw(){
+  const {w,h,r,sw,sh}=layout();if(!w||!h)return;
+  ctx.setTransform(r,0,0,r,0,0);ctx.fillStyle='#1b121a';ctx.fillRect(0,0,w,h);
+  if(phase==='photo'){ctx.fillStyle='#030509';ctx.fillRect(0,0,w,h);renderPhoto(photo||preview,w,h,photoZoom);return;}
+  if(!frames.length)return;
+  const width=sw*z,height=sh*z,centerY=clamp(cy,h/(2*height),1-h/(2*height));
+  const project=([u,v])=>[w/2+wrap(u-cx)*width,h/2+(v-centerY)*height];
+  ctx.save();ctx.translate(w/2,h/2);ctx.rotate(angle);ctx.translate(-w/2,-h/2);
+  if(skyImage){
+    const [x,y]=project([.5,.5]);
+    for(const offset of [-width,0,width]) ctx.drawImage(skyImage,x-width/2+offset,y-height/2,width,height);
+  } else {
+    const step=z>20?1:z>6?5:z>2?10:30;
+    ctx.lineWidth=.7;ctx.strokeStyle='#382831';ctx.fillStyle='#ab9394';ctx.font='11px Roboto,sans-serif';ctx.beginPath();
+    for(let ra=0;ra<360;ra+=step){
+      const [x]=project([1-ra/360,.5]);if(x<0||x>w)continue;
+      ctx.moveTo(x,0);ctx.lineTo(x,h);if(!angle)ctx.fillText('RA '+ra+'°',x+4,h-7);
+    }
+    for(let dec=-90;dec<=90;dec+=step){
+      const [,y]=project([.5,.5-dec/180]);if(y<0||y>h)continue;
+      ctx.moveTo(0,y);ctx.lineTo(w,y);if(!angle)ctx.fillText(dec+'°',5,y-4);
+    }
+    ctx.stroke();
+    ctx.lineWidth=1;ctx.strokeStyle='#684852';ctx.beginPath();
+    for(const path of lines){
+      let prev=null;
+      for(const s of path){
+        const p=project(s);if(!prev||Math.abs(prev[0]-p[0])>width/2)ctx.moveTo(...p);else ctx.lineTo(...p);prev=p;
+      }
+    }
+    ctx.stroke();ctx.fillStyle='#dae5ed';
+    for(const s of stars){const [x,y]=project(s);if(x<0||x>w||y<0||y>h)continue;
+      ctx.beginPath();ctx.arc(x,y,Math.max(.6,1.9-.27*s[2]),0,2*Math.PI);ctx.fill();}
+  }
+  for(const f of [...frames.filter(f=>f!==current()),current()]){
+    const [x,y]=project(f.center),active=f===current();
+    for(const offset of [-width,0,width]){
+      const u=x+offset;
+      ctx.strokeStyle=active?'#ffc4a9':'#c99189';ctx.lineWidth=active?2:1;
+      if(f.quad?.length===4){
+        const quad=f.quad.map(([a,b])=>[u+wrap(a-f.center[0])*width,h/2+(b-centerY)*height]);
+        drawPhoto(ctx,f.id,quad,schedule);
+        ctx.beginPath();quad.forEach(([a,b],i)=>i?ctx.lineTo(a,b):ctx.moveTo(a,b));ctx.closePath();ctx.stroke();
+      }
+      if(u<0||u>w||y<0||y>h)continue;
+      ctx.beginPath();ctx.arc(u,y,active?7:3,0,Math.PI*2);ctx.stroke();
+      if(!angle){ctx.font=active?'bold 15px Roboto,sans-serif':'13px Roboto,sans-serif';
+        const tw=ctx.measureText(f.label).width,tx=clamp(u+10,3,w-tw-9),ty=clamp(y-12,19,h-8);
+        ctx.fillStyle='#25151be6';ctx.fillRect(tx-3,ty-15,tw+7,20);ctx.fillStyle=ctx.strokeStyle;ctx.fillText(f.label,tx,ty);}
+    }
+  }
+  ctx.restore();
+  if(blend>0){ctx.save();ctx.globalAlpha=blend;ctx.fillStyle='#030509';ctx.fillRect(0,0,w,h);
+    renderPhoto(photo||preview,w,h,1);ctx.restore();}
+}
+function aim(){const f=current();cx=f.center[0];cy=f.center[1];feedback();schedule();}
+function fromAtlas(row){
+  const toUV=([ra,dec])=>[1-ra/360,.5-dec/180];
+  const quad=row.field?.corners?.map(toUV);
+  const center=row.field?.center?toUV(row.field.center):quad?.length===4?[
+    quad[0][0]+quad.reduce((n,p)=>n+wrap(p[0]-quad[0][0]),0)/4,quad.reduce((n,p)=>n+p[1],0)/4]:null;
+  return {id:row.id,label:(row.catalog_id||row.id).replaceAll('_',' '),date:row.date?.slice(0,10),
+    name:row.name?.[root.lang]||row.session_name||row.id,center,quad};
+}
+async function read(path){
+  const response=await fetch(path);if(!response.ok)throw Error(String(response.status));return response.json();
+}
+async function load(){
+  phaseTo('loading');message(text('Kaart laden…','Loading map…'));
+  try{
+    const helper=await import('/static/footprint.js');drawPhoto=helper.drawFootprintImage;posterFor=helper.loadPoster;
+    const data=await read(atlas?'/api/atlas':'/api/panorama');
+    if(atlas){
+      frames=data.captures.map(fromAtlas).filter(f=>f.center);
+      const byId=new Map(data.stars.map(([hip,ra,dec,mag])=>[hip,[1-ra/360,.5-dec/180,mag]]));
+      stars=[...byId.values()];lines=data.lines.map(l=>l.map(id=>byId.get(id)).filter(Boolean));
+    } else {
+      const bg=new Image();bg.src=data.image;await bg.decode();skyImage=bg;
+      frames=data.pins.map(p=>({id:p.target,label:p.target.split('~')[0].replaceAll('_',' '),date:p.detail,
+        name:p.name?.[root.lang]||p.target,center:[p.x,p.y],quad:p.corners}));
+    }
+    $('credit').textContent=mapName+'   ·   '+(atlas?'ESA Hipparcos / CDS · Stellarium CC BY-SA 4.0':'ESO / S. Brunier');
+    if(!frames.length){phaseTo('empty');message(text('Geen opnamen met een kaartpositie.','No captures with a map position.'));return;}
+    index=Math.max(0,frames.findIndex(f=>f.id===initial));phaseTo('map');message('');aim();
+  }catch{phaseTo('error');message(text('Kaart niet beschikbaar. OK om opnieuw te proberen.','Map unavailable. Press OK to retry.'));}
+}
+async function original(id,serial){
+  try{
+    const obj=await read('/api/objects/'+encodeURIComponent(id));
+    if(serial!==token)return;
+    const src=obj.original_view||obj.final;
+    if(!src?.startsWith('/media/'))throw Error('missing');
+    const im=new Image();im.src=src;await im.decode();
+    if(serial!==token)return;
+    photo=im;root.dataset.original=id;message('');schedule();
+  }catch{if(serial===token){originalError=true;message(text('Origineel laden mislukt · OK om opnieuw te proberen','Original unavailable · OK to retry'));}}
+}
+function visit(){
+  const f=current(),serial=++token;originalError=false;photoZoom=1;preview=posterFor(f.id);original(f.id,serial);
+  origin=[cx,cy,z];phaseTo('flight');$('hud').style.opacity='0';
+  const {w,h,sw,sh}=layout(), q=f.quad?.map(([u,v])=>[wrap(u-f.center[0])*sw,(v-f.center[1])*sh]);
+  let end=z*4,turn=0;
+  if(q?.length===4){
+    const dx=q[1][0]-q[0][0],dy=q[1][1]-q[0][1],fw=Math.hypot(dx,dy),fh=Math.hypot(q[3][0]-q[0][0],q[3][1]-q[0][1]);
+    const portrait=preview.naturalWidth?preview.naturalHeight>preview.naturalWidth:fh>fw;
+    turn=wrap(((portrait?-Math.PI/2:0)-Math.atan2(dy,dx))/(2*Math.PI))*2*Math.PI;
+    end=clamp(.95*Math.min(w/Math.max(1,portrait?fh:fw),h/Math.max(1,portrait?fw:fh)),1,512);
+  }
+  const start=performance.now(),duration=matchMedia('(prefers-reduced-motion: reduce)').matches?0:1550;
+  function tick(now){
+    if(serial!==token)return;
+    const t=duration?clamp((now-start)/duration,0,1):1,e=t*t*(3-2*t);
+    z=origin[2]*Math.pow(end/origin[2],e);cx=f.center[0]-wrap(f.center[0]-origin[0])*(1-e)*origin[2]/z;
+    cy=f.center[1]-(f.center[1]-origin[1])*(1-e)*origin[2]/z;angle=turn*e;blend=clamp((t-.73)/.27,0,1);
+    if(t>=1){phaseTo('photo');$('credit').hidden=true;feedback();
+      if(!photo&&!originalError)message(text('Origineel laden…','Loading original…'));}
+    draw();if(t<1)animation=requestAnimationFrame(tick);
+  }
+  animation=requestAnimationFrame(tick);
+}
+window.collectionBack=()=>{
+  if(!origin)return false;
+  ++token;cancelAnimationFrame(animation);[cx,cy,z]=origin;origin=null;preview=null;photo=null;delete root.dataset.original;
+  angle=blend=0;photoZoom=1;message('');phaseTo('map');$('credit').hidden=false;feedback();draw();return true;
+};
+window.mapKey=key=>{
+  if(phase==='error'){if(key==='reset')load();return;}
+  if(phase==='photo'){
+    if(key==='reset'&&originalError){originalError=false;message(text('Origineel laden…','Loading original…'));original(current().id,token);}
+    if(key==='in'||key==='out'||key==='reset'){photoZoom=key==='reset'?1:clamp(photoZoom+(key==='in'?1:-1),1,10);feedback();schedule();}
+    return;
+  }
+  if(phase!=='map')return;
+  if(key==='next'||key==='previous'){index=(index+(key==='next'?1:-1)+frames.length)%frames.length;aim();}
+  if(key==='in'||key==='out'){z=clamp(z*(key==='in'?1.5:1/1.5),1,32);feedback();schedule();}
+  if(key==='reset')visit();
+};
+addEventListener('resize',schedule);schedule();load();
+</script></html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="__LANG__" data-chart="__MAP__" data-capture="__CAPTURE__">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; object-src 'none'">
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070c18;color:#ffefe6;font:16px Roboto,sans-serif}
+body{position:relative}canvas.map{display:block;width:100vw;height:100vh}#hud,#message,#credit{position:absolute;pointer-events:none}
+#hud{border-left:3px solid #bd7168;left:4%;top:4%;border-radius:8px;background:#24141bee;padding:9px 14px;transition:opacity .25s}
+#hud strong{color:#ffa997}#help{font-size:.86em;margin-top:4px}#credit{right:3%;bottom:2%;color:#dcc0b8;background:#24141bc9;padding:3px 6px;font-size:11px}
+#message{inset:0;display:grid;place-content:center;text-align:center;background:#180f14}#message:empty{display:none}
+</style>
+<canvas class="map"></canvas><div id="hud"><strong id="title"></strong><div id="help"></div></div>
+<div id="credit"></div><div id="message" role="status"></div><div hidden id="controls"></div>
+<script type="module">
+const $=id=>document.getElementById(id);
+const root=document.documentElement, chart=root.dataset.chart, capture=decodeURIComponent(root.dataset.capture);
+const en=root.lang==='en', tr=(nl,english)=>en?english:nl;
+const names={sky:tr('Skykaart','Sky chart'),polar:tr('Poolkaart','Polar chart'),galaxy:tr('Melkweg','Milky Way')};
+const canvas=document.querySelector('.map');canvas.id=chart+'-canvas';canvas.setAttribute('aria-label',names[chart]);
+let animation=0, playing=false;
+let step=0, sky, unavailable='', loading=false, hideTimer, atCapture=0;
+
+// The NAS renderers bind their canvas and companion controls when imported.
+// Supply those controls off-screen; the TV remote operates the same inputs.
+function controls(tag,ids) {
+  for(const id of ids.split(' ')) {
+    if($(id)) continue;
+    const el=document.createElement(tag);el.id=id;$('controls').append(el);
+  }
+}
+function slider(id) {
+  controls('input',id);
+  Object.assign($(id),{type:'range',min:0,max:1000,value:0});
+}
+function change(id,value) { const el=$(id);el.value=value;el.dispatchEvent(new Event('input')); }
+async function api(path) {
+  const r=await fetch(path);if(!r.ok) { const body=await r.json().catch(()=>({}));throw Error(body.error||'network_error'); }
+  return r.json();
+}
+function updateTitle() {
+  const clock=sky?.data ? ' · '+$('sky-clock').textContent : '';
+  $('title').textContent=names[chart]+' · '+capture.split('~')[0].replaceAll('_',' ')+' · '+tr('zoomstand ','zoom level ')+(Math.round(step)+1)+'/9'+clock;
+}
+function feedback() {
+  updateTitle();
+  $('help').textContent=(playing?tr('Ⅱ  OK  Pauzeren','Ⅱ  OK  Pause'):tr('▶  OK  Afspelen','▶  OK  Play'))+'    ↑ ↓  Zoom'+
+    (chart==='sky'?tr('    ← →  Tijd','    ← →  Time'):'')+tr('    Houd OK vast  Overzicht','    Hold OK  Overview');
+  $('hud').style.opacity='1';clearTimeout(hideTimer);hideTimer=setTimeout(()=>$('hud').style.opacity='0',3500);
+}
+function drawSky() {
+  if(!sky?.data)return;
+  const d=sky.data,index=Math.floor(sky.frame),a=d.samples[index],b=d.samples[Math.min(index+1,d.samples.length-1)];
+  const fraction=sky.frame-index;
+  const az=(a.azimuth+(((b.azimuth-a.azimuth+540)%360)-180)*fraction+360)%360;
+  const altitude=a.altitude+(b.altitude-a.altitude)*fraction;
+  const w=Math.round(innerWidth*devicePixelRatio),h=Math.round(innerHeight*devicePixelRatio);
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+  const ctx=sky.ctx;ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#070c18';ctx.fillRect(0,0,w,h);
+  // The shared SkyPlayer draws in a 1400 x 650 azimuth/altitude projection.
+  // Redraw at the device resolution around the selected time sample.
+  const zoom=2**(step*3/8),scale=Math.min(w/1400,h/650)*zoom;
+  const tx=az/360*1400,ty=490-Math.max(0,altitude)/90*440;
+  const clamp=(v,max)=>Math.max(-max,Math.min(max,v));
+  ctx.setTransform(scale,0,0,scale,(w-1400*scale)/2+clamp((700-tx)*scale,Math.max(0,(1400*scale-w)/2)),
+    (h-650*scale)/2+clamp((325-ty)*scale,Math.max(0,(650*scale-h)/2)));
+  sky.draw();
+}
+function render() {
+  if(chart==='sky') drawSky();
+  else change(chart+'-time',step*125);
+}
+function stop() {
+  playing=false;root.dataset.playing='false';cancelAnimationFrame(animation);
+}
+function play() {
+  if(playing || (chart==='polar' && $('polar-time').disabled))return;
+  const isSky=chart==='sky',end=isSky?sky.data.samples.length-1:8;
+  if(!end)return;
+  let start=isSky?sky.frame:step;
+  if(start>=end)start=0;
+  const began=performance.now(),duration=isSky?45000:10000;
+  playing=true;root.dataset.playing='true';feedback();
+  let last=0;
+  function tick(now) {
+    if(!playing)return;
+    if(now-last>=32) {
+      const position=Math.min(end,start+(now-began)/duration*end);
+      if(isSky)sky.frame=position;else step=position;
+      render();updateTitle();last=now;
+      if(position>=end){stop();feedback();return;}
+    }
+    animation=requestAnimationFrame(tick);
+  }
+  animation=requestAnimationFrame(tick);
+}
+window.mapKey=function(key) {
+  if(loading)return;
+  if(unavailable){if(['toggle','play','reset'].includes(key))setup();return;}
+  if(key==='play' || (key==='toggle' && !playing)){play();return;}
+  stop();
+  if(key==='reset'){step=0;if(sky)sky.frame=atCapture;}
+  if(key==='in' || key==='out') {
+    if(chart==='polar' && $('polar-time').disabled)return;
+    step=Math.max(0,Math.min(8,Math.round(step)+(key==='in'?1:-1)));
+  }
+  if(sky && (key==='previous'||key==='next')) sky.frame=Math.max(0,Math.min(sky.data.samples.length-1,Math.round(sky.frame)+(key==='next'?1:-1)));
+  render();feedback();
+};
+addEventListener('pagehide',stop);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+async function setup() {
+  loading=true;unavailable='';$('message').textContent=tr('Kaart laden…','Loading map…');
+  try {
+    const {setLanguage,t}=await import('/static/i18n.js');setLanguage(en?'en':'nl');
+    if(chart==='sky'){
+      controls('button','sky-play');slider('sky-time');controls('span','sky-status sky-date sky-caption sky-clock');
+      const {SkyPlayer}=await import('/static/sky.js');sky??=new SkyPlayer();
+      await sky.load({id:capture},api);if(!sky.data)throw Error($('sky-status').textContent);
+      atCapture=sky.frame;drawSky();
+      $('credit').textContent='ESA Hipparcos / CDS · Stellarium CC BY-SA 4.0 · Astropy / ERFA';
+    } else if(chart==='polar'){
+      controls('input','polar-side polar-photo epoch-region epoch-trails polar-years');$('polar-photo').checked=true;
+      controls('button','epoch-play epoch-reset polar-play');controls('span','polar-year polar-status');slider('polar-time');
+      const {openPolar}=await import('/static/polar.js');await openPolar(capture);
+      if($('polar-status').textContent)throw Error($('polar-status').textContent);
+      $('credit').textContent='ESA Hipparcos / CDS · Stellarium CC BY-SA 4.0 · HYG / Astronexus';
+    } else {
+      controls('input','galaxy-labels journey-labels');$('galaxy-labels').checked=true;
+      controls('button','galaxy-tab galaxy-play journey-fullscreen');controls('a','galaxy-source');slider('galaxy-time');
+      controls('span','galaxy-distance journey-panel journey-status');controls('video','journey-video');controls('canvas','journey-names');
+      const obj=await api('/api/objects/'+encodeURIComponent(capture));
+      if(!obj.galaxy)throw Error(tr('Geen Melkwegpositie voor deze opname','No Milky Way position for this capture'));
+      const {configureGalaxy,openGalaxy}=await import('/static/atlas.js');
+      const bg=new Image();bg.src='/static/galaxy-face-on.webp';await bg.decode();
+      configureGalaxy(obj.galaxy,obj.metadata.name);openGalaxy();
+      $('credit').textContent='NASA/JPL-Caltech/R. Hurt (SSC/Caltech)';
+    }
+    $('message').textContent='';render();feedback();
+  } catch(e) {
+    unavailable=e.message||'error';$('message').textContent=names[chart]+' · '+(chart==='sky' && sky?.loadError ? $('sky-status').textContent : chart==='polar' && $('polar-status')?.textContent || tr('Kaart niet beschikbaar.','Map unavailable.'))+' '+tr('OK om opnieuw te proberen.','Press OK to try again.');
+    console.error(chart,unavailable);
+  } finally {loading=false;}
+}
+// A TV WebView can compute 100vh as zero during its first Compose layout.
+function sizeViewport() {
+  if(!innerHeight)return;
+  canvas.style.height=document.body.style.height=root.style.height=innerHeight+'px';
+  drawSky();
+}
+addEventListener('resize',sizeViewport);sizeViewport();requestAnimationFrame(sizeViewport);setup();
+</script></html>
