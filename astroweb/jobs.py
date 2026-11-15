@@ -266,7 +266,12 @@ class JobQueue:
             self.checkpoint(job_id)
             relative = f"objects/{record.get('storage_id', record['id'])}/movies/{job_id}.mp4"
             params = Parameters.parse(job["params"])
-            stats = render_video({key: self.store.path(value) for key, value in record["assets"].items()}, self.store.path(relative), params, progress=lambda p: self.checkpoint(job_id,p))
+            extra = {}
+            if params.method == "gaia":
+                from .gaia_depth import prepare
+                extra["stellar_depth"] = prepare(self.store, self.store.get("objects", record["id"]))
+                self.checkpoint(job_id)
+            stats = render_video({key: self.store.path(value) for key, value in record["assets"].items()}, self.store.path(relative), params, progress=lambda p: self.checkpoint(job_id,p), **extra)
             self.checkpoint(job_id)
             self.ensure_preview(relative)
             self.checkpoint(job_id)

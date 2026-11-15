@@ -23,7 +23,7 @@ Omdat starless en stars al beschikbaar zijn, is een AI-sterrenverwijderaar of ee
 
 1. Controleer afmetingen, inhoud en ID-prefix; bewaar de originelen ongewijzigd.
 2. Vergelijk beide sterrenlagen via screen en optellen met de final. Kies de laagste MAE.
-3. Maak een nevelachtergrond en twee artistieke sterrenlagen; houd verbonden sterkernen heel. Corrigeer een kleine residuafwijking ten opzichte van final.
+3. Maak een nevelachtergrond en twee artistieke sterrenlagen; houd verbonden sterkernen heel. Behoud de starless-achtergrond zonder residucorrectie vanuit final.
 4. Pas periodieke camerapaden toe, met onafhankelijke verschuiving/zoom en optioneel een glad helderheidsreliëf van de nevel.
 5. Gebruik overscan en beperk parameterbereiken zodat lege randen buiten beeld blijven.
 6. Schrijf een tijdelijke MP4, voltooi FFmpeg en publiceer het bestand atomair. Een mislukte taak raakt de vorige film niet.
@@ -41,3 +41,31 @@ Er is geen algemene Nederlandse NASA-vertaal-API. [LibreTranslate](https://docs.
 De FITS-headers bevatten echte locatie, RA/Dec, DATE-OBS, telescoop/filter en integratieduur. Astropy/ERFA berekent zonder netwerk actuele horizontale posities. De hergebruikte Hipparcos-sterren bewegen inclusief benaderde eigenbewegingen; Stellarium levert de sterrenbeeldlijnen. De browser animeert tienminutenstappen en toont het doelpad en een hoogtecurve. Exacte locatie blijft standaard serverintern.
 
 De kaart is geen volledige kopie van de RaspAstroDisplay-poster: er wordt geen surveybeeld opgehaald, geen JPL-Maanpositie berekend en geen weeradvies gegeven. Het doel is hier het terugspelen van de opnamenacht. Gaia-sterrenparallax, handmatige neveldieptelagen, een live WebGL-preview en een export van de Skykaart als video zijn mogelijke vervolgstappen.
+
+## Controle op donkere sterafdrukken · 15 november 2026
+
+De eerdere residucorrectie veranderde de starless-achtergrond met het verschil tussen final en de samengestelde lagen. Bij een te heldere sterrenlaag ontstonden negatieve sterafdrukken die loskwamen van de bewegende sterren. Deze correctie is verwijderd. De gekozen screen- of additieve compositie blijft actief. Verschillen in de AstroWizard-exports kunnen daardoor in de totale helderheid zichtbaar zijn. De sterrenlagen voegen uitsluitend licht toe.
+
+Voor Gaia-diepte moeten de sterafbeeldingen afzonderlijk aan Gaia-bronnen worden gekoppeld. De huidige lokale Gaia-uitlijning vraagt alleen positie en magnitude op. Helderheid bepaalt nu de artistieke verdeling van de sterren over twee bewegingslagen. Een volgende afstandsgestuurde modus vraagt bron-ID, parallax, parallaxfout, eigenbeweging en kwaliteitsgegevens, met propagatie naar de opnamedatum. Gebruik onderbouwde afstandsschattingen en onzekerheden, bijvoorbeeld Bailer-Jones, voor onzekere parallaxes. Ongekoppelde of onzekere sterren blijven in een gemeenschappelijke restlaag. Toon bij zo'n modus dat de cameraverplaatsing voor zichtbaarheid wordt versterkt.
+
+De ESA-animatie versterkt parallax en eigenbeweging met een factor 10.000. Het artikel van Luri et al. beschrijft onzekerheden en vertekeningen bij het omzetten van Gaia-parallax naar afstand. Seiza demonstreert een bruikbaar ontwerp met starless-achtergrond, afzonderlijke stersprites en gemeten Gaia-afstanden. Voor deze correctie is behoud van de aangeleverde nevel gekozen. Studio biedt nu een aparte Gaia-methode zoals hieronder beschreven.
+
+Bronnen
+- [ESA · Parallax and proper motion](https://www.esa.int/esatv/Videos/2018/04/Parallax_and_proper_motion)
+- [Luri et al. 2018 · Using Gaia parallaxes](https://doi.org/10.1051/0004-6361/201832964)
+- [Bailer-Jones · GeDR3 distance FAQ](https://bailer-jones.www3.mpia.de/gedr3_distances/FAQ.html)
+- [Seiza · Depth planes for parallax videos](https://github.com/theatrus/seiza/blob/main/docs/design/parallax-depth-planes.md)
+
+### Beschikbaar · Gaia-parallax
+
+De methode gebruikt Gaia DR3-sterren helderder dan G=14. Posities worden met de eigenbeweging naar DATE-OBS verplaatst. Alleen positieve parallaxes met signaal-ruisverhouding van minstens 10 en RUWE tussen 0 en 1,4 worden gebruikt. De afstand is de benadering 1000/parallax in parsec, zonder nulpuntcorrectie of Bayesiaanse prior. Dit is bedoeld als diepteverdeling voor de film. Deze selectie garandeert geen foutloze afstand.
+
+Sterkernen worden eenduidig aan de gemeten posities gekoppeld. Elke gekoppelde ster krijgt een klein beeldfragment met zachte rand. De resterende sterrenlaag beweegt mee met de starless-nevel. De gemeten afstanden bepalen de volgorde van de bewegingssnelheden, begrensd rond de mediane sterafstand. Camerabeweging en schaal blijven artistiek. De nevel krijgt geen verzonnen gemeten afstand. Studio toont het aantal gekoppelde sterren en het afstandsbereik.
+
+Catalogusgegevens worden lokaal gecachet en kunnen daarna offline worden gebruikt. Ontbrekende uitlijning, opnamedatum, afstandsgegevens of eenduidige matches geven een foutmelding. De renderer schakelt niet stilzwijgend terug naar helderheid als afstand. Zowel preview als filmrendering gebruiken dezelfde koppelingen.
+
+### Optionele lokale interpolatie en gemeenschappelijke camera
+
+Bij Gaia kan Studio ongekoppelde sterren laten meebewegen met de nevel, of hun beweging lokaal schatten. Interpolatie vraagt minstens vier gemeten sterren binnen 6% van de beelddiagonaal en binnen het door de gemeten sterren omsloten gebied. Sterk uiteenlopende buurafstanden worden afgewezen. De gewogen inverse-afstand wordt gebruikt als artistieke bewegingsschatting. Deze sterren worden afzonderlijk als geschat geteld. Er worden maximaal 3000 aanvullende sterfragmenten gebruikt.
+
+Gaia-sterren volgen nu dezelfde begrensde camera en zoom als de nevel. De extra parallax komt uitsluitend uit de daadwerkelijk toegepaste cameraverplaatsing. Als een beeldrand de camerabeweging tegenhoudt, schuiven sterren op die as niet zelfstandig door.

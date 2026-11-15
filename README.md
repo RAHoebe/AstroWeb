@@ -39,7 +39,7 @@ Open de [lokale galerij](http://127.0.0.1:8090/). Kies [Studio](http://127.0.0.1
    NGC_7000_final.fits    (optioneel)
    ```
 
-3. Kies sterrenparallax, nevelreliëf of klassieke pan/zoom. Stel **Aantal zoompunten** in op 1–8. Selecteer een nummer, versleep het kader en trek aan een hoek om de uitsnede te bepalen. Elk punt heeft een eigen zoomfactor tot 8×. De film bezoekt de punten op volgorde en keert terug naar het begin.
+3. Kies sterrenparallax, Gaia-parallax met gemeten sterafstanden, nevelreliëf of klassieke pan/zoom. Stel **Aantal zoompunten** in op 1–8. Selecteer een nummer, versleep het kader en trek aan een hoek om de uitsnede te bepalen. Elk punt heeft een eigen zoomfactor tot 8×. De film bezoekt de punten op volgorde en keert terug naar het begin.
 4. Kies **Maak film**. Elke geslaagde H.264-film wordt automatisch de galerijversie en verschijnt direct in de Studio-speler. De beeldstand van de film is instelbaar bij liggende bronfoto’s. Tijdens het renderen blijft de huidige film beschikbaar. Met **Render annuleren** stop je een wachtende of lopende taak. Je kunt een eerdere versie opnieuw selecteren. In Studio kun je ook een ongepubliceerde versie verwijderen of de object-ID en bijbehorende objectteksten wijzigen.
 
 PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afmetingen hebben. De limieten zijn 40 megapixels en 100 MiB per beeld, 512 MiB voor FITS en 600 MiB voor de hele upload. De vier originelen krijgen een SHA-256-controlesom. Voor lokale batchimport: stop de server en voer `python -m astroweb import --source AstroPhotos --render` uit, met één submap per object.
@@ -57,7 +57,7 @@ PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afme
 | Poolkaart | Cirkelvormige sterrenkaart rond de noordelijke of zuidelijke hemelpool, met sterrenbeeldlijnen, uurverdeling en een instelbare zoom naar het doel. |
 | Skykaart | Een kaart van de echte opnamenacht op basis van tijd, positie en locatie, met sterren, sterrenbeeldlijnen en de baan van het doel. |
 
-De parallaxdiepte is een artistieke instelling. Voor het kader van de Hemelreis vergelijkt AstroWeb de sterrenlaag lokaal met Gaia DR3. Nieuwe catalogusvelden, broninformatie en surveytegels vragen internet. Opnamen blijven lokaal. De exacte waarnemingslocatie is standaard privé. Zie [bronnen en licenties](THIRD_PARTY.md) voor de kaarten, catalogi en illustraties.
+De parallaxdiepte is een artistieke instelling. Bij **Gaia-parallax** bepaalt de gemeten afstand de beweging van gekoppelde sterren. Studio toont het aantal bruikbare matches. Hiervoor zijn een uitgelijnde opname en een opnamedatum nodig. Bij **Ongekoppelde sterren** kies je beweging met de nevel of **Lokale interpolatie · geschat**. Interpolatie gebruikt alleen voldoende nabije sterren met overeenkomende afstanden en wordt apart geteld. De cameraverplaatsing wordt voor zichtbaarheid versterkt. Voor het kader van de Hemelreis vergelijkt AstroWeb de sterrenlaag lokaal met Gaia DR3. Nieuwe catalogusvelden, broninformatie en surveytegels vragen internet. Opnamen blijven lokaal. De exacte waarnemingslocatie is standaard privé. Zie [bronnen en licenties](THIRD_PARTY.md) voor de kaarten, catalogi en illustraties.
 
 ## Opslag en Docker
 

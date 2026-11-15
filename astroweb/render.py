@@ -1,4 +1,4 @@
-"""Deterministic CPU parallax. Depth is artistic, never a distance measurement."""
+"""Deterministic CPU parallax with artistic layers or measured Gaia stellar distances."""
 import math
 import os
 import shutil
@@ -30,6 +30,7 @@ class Parameters:
     star_source: str = "auto"
     blend: str = "auto"
     zoom_points: list = field(default_factory=list)
+    gaia_fill: str = "background"
 
     @classmethod
     def parse(cls, raw=None):
@@ -38,7 +39,7 @@ class Parameters:
             raise ValueError("invalid_parameters")
         values = asdict(cls())
         values.update(raw)
-        for key, choices in {"orientation": {"portrait", "original"}, "method": {"layered", "depth", "kenburns"}, "motion": {"orbit", "drift", "push"}, "star_source": {"auto", "stars", "stars_laid"}, "blend": {"auto", "screen", "add"}}.items():
+        for key, choices in {"gaia_fill": {"background", "local"}, "orientation": {"portrait", "original"}, "method": {"layered", "depth", "kenburns", "gaia"}, "motion": {"orbit", "drift", "push"}, "star_source": {"auto", "stars", "stars_laid"}, "blend": {"auto", "screen", "add"}}.items():
             if not isinstance(values[key], str) or values[key] not in choices:
                 raise ValueError("invalid_parameters")
         for key, low, high in [("zoom", 1, 8), ("focus_x", 0, 1), ("focus_y", 0, 1), ("pan_x", -.08, .08), ("pan_y", -.08, .08), ("depth", 0, 1.5), ("duration", 4, 30)]:
@@ -119,22 +120,22 @@ def select_layers(images, params):
 
 
 class Scene:
-    def __init__(self, images, params):
+    def __init__(self, images, params, stellar_depth=None):
         self.params = params
         self.choice, self.scores = select_layers(images, params)
-        self.prepare(lambda key: images[key], params)
+        self.prepare(lambda key: images[key], params, stellar_depth)
 
     @classmethod
-    def from_paths(cls, paths, params):
+    def from_paths(cls, paths, params, stellar_depth=None):
         # Decode one original at a time. Keep only thumbnails for layer comparison.
         small = {key: resize_long(read_rgb(path), 640) for key, path in paths.items()}
         scene = cls.__new__(cls)
         scene.params = params
         scene.choice, scene.scores = select_layers(small, params)
-        scene.prepare(lambda key: read_rgb(paths[key]), params)
+        scene.prepare(lambda key: read_rgb(paths[key]), params, stellar_depth)
         return scene
 
-    def prepare(self, read, params):
+    def prepare(self, read, params, stellar_depth=None):
         def oriented(key):
             image = read(key)
             if params.orientation == "portrait" and image.shape[1] > image.shape[0]:
@@ -168,6 +169,16 @@ class Scene:
         p10, p90 = np.percentile(blurred, [10, 90])
         self.depth = np.clip((blurred - p10) / max(float(p90 - p10), .01), 0, 1).astype(np.float32)
 
+        if params.method == "gaia":
+            if stellar_depth is None:
+                raise ValueError("gaia_depth_missing")
+            from .gaia_depth import split_stars
+            rotated = params.orientation == "portrait" and stellar_depth["source_size"][0] > stellar_depth["source_size"][1]
+            self.gaia_sprites, self.gaia_report = split_stars(stars, stellar_depth, rotated, self.choice["blend"], interpolate=params.gaia_fill=="local")
+            self.star_size = stars.shape[1::-1]
+            self.bg, self.rest = self.pyramid(bg), self.pyramid(stars)
+            return
+
         brightness = stars.max(axis=2)
         count, labels = cv2.connectedComponents((brightness > .025 * 65535).astype(np.uint8))
         peaks = np.zeros(count, dtype=np.uint16)
@@ -176,17 +187,14 @@ class Scene:
         weights[0] = 0
         del brightness
         screen = self.choice["blend"] == "screen"
-        # Reuse the three input buffers for the corrected background and star
-        # layers. Row blocks bound temporary float arrays on large originals.
+        # Keep the starless layer intact. Subtracting a reconstruction residual
+        # here imprints dark copies of stars that detach when the layers move.
+        # Reuse the remaining buffers for the two nonnegative stellar layers.
         for row in range(0, bg.shape[0], 128):
             band = slice(row, row + 128)
-            background = bg[band].astype(np.float32) / 65535
             light = stars[band].astype(np.float32) / 65535
-            residual = final[band].astype(np.float32) / 65535 - compose(background, light, self.choice["blend"])
-            background += residual / np.maximum(1 - light, .02) if screen else residual
             near = light * weights[labels[band], None]
             far = (light - near) / np.maximum(1 - near, .01) if screen else light - near
-            bg[band] = np.rint(np.clip(background, 0, 1) * 65535)
             stars[band] = np.rint(np.clip(far, 0, 1) * 65535)
             final[band] = np.rint(near * 65535)
         del labels
@@ -221,15 +229,20 @@ class Scene:
         u = u*u*(3-2*u)
         return tuple(a+(b-a)*u for a,b in zip(stops[i],stops[i+1]))
 
-    def warp(self, image, dx, dy, pose, factor=1, relief=False):
+    def camera_geometry(self, dx, dy, pose, factor):
         fx, fy, zoom, differential = pose
         # Keep the layers on the same target even at large magnifications.
         scale = self.margin * (1 + zoom + differential * (factor - 1))
         cx, cy = (self.w - 1) / 2, (self.h - 1) / 2
         center_x = cx + 2 * fx * cx - dx * factor / scale
         center_y = cy + 2 * fy * cy - dy * factor / scale
-        mx = (self.xx - cx) / scale + np.clip(center_x, cx / scale, 2 * cx - cx / scale)
-        my = (self.yy - cy) / scale + np.clip(center_y, cy / scale, 2 * cy - cy / scale)
+        return scale, float(np.clip(center_x, cx/scale, 2*cx-cx/scale)), float(np.clip(center_y, cy/scale, 2*cy-cy/scale))
+
+    def warp(self, image, dx, dy, pose, factor=1, relief=False):
+        scale, center_x, center_y = self.camera_geometry(dx, dy, pose, factor)
+        cx, cy = (self.w-1)/2, (self.h-1)/2
+        mx = (self.xx-cx)/scale+center_x
+        my = (self.yy-cy)/scale+center_y
         if relief:
             displacement = (self.depth - .5) * self.params.depth
             mx -= dx * displacement * .35 / scale
@@ -244,11 +257,44 @@ class Scene:
         my = ((my + .5) * (h / self.h) - .5).astype(np.float32)
         return cv2.remap(level, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE).astype(np.float32) / 65535
 
+    def gaia_frame(self, x, y, pose):
+        # Small stellar crops avoid allocating a full high-resolution image for each distance.
+        depth = self.params.depth
+        factor = 1 - .35*depth
+        frame = compose(self.warp(self.bg, x, y, pose, factor),
+                        self.warp(self.rest, x, y, pose, factor), self.choice["blend"])
+        sw, sh = self.star_size
+        scale, center_x, center_y = self.camera_geometry(x, y, pose, factor)
+        _, neutral_x, neutral_y = self.camera_geometry(0, 0, pose, factor)
+        effective_x = scale*(neutral_x-center_x)
+        effective_y = scale*(neutral_y-center_y)
+        cx, cy = (self.w-1)/2, (self.h-1)/2
+        for sprite in self.gaia_sprites:
+            # Only applied camera travel contributes parallax. At a constrained edge,
+            # the nebula and stars share the same stop and the same zoom.
+            relative = .65*depth*(sprite["factor"]-1)/factor
+            ax, ay = scale*self.w/sw, scale*self.h/sh
+            tx = cx + scale*((sprite["x"]+.5)*self.w/sw-.5-center_x) + relative*effective_x
+            ty = cy + scale*((sprite["y"]+.5)*self.h/sh-.5-center_y) + relative*effective_y
+            patch = sprite["pixels"]
+            x0, y0 = max(0, math.floor(tx)-1), max(0, math.floor(ty)-1)
+            x1 = min(self.w, math.ceil(tx+patch.shape[1]*ax)+1)
+            y1 = min(self.h, math.ceil(ty+patch.shape[0]*ay)+1)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            matrix = np.float32([[ax,0,tx-x0],[0,ay,ty-y0]])
+            light = cv2.warpAffine(patch, matrix, (x1-x0,y1-y0), flags=cv2.INTER_LINEAR,
+                                   borderMode=cv2.BORDER_CONSTANT)
+            frame[y0:y1,x0:x1] = compose(frame[y0:y1,x0:x1], light, self.choice["blend"])
+        return np.clip(frame, 0, 1)
+
     def frame(self, phase):
         x, y, z = self.camera(phase)
         pose = self.camera_pose(phase,z)
         if self.params.method == "kenburns":
             return self.warp(self.final, x, y, pose)
+        if self.params.method == "gaia":
+            return self.gaia_frame(x, y, pose)
         depth = self.params.depth
         bg = self.warp(self.bg, x, y, pose, 1 - .35 * depth, self.params.method == "depth")
         far = self.warp(self.far, x, y, pose, 1 + .3 * depth)
@@ -272,9 +318,9 @@ def save_jpg(path, image, quality=91):
     encoded.tofile(path)
 
 
-def render_video(paths, target, params, progress=lambda value: None):
+def render_video(paths, target, params, progress=lambda value: None, stellar_depth=None):
     start = time.monotonic()
-    scene = Scene.from_paths(paths, params)
+    scene = Scene.from_paths(paths, params, stellar_depth)
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(target.stem + ".part.mp4")
@@ -303,7 +349,7 @@ def render_video(paths, target, params, progress=lambda value: None):
             process.wait()
         partial.unlink(missing_ok=True)
         raise
-    return {"width": scene.w, "height": scene.h, "frames": count, "seconds": round(time.monotonic() - start, 2), "choice": scene.choice, "candidates": scene.scores, "bytes": target.stat().st_size}
+    return {"width": scene.w, "height": scene.h, "frames": count, "seconds": round(time.monotonic() - start, 2), "choice": scene.choice, "candidates": scene.scores, "bytes": target.stat().st_size, **({"gaia":scene.gaia_report} if params.method=="gaia" else {})}
 
 def gallery_preview_path(movie):
     return Path(movie).with_suffix(".preview.mp4")

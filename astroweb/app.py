@@ -541,6 +541,16 @@ def create_app(data_dir=None, testing=False):
         queue.select_version(identifier, version_id)
         return jsonify(ok=True)
 
+    @app.get("/api/admin/objects/<identifier>/gaia-depth")
+    @admin_required
+    def gaia_depth_info(identifier):
+        from .gaia_depth import prepare
+        record = get_object(identifier)
+        params = Parameters.parse({**record["params"], "method":"gaia", "resolution":720, "gaia_fill":request.args.get("fill","background")})
+        scene = Scene.from_paths({k:store.path(v) for k,v in record["assets"].items()}, params,
+                                 stellar_depth=prepare(store, record))
+        return jsonify(scene.gaia_report)
+
     @app.post("/api/admin/objects/<identifier>/preview")
     @admin_required
     def preview(identifier):
@@ -552,7 +562,9 @@ def create_app(data_dir=None, testing=False):
         if not 1 <= index <= count:
             raise ValueError("invalid_parameters")
         params.resolution = 720
-        scene = Scene.from_paths({role: store.path(path) for role, path in record["assets"].items()}, params)
+        from .gaia_depth import prepare
+        depth_data = prepare(store, record) if params.method == "gaia" else None
+        scene = Scene.from_paths({role: store.path(path) for role, path in record["assets"].items()}, params, stellar_depth=depth_data)
         # Show the chosen focal point at maximum zoom.
         import cv2
         import numpy as np
