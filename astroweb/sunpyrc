@@ -1,0 +1,7 @@
+# Container defaults: transient runtime files belong on the writable tmpfs.
+[general]
+working_dir = /tmp/astroweb-sunpy-work
+[downloads]
+download_dir = /tmp/astroweb-sunpy-work/downloads
+remote_data_manager_dir = /tmp/astroweb-sunpy-work/data-manager
+sample_dir = /tmp/astroweb-sunpy-work/samples

@@ -8,6 +8,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 ENV SUNPY_CONFIGDIR=/tmp/astroweb-sunpy MPLCONFIGDIR=/tmp/astroweb-matplotlib XDG_CONFIG_HOME=/tmp/astroweb-config XDG_CACHE_HOME=/tmp/astroweb-cache
 COPY astroweb ./astroweb
+COPY astroweb/sunpyrc /etc/xdg/sunpy/sunpyrc
 COPY README.md README.en.md LICENSE THIRD_PARTY.md ./
 USER 10001:10001
 VOLUME ["/data"]
