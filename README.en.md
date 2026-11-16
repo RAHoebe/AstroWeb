@@ -18,7 +18,7 @@ The object viewer exposes relevant extra tabs only. The capture calendar is a se
 
 On TV, **Stars in 3D**, **Light journey**, **Mosaic** and **Solar comparison** are object-viewer actions. **Calendar** sits beside **Sky atlas** in the gallery. Left/right selects a day and up/down changes month. OK opens the day view, where left/right selects a capture and OK opens its photo. Back restores the calendar. Each mode displays its controls.
 
-Heavy preparation uses the bounded server queue. Results live outside the source tree under `data/observatory/`; downloaded Gaia measurements remain usable offline. Missing source data are reported and temporary Gaia outages are retried. Private captures stay protected and public observing windows do not use private sites. Update the website and TV app together. Available in [web v1.5.0](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.0) and [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
+Heavy preparation uses the bounded server queue. Results live outside the source tree under `data/observatory/`; downloaded Gaia measurements remain usable offline. Missing source data are reported and temporary Gaia outages are retried. Private captures stay protected and public observing windows do not use private sites. Update the website and TV app together. Available in [web v1.5.1](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.1) and [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
 
 ## Quick start
 

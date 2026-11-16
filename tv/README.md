@@ -4,7 +4,7 @@
 
 ## Nederlands
 
-**Viewerfuncties:** bij een object staan alleen relevante opties: Sterren in 3D, Lichtreis, Mozaïek (vanaf twee overlappende opnamen) en Zonvergelijking (alleen Zon). Kalender staat in de galerij naast Hemelatlas. In het maandoverzicht kiest ←/→ een dag, ↑/↓ een maand en OK de dagweergave. Daar kiest ←/→ een opname en OK opent de foto. Terug herstelt eerst de kalender. De 3D-afstandskaart ontvouwt zich vanuit de foto; de lichtreis volgt een lichtpuls naar de Aarde. De toetsen staan per scherm in beeld. Website en app moeten samen worden bijgewerkt; gebruik [web v1.5.0](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.0) en [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
+**Viewerfuncties:** bij een object staan alleen relevante opties: Sterren in 3D, Lichtreis, Mozaïek (vanaf twee overlappende opnamen) en Zonvergelijking (alleen Zon). Kalender staat in de galerij naast Hemelatlas. In het maandoverzicht kiest ←/→ een dag, ↑/↓ een maand en OK de dagweergave. Daar kiest ←/→ een opname en OK opent de foto. Terug herstelt eerst de kalender. De 3D-afstandskaart ontvouwt zich vanuit de foto; de lichtreis volgt een lichtpuls naar de Aarde. De toetsen staan per scherm in beeld. Website en app moeten samen worden bijgewerkt; gebruik [web v1.5.1](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.1) en [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
 
 
 
@@ -38,7 +38,7 @@ De tv draait staande foto’s en films bij weergave 90° linksom. De galerij beh
 
 ## English
 
-**Viewer features:** each object exposes relevant actions only: Stars in 3D, Light journey, Mosaic (two or more overlapping captures) and Solar comparison (Sun only). Calendar sits beside Sky atlas in the gallery. In month view, left/right selects a day, up/down changes month and OK opens the day. In day view, left/right selects a capture and OK opens its photo. Back restores the calendar. The 3D distance map unfolds from the photograph; the light journey follows a pulse towards Earth. Each screen shows its controls. Update website and app together; use [web v1.5.0](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.0) and [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
+**Viewer features:** each object exposes relevant actions only: Stars in 3D, Light journey, Mosaic (two or more overlapping captures) and Solar comparison (Sun only). Calendar sits beside Sky atlas in the gallery. In month view, left/right selects a day, up/down changes month and OK opens the day. In day view, left/right selects a capture and OK opens its photo. Back restores the calendar. The 3D distance map unfolds from the photograph; the light journey follows a pulse towards Earth. Each screen shows its controls. Update website and app together; use [web v1.5.1](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.1) and [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
 
 
 

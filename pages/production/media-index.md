@@ -1,6 +1,6 @@
 # AstroWeb media index
 
-AstroWeb v1.4.1 · Google TV 0.6.0. The English overview was recorded with those versions and has narration and captions. The current viewer screenshots and installation downloads describe [web v1.5.0](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.0) and [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0). The screening-room clips are silent.
+AstroWeb v1.4.1 · Google TV 0.6.0. The English overview was recorded with those versions and has narration and captions. The current viewer screenshots and installation downloads describe [web v1.5.1](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.1) and [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0). The screening-room clips are silent.
 
 ## Through the North America Nebula
 

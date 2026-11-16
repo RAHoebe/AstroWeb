@@ -18,7 +18,7 @@ De objectviewer toont alleen de relevante extra tabs. De opnamekalender staat ap
 
 Op TV staan **Sterren in 3D**, **Lichtreis**, **Mozaïek** en **Zonvergelijking** bij het object. In de galerij staat **Kalender** naast **Hemelatlas**. Links/rechts kiest een dag; omhoog/omlaag wisselt de maand. OK opent de dagweergave, waar links/rechts een opname kiest en OK de foto opent. Terug herstelt de kalender. De uitleg per modus staat in beeld.
 
-Zware voorbereiding loopt in de begrensde serverwachtrij. Resultaten staan buiten de broncode onder `data/observatory/`; opgehaalde Gaia-metingen blijven offline bruikbaar. Ontbrekende brongegevens worden gemeld en tijdelijke Gaia-uitval wordt opnieuw geprobeerd. Privé-opnamen blijven afgeschermd; openbare kijktijden gebruiken geen privé-locatie. Werk website en TV-app samen bij. Beschikbaar in [web v1.5.0](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.0) en [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
+Zware voorbereiding loopt in de begrensde serverwachtrij. Resultaten staan buiten de broncode onder `data/observatory/`; opgehaalde Gaia-metingen blijven offline bruikbaar. Ontbrekende brongegevens worden gemeld en tijdelijke Gaia-uitval wordt opnieuw geprobeerd. Privé-opnamen blijven afgeschermd; openbare kijktijden gebruiken geen privé-locatie. Werk website en TV-app samen bij. Beschikbaar in [web v1.5.1](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.1) en [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
 
 ## Aan de slag
 
