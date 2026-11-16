@@ -57,3 +57,20 @@ def test_expanded_atlas_separates_sky_objects_from_galactic_distances():
     assert galactic_map({"id":"M_31", "metadata":{"target":"M31"}}) is None
     assert galactic_map({"id":"NGC_104", "metadata":{"target":"47 Tuc"}})["ly"] > 10000
     assert "xy" not in target_entry("TRUMPLER37")
+
+
+def test_gaia_map_scale_and_galactic_axes():
+    from astropy.coordinates import SkyCoord
+    import astropy.units as u
+    from astroweb.galaxy import SUN, LY_PER_IMAGE, MAP_CREDIT
+    np.testing.assert_allclose(SUN,(.5,.704))
+    assert abs(LY_PER_IMAGE-130462.55)<.1
+    toward=SkyCoord(l=0*u.deg,b=0*u.deg,frame="galactic").icrs
+    np.testing.assert_allclose(face_position(toward.ra.deg,toward.dec.deg,
+        (SUN[1]-.5)*LY_PER_IMAGE),[.5,.5],atol=1e-10)
+    east=SkyCoord(l=90*u.deg,b=0*u.deg,frame="galactic").icrs
+    x,y=face_position(east.ra.deg,east.dec.deg,1000)
+    assert x<SUN[0] and abs(y-SUN[1])<1e-10
+    payload=galactic_map({"id":"NGC_7000","metadata":{"target":"NGC 7000"}})
+    assert payload["map_credit"]==MAP_CREDIT and "Gaia" in MAP_CREDIT
+    assert "by-sa/3.0/igo" in payload["map_license"]

@@ -54,6 +54,9 @@ export function drawGalaxy(){
   const layer=canvas('galaxy-canvas');
   if(!layer||!galaxy)return;
   const {ctx,w,h}=layer;
+  const credit=$('galaxy-map-credit')||document.getElementById('credit');
+  if(credit&&galaxy.map_credit)credit.textContent=galaxy.map_credit;
+  if(credit?.tagName==='A'&&galaxy.map_source)credit.href=galaxy.map_source;
   ctx.fillStyle='#03050a';ctx.fillRect(0,0,w,h);
   const ease=progress*progress*(3-2*progress);
   const side=Math.min(w,h)*Math.pow(13,ease);

@@ -14,7 +14,7 @@ export const words = {
   fitPhoto:["Hele foto","Fit photo"],
   galaxyTab:["Melkweg","Milky Way"],faceMap:["Melkweg van bovenaf","Milky Way from above"],objectNames:["Objectnamen","Object names"],
   atlasPlay:["Afspelen","Play"],atlasPause:["Pauzeren","Pause"],atlasReplay:["Opnieuw afspelen","Replay"],mapProgress:["Voortgang van de zoom","Zoom progress"],
-  lightYears:["lichtjaar","ly"],solarDistance:["Afstand tot de zon","Distance from the Sun"],distanceSource:["Afstandsbron","Distance source"],
+  mapLicence:["Kaartlicentie","Map licence"],lightYears:["lichtjaar","ly"],solarDistance:["Afstand tot de zon","Distance from the Sun"],distanceSource:["Afstandsbron","Distance source"],
   galaxyNote:["Reconstructie van de Melkweg. Posities zijn geprojecteerd op het galactische vlak.","Artist’s reconstruction of the Milky Way. Positions are projected onto the Galactic plane."],
   galacticDistanceField:["Melkwegobject · afstand tot de zon in lichtjaar (optioneel)","Milky Way object · distance from the Sun in light-years (optional)"],
   galacticDistanceHint:["Vul dit alleen in voor een bevestigd Melkwegobject met bekende RA en Dec. Laat leeg voor automatische catalogusherkenning.","Enter a distance only for a confirmed Milky Way object with known RA and Dec. Leave blank to use catalogue matching."],

@@ -140,8 +140,8 @@ const films = [
   "Maps",
   "Our place in the disk",
   "Face-on Milky Way",
-  "The Sun and the North America Nebula appear on an artist’s reconstruction of the Galactic disk. Labels remain separate from the artwork.",
-  "NASA/JPL-Caltech/R. Hurt (SSC/Caltech)."
+  "The Sun and the North America Nebula appear on ESA’s Gaia-informed reconstruction of the Galactic disk. Catalogue positions use the scale and Sun position in ESA’s labelled reference map. Object names are optional overlays.",
+  "ESA/Gaia/DPAC, Stefan Payne-Wardenaar. CC BY-SA 3.0 IGO. Resized, animated and overlaid with catalogue labels."
  ],
  [
   "environment",

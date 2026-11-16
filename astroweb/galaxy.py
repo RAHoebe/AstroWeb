@@ -12,9 +12,13 @@ from astropy.coordinates import SkyCoord
 
 from . import journey
 
-# Normalized pixel positions on PIA10748, calibrated to the annotated ESO map.
-SUN = (.5, .69)
-LY_PER_IMAGE = 26700 / (SUN[1] - .5)
+# ESA505408: Sun marker (5000, 7040) on the 10000-square labelled reference.
+# Its 5 kpc circle has radius 1250 pixels, so the complete image spans 40 kpc.
+SUN = (.5, .704)
+LY_PER_IMAGE = 40000 * u.pc.to(u.lyr)
+MAP_CREDIT = "ESA/Gaia/DPAC, Stefan Payne-Wardenaar · CC BY-SA 3.0 IGO"
+MAP_SOURCE = "https://www.esa.int/ESA_Multimedia/Images/2025/01/The_best_Milky_Way_map_by_Gaia"
+MAP_LICENSE = "https://creativecommons.org/licenses/by-sa/3.0/igo/"
 
 
 def key(value):
@@ -82,7 +86,7 @@ def galactic_map(record):
               {"id":"Sgr A*", "nl":"Galactisch centrum", "en":"Galactic centre", "xy":[.5,.5]}]
     points.extend({k:r[k] for k in ("id","nl","en","xy")} for r in landmarks() if "xy" in r and r is not known)
     return {"solar":bool(record.get("body")),"xy":chosen["xy"], "ly":chosen["ly"], "source":chosen["source"], "points":points,
-            "ly_per_image":LY_PER_IMAGE}
+            "ly_per_image":LY_PER_IMAGE, "map_credit":MAP_CREDIT, "map_source":MAP_SOURCE, "map_license":MAP_LICENSE}
 
 
 def journey_labels(record, field):

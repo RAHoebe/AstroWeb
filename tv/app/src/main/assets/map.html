@@ -163,7 +163,8 @@ async function setup() {
       configureGalaxy(obj.galaxy,obj.metadata.name);openGalaxy();
       try{motion=galaxyMotion($('motion'),obj.galaxy,bg,obj.metadata.name[en?'en':'nl']);}
       catch(e){console.warn('Galaxy motion layer unavailable',e);}
-      $('credit').textContent='NASA/JPL-Caltech/R. Hurt (SSC/Caltech)';
+      // Servers predating map metadata bundle the NASA reconstruction.
+      $('credit').textContent=obj.galaxy.map_credit||'NASA/JPL-Caltech/R. Hurt (SSC/Caltech)';
     }
     $('message').textContent='';render();feedback();
   } catch(e) {
