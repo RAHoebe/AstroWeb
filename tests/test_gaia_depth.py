@@ -66,6 +66,31 @@ def test_epoch_propagation_and_ids_are_preserved(monkeypatch):
     assert d["stars"][0]["distance_pc"]==100
 
 
+def test_catalogue_uses_esa_fallback_and_keeps_the_cache(tmp_path,monkeypatch):
+    import io
+    import requests
+    from astropy.table import Table
+    from astroweb import gaia_depth
+    from astroweb.store import Store
+    table=Table(rows=[(1234567890123456789,10.,30.,2016.,0.,0.,10.,.1,1.)],
+                names=['source_id','ra','dec','ref_epoch','pmra','pmdec','parallax','parallax_error','ruwe'])
+    stream=io.BytesIO();table.write(stream,format='votable')
+    calls=[]
+    class Reply:
+        content=stream.getvalue()
+        def raise_for_status(self):pass
+    def get(url,**kwargs):
+        calls.append(url)
+        if 'aip.de' in url:raise requests.HTTPError('temporary mirror failure')
+        return Reply()
+    monkeypatch.setattr(gaia_depth.external_http,'get',get)
+    store=Store(tmp_path);field={'corners':[[9.9,29.9],[10.1,29.9],[10.1,30.1],[9.9,30.1]]}
+    rows=gaia_depth.catalogue(store,field)
+    assert rows[0]['source_id']=='1234567890123456789'
+    assert gaia_depth.catalogue(store,field)==rows
+    assert len(calls)==2 and calls[1].startswith('https://gea.esac.esa.int/')
+
+
 def test_studio_preview_and_queue_use_gaia_method(tmp_path, monkeypatch):
     from astroweb.app import create_app
     from astroweb.media import import_object

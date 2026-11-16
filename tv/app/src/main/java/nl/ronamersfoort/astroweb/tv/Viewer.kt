@@ -34,6 +34,9 @@ import kotlinx.coroutines.CancellationException
     val mapsButton=remember { FocusRequester() }
     val tripsButton = remember { FocusRequester() }
     var explore by rememberSaveable { mutableStateOf(false) }
+    var observatory by rememberSaveable { mutableStateOf(entry in listOf("space","cosmic","mosaic","solar")) }
+    var observatoryMode by rememberSaveable { mutableStateOf(entry) }
+    val featureFocus=remember { listOf("space","cosmic","mosaic","solar").associateWith { FocusRequester() } }
     val exploreButton=remember { FocusRequester() }
     var choosingDate by remember { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
@@ -61,14 +64,15 @@ import kotlinx.coroutines.CancellationException
     }
     val p = photo
     val currentDate = remember { FocusRequester() }
-    LaunchedEffect(p, full, choosingDate, failed, trips, maps, explore) {
-        if (trips || maps || explore) return@LaunchedEffect
+    LaunchedEffect(p, full, choosingDate, failed, trips, maps, explore, observatory) {
+        if (trips || maps || explore || observatory) return@LaunchedEffect
         if (p != null) {
             when {
                 full && film && p.film!=null -> canvas
                 full -> return@LaunchedEffect
                 choosingDate -> currentDate
                 focusReturn == "explore" -> exploreButton
+                focusReturn == "observatory" -> featureFocus[observatoryMode] ?: first
                 focusReturn == "maps" -> mapsButton
                 focusReturn == "trips" -> tripsButton
                 focusReturn == "full" -> fullButton
@@ -83,6 +87,15 @@ import kotlinx.coroutines.CancellationException
     }
     if (explore && p != null) {
         RemoteCanvas("viewing.html",p.id,"explore",en,foreground=foreground) { focusReturn="explore";explore=false }
+        return
+    }
+    if (observatory && p != null) {
+        if(observatoryMode !in p.explorations) {
+            val context=LocalContext.current
+            LaunchedEffect(observatoryMode) {android.widget.Toast.makeText(context,if(en) "This view is unavailable for this capture" else "Deze weergave is niet beschikbaar voor deze opname",android.widget.Toast.LENGTH_LONG).show();focusReturn="first";observatory=false}
+            return
+        }
+        RemoteCanvas("observatory.html",p.id,observatoryMode,en,foreground=foreground,openCapture={chosen->capture=chosen;observatory=false;film=false}) { focusReturn="observatory";observatory=false }
         return
     }
     if (maps && p != null) {
@@ -157,6 +170,10 @@ import kotlinx.coroutines.CancellationException
                                 Action(if(en) "Rotate 90°" else "Draai 90°",icon=R.drawable.ic_rotate) { turns=(turns+1)%4 }
                                 Action(if(en) "Full screen" else "Volledig scherm", Modifier.focusRequester(fullButton),icon=R.drawable.ic_full) { full=true }
                                 Action(if(en) "Explore" else "Verkennen", Modifier.focusRequester(exploreButton)) { explore=true }
+                                for(feature in listOf("space","cosmic","mosaic","solar").filter { it in p.explorations }) {
+                                    val name=when(feature) {"space" -> if(en) "Stars in 3D" else "Sterren in 3D";"cosmic" -> if(en) "Light journey" else "Lichtreis";"mosaic" -> if(en) "Mosaic" else "Mozaïek";else -> if(en) "Solar comparison" else "Zonvergelijking"}
+                                    Action(name,Modifier.focusRequester(featureFocus.getValue(feature)),icon=R.drawable.ic_star) {observatoryMode=feature;observatory=true}
+                                }
                                 Action(if(en) "Gallery" else "Galerij",icon=R.drawable.ic_gallery, run=leave)
                             }
                         }

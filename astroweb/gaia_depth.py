@@ -34,14 +34,20 @@ def catalogue(store, field):
         f"1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{center.ra.deg:.8f},{center.dec.deg:.8f},{radius:.7f})) "
         "AND phot_g_mean_mag<14"
     )
-    try:
-        response = external_http.get("https://gaia.aip.de/tap/sync",
-            params={"REQUEST": "doQuery", "LANG": "ADQL", "QUERY": query, "FORMAT": "votable"},
-            timeout=(5, 60))
-        response.raise_for_status()
-        table = Table.read(io.BytesIO(response.content), format="votable", use_names_over_ids=True)
-    except (requests.RequestException, ValueError, OSError) as error:
-        raise ValueError("gaia_depth_unavailable") from error
+    table = None
+    errors = []
+    for endpoint in ("https://gaia.aip.de/tap/sync","https://gea.esac.esa.int/tap-server/tap/sync"):
+        try:
+            response = external_http.get(endpoint,
+                params={"REQUEST": "doQuery", "LANG": "ADQL", "QUERY": query, "FORMAT": "votable"},
+                timeout=(5, 35))
+            response.raise_for_status()
+            table = Table.read(io.BytesIO(response.content), format="votable", use_names_over_ids=True)
+            break
+        except (requests.RequestException, ValueError, OSError) as error:
+            errors.append(error)
+    if table is None:
+        raise ValueError("gaia_depth_unavailable") from errors[-1]
     rows = []
     for row in table:
         try:
@@ -90,7 +96,7 @@ def prepare(store, record):
     if not stars:
         raise ValueError("gaia_depth_no_stars")
     return {"stars": stars, "epoch": float(epoch.jyear), "checked_at": now(),
-            "source": "Gaia DR3 / ESA / AIP", "distance_method": "inverse parallax, SNR >= 10, RUWE < 1.4",
+            "source": "Gaia DR3 / ESA", "distance_method": "inverse parallax, SNR >= 10, RUWE < 1.4",
             "source_size": [record["width"], record["height"]]}
 
 

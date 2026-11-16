@@ -8,3 +8,7 @@ astropy>=7,<9
 tzdata>=2025
 scipy>=1.14,<2
 astropy-healpix>=1,<2
+astroquery>=0.4.11,<0.5
+reproject>=0.19,<0.22
+astroplan>=0.10,<0.11
+sunpy[map]>=7,<9

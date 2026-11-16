@@ -16,7 +16,7 @@ data class Capture(val id: String, val date: String)
 data class Photo(
     val id: String, val catalog: String, val name: Words, val summary: Words,
     val date: String, val poster: String?, val original: String?, val film: String?,
-    val hasHubble: Boolean, val maps: Boolean, val milkyWay: Boolean, val captures: List<Capture>, val aliases: List<String> = emptyList()
+    val hasHubble: Boolean, val maps: Boolean, val milkyWay: Boolean, val captures: List<Capture>, val aliases: List<String> = emptyList(),val explorations:Set<String> = emptySet()
 )
 
 // Prefer the human title, even when metadata prefixes or appends the catalogue ID.
@@ -72,7 +72,8 @@ private fun photo(o: JSONObject): Photo {
         o.media("poster"), o.media("original_view") ?: o.media("final"), o.media("video"),
         o.optBoolean("hubble_available"), o.isNull("capture_kind") || o.optString("capture_kind").isBlank(),
         o.optJSONObject("galaxy") != null, o.optJSONArray("captures").entries().map { Capture(it.getString("id"), it.optString("date").take(10)) },
-        info.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty())
+        info.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
+        o.optJSONObject("explorations")?.let { f -> f.keys().asSequence().filter { f.optBoolean(it) && it!="planner" }.toSet() }.orEmpty())
 }
 suspend fun gallery(): List<Photo> {
     return json("/api/objects").getJSONArray("objects").entries().map(::photo)
@@ -97,21 +98,22 @@ private val fieldNames = mapOf(
     "ic1396a" to Words("Olifantenslurf", "Elephant’s Trunk")
 )
 
-suspend fun hubbleTrips(capture: String): List<Trip> {
+suspend fun hubbleTrips(capture: String,solar:Boolean=false): List<Trip> {
     val path = android.net.Uri.encode(capture)
     var fieldNumber = 0
-    return json("/api/objects/$path/hubble?view=tv").optJSONArray("observations").entries().map { obj ->
+    val endpoint=if(solar) "solar-system" else "hubble?view=tv"
+    return json("/api/objects/$path/$endpoint").optJSONArray("observations").entries().map { obj ->
         val id = obj.getString("id")
         val target = obj.optString("target").takeUnless { it.uppercase() in setOf("ANY","NONE","PAR","PARALLEL") }.orEmpty()
         val description = obj.optString("title").ifBlank {
             listOf(target, obj.optString("filter")).filter { it.isNotBlank() }.joinToString(" · ")
         }.ifBlank { id }
         if (obj.optBoolean("full_footprint")) fieldNumber++
-        val name = fieldNames[id] ?: if (obj.optBoolean("full_footprint"))
+        val name = if(obj.has("name")) obj.words("name") else fieldNames[id] ?: if (obj.optBoolean("full_footprint"))
             Words("$description · veld $fieldNumber", "$description · field $fieldNumber")
         else Words(description, description)
         val tvVideo=obj.media("tv_video")
         Trip(id,name,obj.optString("tv_credit").ifBlank { obj.optString("credit").ifBlank { "NASA / ESA · Hubble" } },
-            tvVideo ?: ("$server/media/$path/hubble/"+android.net.Uri.encode(id)),overlayCredit=tvVideo!=null)
+            tvVideo ?: ("$server/media/$path/"+(if(solar) "solar-system/" else "hubble/")+android.net.Uri.encode(id)),overlayCredit=tvVideo!=null)
     }
 }

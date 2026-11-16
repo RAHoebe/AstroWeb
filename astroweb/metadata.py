@@ -145,6 +145,15 @@ def validate_metadata(raw):
         if isinstance(distance, bool) or not isinstance(distance, (float, int)) or not math.isfinite(distance) or distance <= 0:
             raise ValueError("invalid_metadata")
         result["galactic_distance_ly"] = distance
+    for field,source,minimum,maximum in (("distance_ly","distance_source",0,1e12),("redshift","redshift_source",0,20)):
+        value = raw.get(field)
+        if value is not None:
+            reference = raw.get(source)
+            if (isinstance(value,bool) or not isinstance(value,(float,int)) or not math.isfinite(value)
+                    or not minimum<value<=maximum or not isinstance(reference,str)
+                    or not re.fullmatch(r"https://[^\s<>\"']{3,1000}",reference)):
+                raise ValueError("invalid_metadata")
+            result[field],result[source] = value,reference
     result["aliases"] = [result["target"]]
     result["translation"] = "admin"
     result["updated_at"] = now()

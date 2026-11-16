@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
     var opened by rememberSaveable { mutableStateOf<String?>(null) }
     var survey by rememberSaveable { mutableStateOf<String?>(null) }
     var lastSurvey by rememberSaveable { mutableStateOf<String?>(null) }
+    var returnCalendar by rememberSaveable { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
     var photos by remember { mutableStateOf<List<Photo>?>(null) }
     var failed by remember { mutableStateOf(false) }
@@ -129,7 +130,7 @@ class MainActivity : ComponentActivity() {
             if(dest==null){
                 android.widget.Toast.makeText(context,if(en) "No matching object or command" else "Geen passend object of opdracht",android.widget.Toast.LENGTH_LONG).show()
             } else {
-                opened=dest.objectId;survey=dest.view.takeIf { it=="atlas" || it=="panorama" }
+                opened=dest.objectId;survey=dest.view.takeIf { it in listOf("atlas","panorama","observatory","calendar") }
                 if(dest.objectId!=null)selected=dest.objectId
                 lastSurvey=null;entry=dest.view;invocation++
             }
@@ -143,8 +144,8 @@ class MainActivity : ComponentActivity() {
         val current = opened
         val mode=survey
         when {
-            mode != null -> RemoteCanvas(if(mode=="modes") "viewing.html" else "collection-tv.html",selected,mode,en,foreground=foreground) { lastSurvey=mode;survey=null }
-            current != null -> key(current,invocation) { Viewer(current, en, foreground,entry) { opened = null } }
+            mode != null -> RemoteCanvas(when(mode) { "observatory","calendar" -> "observatory.html"; "modes" -> "viewing.html"; else -> "collection-tv.html" },selected,if(mode=="observatory") "calendar" else mode,en,foreground=foreground,openCapture={chosen->selected=list?.firstOrNull { it.id==chosen || it.catalog==chosen.substringBefore('~') }?.id ?: chosen;opened=chosen;returnCalendar=mode in listOf("calendar","observatory");survey=null;entry="photo"}) { lastSurvey=mode;survey=null }
+            current != null -> key(current,invocation) { Viewer(current, en, foreground,entry) { opened = null;if(returnCalendar){survey="calendar";returnCalendar=false} } }
             failed || list?.isEmpty() == true -> {
                 val focus = remember { FocusRequester() }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -172,6 +173,7 @@ class MainActivity : ComponentActivity() {
     val atlasFocus=remember { FocusRequester() }
     val modesFocus=remember { FocusRequester() }
     val panoramaFocus=remember { FocusRequester() }
+    val observatoryFocus=remember { FocusRequester() }
     var initialFocus by remember { mutableStateOf(true) }
     val ready=androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     val inputMode=androidx.compose.ui.platform.LocalInputModeManager.current
@@ -185,6 +187,7 @@ class MainActivity : ComponentActivity() {
                 initialFocus && lastSurvey=="modes" -> modesFocus
                 initialFocus && lastSurvey=="atlas" -> atlasFocus
                 initialFocus && lastSurvey=="panorama" -> panoramaFocus
+                initialFocus && lastSurvey in listOf("observatory","calendar") -> observatoryFocus
                 else -> focus.getValue(current.id)
             }
             initialFocus=!target.requestFocus()
@@ -201,7 +204,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.width(7.dp))
                 Text("AstroWeb", color = light, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
                 Spacer(Modifier.width(14.dp))
-                Text((if (en) "Gallery" else "Galerij")+"   "+(photos.indexOf(current)+1)+" / "+photos.size, color = quiet, fontSize = 17.sp)
+                Text((photos.indexOf(current)+1).toString()+" / "+photos.size, color = quiet, fontSize = 17.sp)
                 Spacer(Modifier.weight(1f))
                 Action("Server",icon=R.drawable.ic_server,iconOnly=true,run=configure)
                 Spacer(Modifier.width(8.dp))
@@ -209,11 +212,13 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.width(8.dp))
                 Action(if(en) "Sky atlas" else "Hemelatlas",Modifier.focusRequester(atlasFocus),icon=R.drawable.ic_atlas) { openSurvey("atlas") }
                 Spacer(Modifier.width(8.dp))
+                Action(if(en) "Calendar" else "Kalender",Modifier.focusRequester(observatoryFocus),icon=R.drawable.ic_date) { openSurvey("calendar") }
+                Spacer(Modifier.width(8.dp))
                 Action(if(en) "Night panorama" else "Nachtpanorama",Modifier.focusRequester(panoramaFocus),icon=R.drawable.ic_panorama) { openSurvey("panorama") }
                 Spacer(Modifier.width(8.dp))
                 Action(if(en) "Viewing modes" else "Kijkmodi",Modifier.focusRequester(modesFocus),icon=R.drawable.ic_viewing_modes) { openSurvey("modes") }
                 Spacer(Modifier.width(8.dp))
-                Action(if (en) "NL" else "EN", icon=R.drawable.ic_language, run = toggleLanguage)
+                Action(if (en) "NL" else "EN", run = toggleLanguage)
             }
             Spacer(Modifier.height(15.dp))
             GalleryInfo(photos,current,en,infoLimit)

@@ -23,12 +23,18 @@ selectButtons($('groups'),groups,index=>{
   });buttons[0].click();
 });
 const screens=[
+ ['Stars in 3D','viewer-space','Actual star crops linked to Gaia DR3, unfolded into a distance diagram with a logarithmic depth axis.'],
+ ['Light journey','viewer-cosmic','A light pulse travels from the object to Earth; your own photo appears at arrival.'],
+ ['Sky mosaic','viewer-mosaic','Overlapping registered captures form a visual mosaic, with every contributing capture date visible.'],
+ ['Solar comparison','viewer-solar','Sun-only comparison with dated SDO imagery and SunPy coordinates.'],
+ ['Capture calendar','calendar-month','The collection-wide calendar shows capture days, portrait previews and darkness windows.'],
+ ['TV calendar day','calendar-tv-day','Remote control selects a photo on the capture-day timeline. OK opens that exact capture.'],
  ['Google TV','tv-gallery','Five portrait posters share one row. The title, date and object summary sit above them.'],
  ['Web gallery','web-gallery','The web collection adapts to the width of the browser. Hover or focus a poster for a film preview.'],
  ['Studio','studio','Position the zoom frames on the original capture, compare rendered versions and choose a gallery film.'],
  ['Object discovery','discovery','Explore catalogued objects in the original image and use a selected object as a Studio zoom point.'],
  ['TV maps','tv-maps','Open a map with the remote. The available choices follow the selected object.'],
- ['TV Hubble','tv-hubble','A fullscreen Hubble journey maintains the destination image’s orientation.']
+ ['TV archive journey','tv-hubble','A fullscreen Hubble journey maintains the destination image’s orientation.']
 ];
 selectButtons($('screen-tabs'),screens.map(s=>s[0]),i=>{const s=screens[i];$('screen-img').src='media/'+s[1]+'.webp';$('screen-img').alt=s[2];$('screen-caption').textContent=s[2];});
 // Download links in the installation section identify the supported releases.
@@ -39,7 +45,7 @@ const tv=tvRelease.replace('/releases/tag/','/releases/download/')+'/';
 const guides=[
  ['Local network','Keep it inside your home',`<p>Put the computer or NAS and Google TV on the same trusted LAN. The server stores the originals, database and films. The remote plays the collection directly over Wi-Fi or Ethernet.</p><ol><li>Download the <a href="${web}">web release</a>. On the server, put <code>ASTROWEB_LAN_IP=192.168.1.50</code> in a local <code>.env</code> file, substituting your actual private address. Create <code>data/</code> with write access for UID/GID 10001.</li><li>Build the server, create the Studio password and start it:</li></ol><pre>docker compose -f compose.lan.yaml build
 docker compose -f compose.lan.yaml run --rm astroweb python -m astroweb admin
-docker compose -f compose.lan.yaml up -d</pre><p>Open <code>http://192.168.1.50:8090</code> in a browser on the LAN. For a different address, add a local DNS record named <code>astroweb.home.arpa</code> on your router pointing to that address. On Google TV, install the <a href="${tv}AstroWeb-TV-LAN-${tvVersion}.apk">LAN APK</a> and enter <code>http://astroweb.home.arpa:8090</code> or the example IP. No reverse proxy, public domain, port forwarding or Google Assistant is needed. HTTP assumes a trusted home network.</p><p><strong>Offline operation.</strong> The LAN file defaults to <code>ASTROWEB_OFFLINE=1</code>. Local uploads, rendering and cached media work. New survey tiles, Gaia matches, Hubble and mission imagery require prior downloads. To prepare them online, set the variable to <code>0</code>, recreate the container, open the desired journeys, then switch back to <code>1</code> and recreate it again. Download software and dependencies before disconnecting. This setting controls AstroWeb’s external HTTP requests; Google TV system services have their own network settings.</p>`],
+docker compose -f compose.lan.yaml up -d</pre><p>Open <code>http://192.168.1.50:8090</code> in a browser on the LAN. For a different address, add a local DNS record named <code>astroweb.home.arpa</code> on your router pointing to that address. On Google TV, install the <a href="${tv}AstroWeb-TV-LAN-${tvVersion}.apk">LAN APK</a> and enter <code>http://astroweb.home.arpa:8090</code> or the example IP. No reverse proxy, public domain, port forwarding or Google Assistant is needed. HTTP assumes a trusted home network.</p><p><strong>Offline operation.</strong> The LAN file defaults to <code>ASTROWEB_OFFLINE=1</code>. Local uploads, rendering and cached media work. New survey tiles, Gaia matches, archive and mission imagery require prior downloads. To prepare them online, set the variable to <code>0</code>, recreate the container, open the desired journeys, then switch back to <code>1</code> and recreate it again. Download software and dependencies before disconnecting. This setting controls AstroWeb’s external HTTP requests; Google TV system services have their own network settings.</p>`],
  ['Computer','Run it on a PC',`<p>Download the <a href="${web}">source archive</a> and extract it. Install Python 3.11–3.13 and FFmpeg with libx264. The Windows starter creates the virtual environment and installs the listed requirements.</p><ol><li>On Windows run <code>Start-AstroWeb.cmd</code>. On macOS or Linux use the commands below.</li><li>Open <code>http://127.0.0.1:8090/admin</code> on the same computer to create your first Studio password of at least 11 characters.</li><li>Upload a capture, render a film, then open the gallery.</li></ol><pre>python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt

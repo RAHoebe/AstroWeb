@@ -5,7 +5,7 @@ if not exist ".venv\Scripts\python.exe" (
   python -m venv .venv
   if errorlevel 1 goto failed
 )
-".venv\Scripts\python.exe" -c "import astropy_healpix, scipy.spatial, flask, cv2, waitress" >nul 2>&1
+".venv\Scripts\python.exe" -c "import astropy_healpix, scipy.spatial, flask, cv2, waitress, astroquery, reproject, astroplan, sunpy.map" >nul 2>&1
 if errorlevel 1 (
   ".venv\Scripts\python.exe" -m pip install -r requirements.txt
   if errorlevel 1 goto failed

@@ -39,6 +39,8 @@ def test_unproven_footprints_are_rejected(region,target):
 
 @pytest.mark.parametrize("skymap_hit",[False,True])
 def test_upload_pipeline_searches_both_catalogues_and_saves_only_full_match(tmp_path,monkeypatch,offline_spatial_catalogue,skymap_hit):
+    from astroweb import mission_archive
+    monkeypatch.setattr(mission_archive, "discover", lambda *args: None)
     st=Store(tmp_path)
     rec=capture()
     st.put("objects",rec["id"],rec)

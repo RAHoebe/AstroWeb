@@ -33,7 +33,8 @@ private data class Choices(val items: List<Trip> = emptyList(), val busy: Boolea
 @Composable internal fun Travel(p: Photo, en: Boolean, foreground: Boolean, openSky:Boolean=false, leave: () -> Unit) {
     var attempt by remember { mutableIntStateOf(0) }
     val sky=choices(p.id,attempt) { listOfNotNull(skyTrip(p.id)) }
-    val hubble=choices(p.id,attempt) { if(p.hasHubble) hubbleTrips(p.id) else emptyList() }
+    val solar=p.catalog.uppercase() in setOf("SUN","MOON","MERCURY","VENUS","MARS","JUPITER","SATURN","URANUS","NEPTUNE")
+    val hubble=choices(p.id,attempt) { if(p.hasHubble||solar) hubbleTrips(p.id,solar) else emptyList() }
     var selection by rememberSaveable(p.id) { mutableStateOf("journey") }
     var watching by rememberSaveable(p.id) { mutableStateOf(openSky) }
     val list=sky.items+hubble.items
@@ -69,7 +70,7 @@ private data class Choices(val items: List<Trip> = emptyList(), val busy: Boolea
                 Spacer(Modifier.height(10.dp))
                 Column(Modifier.weight(1f).verticalScroll(scroll),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                     for (trip in list) {
-                        if (trip==hubble.items.firstOrNull()) Text("Hubble", color=coral,fontSize=17.sp)
+                        if (trip==hubble.items.firstOrNull()) Text(if(solar) (if(en) "Detail journeys" else "Detailreizen") else (if(en) "Archive journeys" else "Archiefreizen"), color=coral,fontSize=17.sp)
                         Action(trip.name.get(en),Modifier.fillMaxWidth().focusRequester(requesters.getValue(trip.id))
                             .onFocusChanged { if(it.isFocused) selection=trip.id },icon=R.drawable.ic_route) {
                             selection=trip.id;watching=true

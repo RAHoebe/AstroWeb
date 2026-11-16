@@ -27,8 +27,13 @@ internal fun destination(query:String,photos:List<Photo>,selected:String?):Desti
     fun has(vararg words:String)=words.any { " $it " in q }
     if(has("hemelatlas","sky atlas","personal atlas"))return Destination("atlas")
     if(has("nachtpanorama","night panorama"))return Destination("panorama")
+    if(has("opnamekalender","kalender","calendar","observatorium","observatory"))return Destination("calendar")
     if(has("galerij","gallery"))return Destination("gallery")
     val view=when {
+        has("sterren in 3d","stars in 3d","stars in three d") -> "space"
+        has("lichtreis","light journey") -> "cosmic"
+        has("mozaiek","mosaic") -> "mosaic"
+        has("zonvergelijking","solar comparison") -> "solar"
         has("poolkaart","polar chart","polar map") -> "polar"
         has("skykaart","sky chart") -> "sky"
         has("melkwegkaart","melkweg","milky way map") -> "galaxy"
@@ -44,7 +49,8 @@ internal fun destination(query:String,photos:List<Photo>,selected:String?):Desti
     }
     val target=matches.singleOrNull()?.id ?: if(matches.isEmpty() && q.trim() in setOf(
         "open de foto","show the photo","open reizen","open journeys","open de poolkaart","open polar chart",
-        "open de skykaart","open sky chart","speel af","play","open de melkwegkaart","open milky way map"))selected else null
+        "open de skykaart","open sky chart","speel af","play","open de melkwegkaart","open milky way map",
+        "open sterren in 3d","show stars in 3d","open de lichtreis","open light journey","open het mozaiek","open mosaic","open zonvergelijking","open solar comparison"))selected else null
     return target?.let { Destination(view,it) }
 }
 

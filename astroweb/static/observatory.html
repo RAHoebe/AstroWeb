@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#180f14"><title>AstroWeb · Observatorium</title>
+  <link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/observatory.css">
+  <script type="module" src="/static/observatory.js"></script>
+</head>
+<body>
+<img id="obs-backdrop" alt="" aria-hidden="true"><div class="veil"></div>
+<header class="obs-header"><a class="brand" href="/">ASTRO<span>WEB</span></a><span data-i18n="observatory">Observatorium</span>
+  <nav><button data-lang="nl">NL</button><button data-lang="en">EN</button><a id="obs-return" href="/" data-i18n="backGallery">Terug naar de galerij</a></nav>
+</header>
+<main>
+  <section id="obs-hub" aria-labelledby="obs-heading">
+    <div class="hub-heading"><div><p class="eyebrow" data-i18n="obs_eyebrow">JE EIGEN COLLECTIE ALS VERTREKPUNT</p><h1 id="obs-heading" data-i18n="obs_heading">Je hemel. Nieuwe perspectieven.</h1></div>
+      <label class="capture-choice"><span data-i18n="obs_capture">Vertrek vanaf</span><select id="obs-capture"></select></label></div>
+    <div id="obs-cards" class="mode-cards">
+      <button class="mode-card" data-mode="mosaic"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 8h28v28H8zM28 28h28v28H28zM14 29l7-9 9 8M35 49l7-9 8 5"/></svg><span class="card-number">01</span><h2 data-i18n="obs_mosaic">Jouw hemelmozaïek</h2><p data-i18n="obs_mosaic_intro">Overlappende opnamen samen in één zoombaar beeld.</p><span class="card-state"></span></button>
+      <button class="mode-card" data-mode="space"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5l24 14v27L32 60 8 46V19zM8 19l24 14 24-14M32 33v27M19 39l9-16 16 19"/><circle cx="19" cy="39" r="3"/><circle cx="28" cy="23" r="3"/><circle cx="44" cy="42" r="3"/></svg><span class="card-number">02</span><h2 data-i18n="obs_space">Tussen de sterren</h2><p data-i18n="obs_space_intro">Beweeg door de gemeten Gaia-afstanden in je eigen foto.</p><span class="card-state"></span></button>
+      <button class="mode-card" data-mode="cosmic"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="23"/><path d="M32 17v16l12 8M6 12l9-4 2 9M13 12C4 24 5 41 16 50M24 4h16"/></svg><span class="card-number">03</span><h2 data-i18n="obs_cosmic">De reis van het licht</h2><p data-i18n="obs_cosmic_intro">Ontdek hoeveel verleden er in jouw opname verborgen ligt.</p><span class="card-state"></span></button>
+      <button class="mode-card" data-mode="planner"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 15h44v41H10zM20 8v14M44 8v14M10 29h44M18 39h6M30 39h6M42 39h5M18 48h6M30 48h6"/></svg><span class="card-number">04</span><h2 data-i18n="obs_planner">Jouw opnamekalender</h2><p data-i18n="obs_planner_intro">Vind donkere nachten en gunstige kijktijden voor je objecten.</p><span class="card-state"></span></button>
+      <button class="mode-card" data-mode="solar"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="16"/><path d="M32 3v8M32 53v8M3 32h8M53 32h8M11 11l6 6M47 47l6 6M11 53l6-6M47 17l6-6"/><circle cx="27" cy="29" r="2"/><path d="M36 37l4-4"/></svg><span class="card-number">05</span><h2 data-i18n="obs_solar">Dezelfde Zon</h2><p data-i18n="obs_solar_intro">Vergelijk je zonopname met SDO op hetzelfde opnametijdstip.</p><span class="card-state"></span></button>
+    </div>
+    <p id="obs-hub-status" role="status"></p><p id="obs-hub-help" class="help" data-i18n="obs_hub_help">Kies een opname en ontdek de beschikbare perspectieven.</p>
+  </section>
+  <section id="obs-scene" hidden aria-labelledby="obs-scene-title">
+    <div class="scene-heading"><button id="obs-home" class="quiet" data-i18n="obs_home">← Observatorium</button><div><h1 id="obs-scene-title"></h1><p id="obs-object"></p></div><div class="scene-tools"><button id="obs-full" data-i18n="fullscreen">Volledig scherm</button><a id="obs-open" href="/" data-i18n="obs_open">Open opname ↗</a></div></div>
+    <div id="obs-surface" tabindex="0" role="region" data-i18n-aria="obs_scene">
+      <canvas id="obs-canvas"></canvas><canvas id="obs-gl" aria-hidden="true" hidden></canvas>
+      <div id="obs-loading" role="status"><div class="spinner"></div><p id="obs-status"></p><button id="obs-retry" hidden data-i18n="retry">Opnieuw proberen</button></div>
+      <div id="obs-readouts" class="readouts" aria-live="off"></div>
+      <div id="obs-calendar" hidden><div id="obs-calendar-title"></div><p id="obs-calendar-legend"></p><div id="obs-calendar-month"><div id="obs-season"></div><div id="obs-weekdays"></div><div id="obs-days"></div><div id="obs-night"></div><div id="obs-day-preview"></div></div><section id="obs-calendar-day" hidden><button id="obs-day-back" data-i18n="calendarMonthBack">← Maandoverzicht</button><h2 id="obs-day-title"></h2><div id="obs-day-timeline"></div><div id="obs-day-photos"></div><p id="obs-day-empty" data-i18n="calendarNoCaptures" hidden>Geen opnamen op deze dag.</p><p id="obs-day-night"></p></section></div>
+      <p id="obs-remote-help" class="remote-help"></p>
+      <div id="obs-solar-options" hidden></div><p id="obs-solar-status" role="status"></p>
+    </div>
+    <div class="controls">
+      <div class="control-buttons"><button id="obs-prev" data-i18n-aria="previousObject">←</button><button id="obs-play">▶</button><button id="obs-next" data-i18n-aria="nextObject">→</button><button id="obs-minus" data-i18n-aria="obs_zoom_out">−</button><button id="obs-plus" data-i18n-aria="obs_zoom_in">+</button><button id="obs-reset" data-i18n="obs_reset">Beginstand</button></div>
+      <label id="obs-progress-label"><span id="obs-progress-name"></span><input id="obs-progress" type="range" min="0" max="1000" value="0"></label>
+      <label id="obs-month-label" hidden><span data-i18n="obs_month">Maand</span><input id="obs-month" type="month" min="2000-01" max="2100-12"></label>
+      <label id="obs-target-label" hidden><span data-i18n="calendarPlanFor">Kijktijden voor</span><select id="obs-plan-target"></select></label><button id="obs-today" hidden data-i18n="calendarToday">Vandaag</button>
+      <label id="obs-source-label" hidden><span data-i18n="obs_reference">Vergelijk met</span><select id="obs-solar-source"></select></label>
+      <label id="obs-grid-label" hidden><input id="obs-grid" type="checkbox" checked><span data-i18n="obs_solar_grid">Zonneraster</span></label>
+      <button id="obs-rotate" hidden data-i18n="obs_rotate">Eigen foto 90° draaien</button>
+      <button id="obs-clear-point" hidden data-i18n="obs_clear_point">Wis zonnelocatie</button>
+      <button id="obs-refresh" hidden data-i18n="retry">Opnieuw proberen</button>
+      <label id="obs-angle-label" hidden><span data-i18n="obs_angle">Oriëntatie eigen foto</span><input id="obs-angle" type="range" min="-180" max="180" value="0"></label>
+    </div>
+    <dl id="obs-cosmology" hidden></dl><div class="scene-notes"><p id="obs-note"></p><p id="obs-credit"></p></div>
+  </section>
+</main>
+</body>
+</html>

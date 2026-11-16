@@ -9,7 +9,8 @@ import requests
 from . import external_http
 
 from .hubble import HEIGHT, WIDTH, encode
-from .journey import smooth
+from .journey import smooth, disk_in_photo
+from .camera import FocusZoom
 
 LOCK = threading.Lock()
 LRO = "NASA/GSFC/Arizona State University"
@@ -93,13 +94,93 @@ def frames(photo, image, focus, keep_edges=False):
             yield cv2.addWeighted(source,1-fade,destination,fade,0)
 
 
+def limb_circle(image):
+    """Fit the visible lunar/solar limb even when most of the disk is cropped."""
+    gray=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY);h,w=gray.shape
+    candidates=[]
+    for threshold in (6,10,16,24,32):
+        contours,_=cv2.findContours(np.uint8(gray<threshold)*255,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+        if not contours:continue
+        points=max(contours,key=cv2.contourArea).reshape(-1,2).astype(float)
+        points=points[(points[:,0]>2)&(points[:,0]<w-3)&(points[:,1]>2)&(points[:,1]<h-3)]
+        if len(points)<50:continue
+        if len(points)>3000:points=points[::max(1,len(points)//3000)]
+        good=np.ones(len(points),bool)
+        for _ in range(5):
+            p=points[good];x,y=p.T
+            values=np.linalg.lstsq(np.c_[2*x,2*y,np.ones(len(p))],x*x+y*y,rcond=None)[0]
+            center=values[:2];radius=np.sqrt(max(0,values[2]+center@center))
+            residual=np.abs(np.linalg.norm(points-center,axis=1)-radius)
+            good=residual<max(2.,3*np.median(residual))
+        error=float(np.median(residual[good]))
+        if radius>min(w,h)*.2 and good.sum()>50 and error<3:
+            candidates.append((error,center,float(radius)))
+    if not candidates:raise ValueError('solarDetailMissing')
+    _,center,radius=min(candidates,key=lambda v:v[0])
+    # Align luminous limb to luminous limb, rather than the inner threshold
+    # contour of the dark lunar disk. The visible edge is slightly farther out.
+    theta=np.linspace(0,2*np.pi,720,endpoint=False);radii=np.linspace(radius-15,radius+15,241)
+    xx=(center[0]+np.cos(theta)[:,None]*radii).astype(np.float32);yy=(center[1]+np.sin(theta)[:,None]*radii).astype(np.float32)
+    valid=(xx.min(axis=1)>2)&(xx.max(axis=1)<w-3)&(yy.min(axis=1)>2)&(yy.max(axis=1)<h-3)
+    profiles=cv2.remap(cv2.GaussianBlur(gray.astype(np.float32),(0,0),.6),xx,yy,cv2.INTER_LINEAR)
+    gradient=np.gradient(profiles,radii,axis=1);indices=gradient.argmax(axis=1)
+    accepted=valid&(gradient[np.arange(len(theta)),indices]>2)
+    if accepted.sum()>50:radius=float(np.median(radii[indices[accepted]]))
+    return center,radius
+
+
+def limb_registration(photo,image):
+    source,radius=disk_in_photo(photo)
+    if not radius:raise ValueError('solarDetailMissing')
+    # Otsu is a useful disk locator, but limb darkening makes that mask too
+    # small. Fit the strongest outward intensity gradient for the true edge.
+    gray=cv2.GaussianBlur(cv2.cvtColor(photo,cv2.COLOR_BGR2GRAY).astype(np.float32),(0,0),.7)
+    angles=np.linspace(0,2*np.pi,720,endpoint=False);radii=np.linspace(.9*radius,1.1*radius,201)
+    xx=(source[0]+np.cos(angles)[:,None]*radii).astype(np.float32)
+    yy=(source[1]+np.sin(angles)[:,None]*radii).astype(np.float32)
+    profiles=cv2.remap(gray,xx,yy,cv2.INTER_LINEAR)
+    edge=radii[np.argmax(-np.gradient(profiles,axis=1),axis=1)]
+    points=np.float32(np.c_[source[0]+np.cos(angles)*edge,source[1]+np.sin(angles)*edge])
+    center,axes,angle=cv2.fitEllipse(points[:,None])
+    source=np.asarray(center);axes=np.asarray(axes)/2
+    destination,other=limb_circle(image)
+    theta=np.deg2rad(angle);rotation=np.array([[np.cos(theta),-np.sin(theta)],[np.sin(theta),np.cos(theta)]])
+    linear=rotation@np.diag(other/axes)@rotation.T
+    ratio=float(np.sqrt(np.linalg.det(linear)))
+    matrix=np.eye(3);matrix[:2,:2]=linear;matrix[:2,2]=destination-linear@source
+    return matrix,destination,ratio
+
+
+def aligned_limb_frames(photo,image,focus):
+    registration,origin,ratio=limb_registration(photo,image)
+    h,w=image.shape[:2];target=np.array(focus)*[w,h]
+    start=min(WIDTH/photo.shape[1],HEIGHT/photo.shape[0])/ratio
+    margin=np.maximum(1,np.minimum(target,[w,h]-target))
+    end=max(start*4,1.06*max(WIDTH/(2*margin[0]),HEIGHT/(2*margin[1])))
+    camera=FocusZoom(origin,target,start,end,WIDTH,HEIGHT)
+    yy,xx=np.ogrid[:h,:w]
+    edge=np.minimum(np.minimum(yy,h-1-yy),np.minimum(xx,w-1-xx))
+    mask=np.uint8(255*np.clip(edge/35,0,1))
+    for i in range(288):
+        phase=i/287;_,cam=camera.at(smooth((phase-.08)/.85))
+        source=cv2.warpPerspective(photo,cam@registration,(WIDTH,HEIGHT))
+        fade=smooth((phase-.25)/.5)
+        if fade<=0:yield source;continue
+        dest=cv2.warpPerspective(image,cam,(WIDTH,HEIGHT))
+        alpha=cv2.warpPerspective(mask,cam,(WIDTH,HEIGHT)).astype(np.float32)*(fade/255)
+        # Fade the full photosphere uniformly. A spatially varying source
+        # weight would imprint the rectangular boundary of this cropped image.
+        blended=source.astype(np.float32)*(1-fade)+dest.astype(np.float32)*alpha[:,:,None]
+        yield np.uint8(np.clip(blended,0,255))
+
+
 def movie(store,record,ident):
     item=next((f for f in FEATURES.get(record.get("body"),[]) if f[0]==ident),None)
     if not item:
         raise ValueError("solarDetailMissing")
     _,file,_,_,credit,x,y=item
     limb=ident=="NHQ202404080107"
-    key=hashlib.sha256(str(("limb-tour-v2" if limb else "solar-tour-v1",item,record["sha256"]["final"])).encode()).hexdigest()[:20]
+    key=hashlib.sha256(str(("limb-registered-v6" if limb else "solar-tour-v1",item,record["sha256"]["final"])).encode()).hexdigest()[:20]
     folder=store.path(f"objects/{record.get('storage_id',record['id'])}/solar-system")
     output=folder/(key+".mp4")
     with LOCK:
@@ -111,7 +192,8 @@ def movie(store,record,ident):
             folder.mkdir(parents=True,exist_ok=True)
             tmp=folder/(uuid.uuid4().hex+".part.mp4")
             try:
-                encode(frames(photo,image,(x,y),keep_edges=limb),credit.replace(" · "," / "),tmp)
+                sequence=aligned_limb_frames(photo,image,(x,y)) if limb and disk_in_photo(photo)[1] is not None else frames(photo,image,(x,y),keep_edges=limb)
+                encode(sequence,credit.replace(" · "," / "),tmp)
                 tmp.replace(output)
             finally:
                 tmp.unlink(missing_ok=True)

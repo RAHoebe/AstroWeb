@@ -88,6 +88,9 @@ def create_app(data_dir=None, testing=False):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        if request.path=='/observatory' and request.args.get('embed')=='1':
+            response.headers['X-Frame-Options']='SAMEORIGIN'
+            response.headers['Content-Security-Policy']=response.headers['Content-Security-Policy'].replace("frame-ancestors 'none'","frame-ancestors 'self'")
         if request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         if response.is_json and response.status_code == 200 and response.calculate_content_length() >= 16_384:
@@ -213,7 +216,8 @@ def create_app(data_dir=None, testing=False):
         primary=groups.get(catalog,[record])[0]
         allowed=records if session.get("admin") else [r for r in records if r["published"]]
         dates=capture_groups([r for r in allowed if group_id(r)==catalog]).get(catalog,[])
-        return jsonify({**present(record), "captures":[date_option(r) for r in dates],"neighbours":neighbours(visible,primary["id"]), "physical":field_scale(store,record), "hubble_available":hubble_target(record), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record))})
+        features=app.extensions['observatory'].features(record,allowed)
+        return jsonify({**present(record), "captures":[date_option(r) for r in dates],"neighbours":neighbours(visible,primary["id"]), "physical":field_scale(store,record), "hubble_available":hubble_target(record), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record)),"explorations":features})
 
     @app.get("/api/objects/<identifier>/environment")
     def environment(identifier):
@@ -723,4 +727,6 @@ def create_app(data_dir=None, testing=False):
         response = send_file(store.path(relative), conditional=True, max_age=3600 if kind == "final" else 0, download_name=f"{identifier}{'.mp4' if kind == 'movie' else Path(relative).suffix}", as_attachment=request.args.get("download") == "1")
         return response
 
+    from .observatory import register as register_observatory
+    register_observatory(app,store,queue,get_object)
     return app

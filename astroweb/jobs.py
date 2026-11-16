@@ -148,6 +148,16 @@ class JobQueue:
         except Exception:
             # Optional external data must not prevent publishing the user's film.
             logging.exception("Could not select a Hubble destination for %s", identifier)
+        # Additional archives run after the current render, so large optional
+        # products cannot delay publication of the user's own film.
+        self.executor.submit(self.discover_missions, identifier)
+
+    def discover_missions(self, identifier):
+        from . import mission_archive
+        try:
+            mission_archive.discover(self.store, identifier)
+        except Exception:
+            logging.exception("Could not select additional archive destinations for %s", identifier)
 
     def align(self, identifier):
         with self.store.lock:

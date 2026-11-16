@@ -60,9 +60,10 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
 }
 
 @SuppressLint("SetJavaScriptEnabled")
-@Composable internal fun RemoteCanvas(asset:String,id:String,mode:String,en:Boolean,foreground:Boolean=true,turns:Int=0,onRotate:()->Unit={},leave:(()->Unit)?=null) {
+@Composable internal fun RemoteCanvas(asset:String,id:String,mode:String,en:Boolean,foreground:Boolean=true,turns:Int=0,onRotate:()->Unit={},openCapture:((String)->Unit)?=null,leave:(()->Unit)?=null) {
     val context=LocalContext.current
     val page=remember(asset,id,mode,en) {
+        if(asset=="observatory.html") return@remember ""
         fun read(name:String)=context.assets.open(name).bufferedReader().use { it.readText() }
         val html=read(asset)
         val scripts=if(asset=="map.html") html.replace("__MAP_MOTION__",read("map-motion.js"))
@@ -76,6 +77,7 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
     val focus=remember { FocusRequester() }
     LaunchedEffect(web,foreground) {
         if(asset=="viewing.html") web?.evaluateJavascript("window.viewActive?.($foreground)",null)
+        if(asset=="observatory.html") web?.evaluateJavascript("window.viewActive?.($foreground)",null)
         if(!foreground && asset=="map.html") web?.evaluateJavascript("window.mapKey?.('pause')",null)
     }
     if(leave!=null) BackHandler {
@@ -91,13 +93,18 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
             KeyEvent.KEYCODE_DPAD_DOWN -> "out"
             KeyEvent.KEYCODE_DPAD_LEFT -> "previous"
             KeyEvent.KEYCODE_DPAD_RIGHT -> "next"
-            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER -> if(asset=="map.html") "toggle" else "select"
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> if(asset=="map.html" || asset=="viewing.html") "toggle" else return@onPreviewKeyEvent false
-            KeyEvent.KEYCODE_MEDIA_PLAY -> if(asset=="map.html" || asset=="viewing.html") "play" else return@onPreviewKeyEvent false
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> if(asset=="map.html" || asset=="viewing.html") "pause" else return@onPreviewKeyEvent false
+            KeyEvent.KEYCODE_DPAD_CENTER,KeyEvent.KEYCODE_ENTER,KeyEvent.KEYCODE_NUMPAD_ENTER -> if(asset=="observatory.html") "discover" else if(asset=="map.html") "toggle" else "select"
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> if(asset in listOf("map.html","viewing.html","observatory.html")) "toggle" else return@onPreviewKeyEvent false
+            KeyEvent.KEYCODE_MEDIA_PLAY -> if(asset in listOf("map.html","viewing.html","observatory.html")) "play" else return@onPreviewKeyEvent false
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> if(asset in listOf("map.html","viewing.html","observatory.html")) "pause" else return@onPreviewKeyEvent false
             else -> return@onPreviewKeyEvent false
         }
-        if(command=="select") {
+        if(command=="discover") {
+            if(ev.action==KeyEvent.ACTION_UP){
+                val action=if(ev.eventTime-ev.downTime>=android.view.ViewConfiguration.getLongPressTimeout()) "home" else "select"
+                web?.evaluateJavascript("window.mapKey?.('$action')",null)
+            }
+        } else if(command=="select") {
             if(ev.action==KeyEvent.ACTION_UP){
                 val rotate=ev.eventTime-ev.downTime>=android.view.ViewConfiguration.getLongPressTimeout()
                 if(rotate)onRotate()
@@ -126,9 +133,20 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
             if(asset=="viewing.html") settings.mediaPlaybackRequiresUserGesture=false
             settings.allowFileAccess=false;settings.allowContentAccess=false
             webViewClient=object:WebViewClient() {
-                override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest)=true
+                override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean {
+                    val origin=Uri.parse(server);val url=request.url
+                    if(openCapture!=null && url.scheme==origin.scheme && url.host==origin.host && url.port==origin.port && url.pathSegments.size==2 && url.pathSegments[0]=="viewer") {
+                        val chosen=url.pathSegments[1]
+                        if(chosen.matches(Regex("[A-Za-z0-9_~.-]{1,80}")))view.post { openCapture(chosen) }
+                    }
+                    return true
+                }
             }
-            loadDataWithBaseURL("$server/",page,"text/html","utf-8",null)
+            if(asset=="observatory.html") {
+                val path=if(mode=="calendar" || mode=="planner") "/calendar?tv=1" else "/observatory?tv=1&embed=1&mode=${Uri.encode(mode)}"
+                loadUrl("$server$path&capture=${Uri.encode(id)}&lang=${if(en) "en" else "nl"}")
+            }
+            else loadDataWithBaseURL("$server/",page,"text/html","utf-8",null)
             web=this
         } },modifier=Modifier.fillMaxSize(),onRelease={ it.stopLoading();it.destroy();web=null })
     }

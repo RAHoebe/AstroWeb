@@ -4,6 +4,10 @@
 
 ## Nederlands
 
+**Viewerfuncties:** bij een object staan alleen relevante opties: Sterren in 3D, Lichtreis, Mozaïek (vanaf twee overlappende opnamen) en Zonvergelijking (alleen Zon). Kalender staat in de galerij naast Hemelatlas. In het maandoverzicht kiest ←/→ een dag, ↑/↓ een maand en OK de dagweergave. Daar kiest ←/→ een opname en OK opent de foto. Terug herstelt eerst de kalender. De 3D-afstandskaart ontvouwt zich vanuit de foto; de lichtreis volgt een lichtpuls naar de Aarde. De toetsen staan per scherm in beeld. Website en app moeten samen worden bijgewerkt; gebruik [web v1.5.0](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.0) en [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
+
+
+
 Lokale, alleen-lezen proef voor Google TV. De galerij toont alle gepubliceerde objecten in de volgorde van de NAS. Ze ververst bij openen, terugkeer naar de galerij en iedere minuut zolang de galerij zichtbaar is. De viewer begint met de galerijfilm en speelt die direct af. Zonder film opent de foto. Bij meerdere opnamen wisselt **Opnamedatum** zowel de foto als de film. De app gebruikt HTTPS en heeft geen Studio-account nodig.
 
 **Op de ingerichte Windows-pc:** dubbelklik op **Start-AstroWeb-TV.cmd**. Klik in het emulatorvenster om het toetsenbord te gebruiken. Pijltjes verplaatsen de focus, Enter kiest en Esc gaat terug. De virtuele TV-afstandsbediening is ook beschikbaar in de uitgebreide emulatorbediening.
@@ -28,11 +32,15 @@ Open **Kijkmodi** boven de galerij of **Verkennen** bij een opname. Kies eerst d
 
 **Kaarten:** open een opname en kies Skykaart, Poolkaart of (bij objecten met een positie binnen onze Melkweg) Melkweg. De kaart opent op volledig scherm. OK of de afspeel-/pauzetoets start, pauzeert en hervat de animatie. De Skykaart doorloopt de opnamenacht; de Poolkaart en Melkweg zoomen naar het object. ↑/↓ zoomt handmatig, lang OK herstelt het overzicht en Terug opent de kaartkeuze. Op de Skykaart wisselen ←/→ het tijdstip tijdens de opnamenacht.
 
-**Reizen:** kies **Reizen**, dan **Hemelreis** of een bestemming onder **Hubble**. OK start de reis op volledig scherm en pauzeert of hervat tijdens de film. Terug brengt je naar de laatstgekozen bestemming. De volgorde en beschikbaarheid volgen de geselecteerde opname op de NAS. De Cygnusmuur-bestemming bij NGC 7000 gebruikt een DSS2-opname uit de ESA/Hubble-collectie; de archiefvelden met HST-filter zijn afzonderlijke bestemmingen.
+**Reizen:** kies **Reizen**, dan **Hemelreis** of een bestemming onder **Archiefreizen**. OK start de reis op volledig scherm en pauzeert of hervat tijdens de film. Terug brengt je naar de laatstgekozen bestemming. De volgorde en beschikbaarheid volgen de geselecteerde opname op de NAS. De Cygnusmuur-bestemming bij NGC 7000 gebruikt een DSS2-opname uit de ESA/Hubble-collectie; de archiefvelden met HST-filter zijn afzonderlijke bestemmingen.
 
 De tv draait staande foto’s en films bij weergave 90° linksom. De galerij behoudt de portretposters. Voor het klikbare D-pad: open **… → Directional pad** bij de emulator. Als ook de middelste toets niets doet, sluit deze AVD en start hem met **Start-AstroWeb-TV.cmd**. De starter schakelt hardwaretoetsenbordinvoer in en gebruikt na deze wijziging een koude start.
 
 ## English
+
+**Viewer features:** each object exposes relevant actions only: Stars in 3D, Light journey, Mosaic (two or more overlapping captures) and Solar comparison (Sun only). Calendar sits beside Sky atlas in the gallery. In month view, left/right selects a day, up/down changes month and OK opens the day. In day view, left/right selects a capture and OK opens its photo. Back restores the calendar. The 3D distance map unfolds from the photograph; the light journey follows a pulse towards Earth. Each screen shows its controls. Update website and app together; use [web v1.5.0](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.0) and [TV 0.7.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.7.0).
+
+
 
 A read-only local Google TV prototype for the NAS gallery. Browse every published NAS object with the D-pad. The gallery refreshes on entry, on return and every minute while visible. Opening a capture plays its gallery film first, falling back to the photo when no film is available. **Full screen** fits the complete frame, Use up/down for 1–10× photo zoom in steps of 0.2× and OK to switch to four-way panning or back to zoom. Back restores the controls. Back again restores gallery focus. The language button remembers your preference.
 
@@ -48,7 +56,7 @@ Choose **Viewing modes** above the gallery, or **Explore** inside a capture. Cho
 
 Open this directory in Android Studio with JDK 17, SDK 36, Build Tools 36.0.0 and a 1080p Google TV AVD. Use Run to install and launch. On the configured Windows PC, **Start-AstroWeb-TV.cmd** opens the app in the **AstroWeb_Google_TV** emulator. Arrow keys, Enter and Esc simulate the remote. The APK requires network access to the AstroWeb NAS.
 
-Choose **Journeys** and select the sky journey or a Hubble destination for the active capture. OK starts, pauses or resumes fullscreen playback. Back returns to the selected destination. Portrait photos and films turn counterclockwise for landscape viewing. Gallery posters retain their orientation. The Windows starter enables hardware keyboard input on this AVD so its clickable **Extended Controls → Directional pad** works after a cold boot.
+Choose **Journeys** and select the sky journey or an Archive journeys destination for the active capture. OK starts, pauses or resumes fullscreen playback. Back returns to the selected destination. Portrait photos and films turn counterclockwise for landscape viewing. Gallery posters retain their orientation. The Windows starter enables hardware keyboard input on this AVD so its clickable **Extended Controls → Directional pad** works after a cold boot.
 
 **Maps:** open a capture and select the sky chart, polar chart or, where a Galactic position is available, the face-on Milky Way. OK or Play/Pause starts, pauses and resumes the animation. The sky chart follows the observation night; the polar chart and Milky Way zoom towards the target. Up/down zoom manually, holding OK restores the overview and Back returns to map selection. Left/right change observation time on the sky chart.
 

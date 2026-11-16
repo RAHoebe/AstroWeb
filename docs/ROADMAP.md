@@ -1,5 +1,19 @@
 # Ontwikkelagenda / Roadmap
 
+## Objectweergaven en opnamekalender / Object views and capture calendar
+
+Lokaal geïmplementeerd, nog niet opgenomen in een gepubliceerde release:
+
+| Functie / Feature | Gedrag / Behaviour |
+| --- | --- |
+| Eigen hemelmozaïek / Own sky mosaic | Reproject combineert overlappende gemeten opnamen; panelen kiezen, zoomen en rondleiding. / Registered, feathered capture mosaics with panel selection, zoom and a tour. |
+| Gaia-sterrenreis / Gaia stellar journey | Eigen sterpixels met gemeten afstanden, GPU-weergave en een vlak voor onbekende afstanden. / Original stellar pixels at measured distances, GPU rendering and an image plane for unknown distances. |
+| Lichtreistijd / Light-travel time | Catalogusafstanden of NED-roodverschuiving met Astropy Planck18 en benoemde afstandsdefinities. / Catalogue distances or NED redshifts with Astropy Planck18 and explicit distance definitions. |
+| Opnamekalender / Observing calendar | Lokale nachten, maanafstand, duisternis en een jaarindicatie; privé-locaties blijven afgeschermd. / Local nights, Moon separation, darkness and a seasonal overview; private sites stay protected. |
+| Zonvergelijking / Solar comparison | Eigen opname naast gedateerde HMI/AIA-beelden, SunPy-raster en differentiële rotatie van een geselecteerde zonnelocatie. / Own capture alongside dated HMI/AIA imagery, a SunPy grid and differential rotation of a selected solar location. |
+
+Website en Google TV delen deze functies, geïntegreerd bij het object of in de collectiebrede opnamekalender. De installatie en voorbeelden zijn beschreven in de README; de toetsen staan per TV-scherm in beeld. / The website and Google TV share these features in the object viewer or collection-wide capture calendar. Setup and examples are documented in the README; each TV screen displays its controls.
+
 Vervolg op **Ontdek objecten**. Voorstellen 2, 3 en 5 zijn beschikbaar. Voorstel 4 staat nog open. De nummers verwijzen naar de oorspronkelijke voorstellen.
 
 | # | Voorstel | Eerste bruikbare versie | Benodigd |

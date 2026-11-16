@@ -25,7 +25,9 @@ def field_scale(store,record):
                 pass
         return result
     row=target_entry(key(meta["target"])) or {}
-    distance=meta.get("galactic_distance_ly")
+    distance=meta.get("distance_ly") or meta.get("galactic_distance_ly")
+    if meta.get("distance_ly"):
+        result["source"]=meta.get("distance_source")
     if distance is None:
         ident=key(row.get("id",meta["target"]))
         if ident in DISTANCES:

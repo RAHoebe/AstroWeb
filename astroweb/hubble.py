@@ -1,4 +1,4 @@
-"""Registered flights into optical HST mosaics, archive data and credited ground-based plates."""
+"""Registered flights into space-telescope archives and credited ground-based plates."""
 import hashlib
 import json
 import math
@@ -76,6 +76,8 @@ def eligible(record):
 def fields(store,record, local_only=False):
     if record.get("capture_kind"):
         return []
+    from .mission_archive import cached_options
+    missions = cached_options(store, record)
     options=[]
     preferred = skymap.cached_option(store, record)
     if is_andromeda(record):
@@ -98,15 +100,16 @@ def fields(store,record, local_only=False):
                 additional = [e for e in archived if e["id"] not in represented]
                 options = ([e for e in additional if e.get("relation") != "field"] + options
                            + [e for e in additional if e.get("relation") == "field"])
-            elif search.get("unavailable") and not options and not preferred:
-                raise ValueError("hubble_unavailable")
-    if not options and not search and not local_only:
+    if not options and not missions and not search and not local_only:
         from .hst_archive import find_fields
         try:
             options = find_fields(store,record)
         except (requests.RequestException, ValueError, OSError):
             if not preferred or skymap.focus_point(store, record, preferred) is None:
                 raise
+    options.extend(missions)
+    if not options and search and search.get("unavailable") and not preferred:
+        raise ValueError("hubble_unavailable")
     if preferred and skymap.focus_point(store, record, preferred) is not None:
         return [preferred, *options]
     return options
@@ -263,10 +266,13 @@ def render(store,record,name,registration_matrix,path,archive=None,tv=False):
         layers=[(patch(store,x,y,level,extent),level) for level,extent in ((5,10000),(7,5500),(8,2400))]
         credit="Hubble: NASA, ESA, B. Williams (University of Washington)"
     else:
-        from .hst_archive import registered_cutout
+        if archive.get("provider") in {"euclid", "jwst"}:
+            from .mission_archive import registered_cutout
+        else:
+            from .hst_archive import registered_cutout
         image,registration_matrix,(x,y)=registered_cutout(store,record,archive)
         layers=[((image,np.eye(3)),8)]
-        credit="NASA/ESA Hubble | STScI/HLA | "+archive["filter"]
+        credit=tv_credit(archive)
     basis=np.linalg.inv(registration_matrix)
     plane=basis@registration_matrix
     centre=cv2.perspectiveTransform(np.float64([[[x,y],[x+1,y],[x,y+1]]]),plane)[0]
@@ -351,6 +357,8 @@ def movie(store,record,name,tv=False, cached_only=False, options=None):
         from .journey import geometry
         matrix=None
         signature=["hst-optical-v6-structure",record["sha256"]["final"],geometry(store,record),name]
+        if archive.get("provider"):
+            signature.append(["mission-v1", archive])
     signature.append("destination-axes-visible-target-v1")
     if tv:signature.append("tv-destination-frame-v2")
     digest=hashlib.sha256(json.dumps(signature).encode()).hexdigest()[:20]
