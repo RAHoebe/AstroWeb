@@ -6,7 +6,7 @@ function selectButtons(host,options,choose,initial=0){
     host.append(button);return button;
   });buttons[initial].click();
 }
-const groups=['Journeys','Capture films','Maps','Google TV'];
+const groups=['Capture films','Journeys','Maps','Google TV'];
 selectButtons($('groups'),groups,index=>{
   const list=films.filter(f=>f[1]===groups[index]);$('playlist').replaceChildren();
   const buttons=list.map((f,i)=>{
@@ -31,9 +31,9 @@ const screens=[
  ['TV Hubble','tv-hubble','A fullscreen Hubble journey maintains the destination image’s orientation.']
 ];
 selectButtons($('screen-tabs'),screens.map(s=>s[0]),i=>{const s=screens[i];$('screen-img').src='media/'+s[1]+'.webp';$('screen-img').alt=s[2];$('screen-caption').textContent=s[2];});
-// The first entry for each product is its newest published stable release.
-const web=document.querySelector('#releases [data-product="web"]').href;
-const tvRelease=document.querySelector('#releases [data-product="tv"]').href;
+// Download links in the installation section identify the supported releases.
+const web=document.querySelector('#downloads [data-product="web"]').href;
+const tvRelease=document.querySelector('#downloads [data-product="tv"]').href;
 const tvVersion=tvRelease.split('/').pop().replace(/^tv-v/,'');
 const tv=tvRelease.replace('/releases/tag/','/releases/download/')+'/';
 const guides=[

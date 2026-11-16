@@ -7,7 +7,7 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<header class="nav"><div class="wrap nav-inner"><a href="#" class="brand"><img src="mark.svg" width="31" height="31" alt="">AstroWeb</a><nav aria-label="Primary"><a href="#cinema">Screening room</a><a href="#studio">Studio</a><a href="#screens">Web &amp; TV</a><a href="#install">Install</a><a href="#releases">Releases</a></nav><a class="repo" href="https://github.com/RAHoebe/AstroWeb">GitHub ↗</a></div></header>
+<header class="nav"><div class="wrap nav-inner"><a href="#" class="brand"><img src="mark.svg" width="31" height="31" alt="">AstroWeb</a><nav aria-label="Primary"><a href="#cinema">Screening room</a><a href="#studio">Studio</a><a href="#screens">Web &amp; TV</a><a href="#install">Install</a><a href="#direct">Methods</a></nav><a class="repo" href="https://github.com/RAHoebe/AstroWeb">GitHub ↗</a></div></header>
 <main id="main">
 <section class="hero" aria-labelledby="hero-title"><img class="hero-photo" src="media/elephant.webp" alt="The dark tip of the Elephant’s Trunk silhouetted against red emission and a field of stars" fetchpriority="high">
 <div class="wrap hero-content"><h1 id="hero-title">Your sky<br><em>in motion.</em></h1><p>Turn your astrophotos into films. Travel from the Milky Way to your own field of view, then watch the journey on the big screen.</p>
@@ -16,7 +16,7 @@
 
 <section id="cinema" class="wrap section"><div class="section-head"><div><p class="kicker">Film &amp; sky atlas</p><h2>The screening room</h2></div><p>Choose a sequence to see what AstroWeb actually renders. Each clip is available to watch or download.</p></div>
 <div id="groups" class="switches" aria-label="Browse clips"></div>
-<div class="cinema"><div class="feature"><video id="player" controls preload="none" playsinline poster="media/journey-poster.webp"><source src="media/journey.mp4" type="video/mp4">Your browser cannot play this film.</video><div class="film-info"><div><p id="film-type" class="kicker"></p><h3 id="film-title">Sky journey</h3></div><a class="download" id="film-download" href="media/journey.mp4" download>Download MP4 ↓</a></div><p id="film-description"></p><p id="film-credit" class="credit"></p></div>
+<div class="cinema"><div class="feature"><video id="player" controls preload="none" playsinline poster="media/gaia-america-poster.webp"><source src="media/gaia-america.mp4" type="video/mp4">Your browser cannot play this film.</video><div class="film-info"><div><p id="film-type" class="kicker"></p><h3 id="film-title">Through the North America Nebula</h3></div><a class="download" id="film-download" href="media/gaia-america.mp4" download>Download MP4 ↓</a></div><p id="film-description"></p><p id="film-credit" class="credit"></p></div>
 <div id="playlist" class="playlist" aria-label="Select a clip"></div></div><noscript><p>JavaScript enables the film selector. All clips are also listed in the <a href="production/media-index.md">media index</a>.</p></noscript></section>
 
 <section class="band" id="studio"><div class="wrap section"><div class="section-head"><div><p class="kicker">From capture to film</p><h2>Inside the layers</h2></div><p>Start with a stacked telescope exposure. If you have individual FITS frames, <a href="https://astrowizard.lukomatico.com/stackingwizard.html">StackingWizard</a> can combine them. Process the stack in <a href="https://astrowizard.lukomatico.com/">AstroWizard</a>, then export the four aligned images shown below. AstroWeb takes over at the film-making stage.</p></div>
@@ -27,76 +27,35 @@
 <figure><img src="media/layer-stars_laid.webp" alt="Second star-layer export from the same AstroWizard project" loading="lazy"><figcaption><code>stars_laid</code><p>An alternative star-layer export. Studio compares both star layers and their blends against the final image.</p></figcaption></figure>
 </div><p class="note">Use the same object prefix, for example <code>M_31_final.png</code> and <code>M_31_starless.png</code>. An optional final FITS adds observation metadata and can help locate the field. For the Sun, Moon, planets, star trails or a Milky Way landscape, one finished image plus optional FITS is enough.</p></div></section>
 
+
+<section class="wrap section" id="direct">
+  <div class="section-head"><div><p class="kicker">Direct the scene</p><h2>Choose your depth.</h2></div><p>Place up to eight named zoom frames yourself, or ask Studio to suggest a route from catalogued objects and image structure. Drag and resize each frame, preview a stop, then render the complete film.</p></div>
+  <div class="method-grid">
+    <article><h3>Gaia parallax</h3><p>Registered star positions are propagated to the capture date. Gaia DR3 stars with precise, positive parallaxes supply approximate distances, which order their movement relative to the starless nebula.</p><p>Choose <strong>Local interpolation · estimated</strong> to give additional stars a motion estimate from at least four nearby measured stars with consistent distances. Studio counts measured and estimated stars separately. Other stars move with the background.</p></article>
+    <article><h3>Stellar parallax</h3><p>Move two stellar layers across the supplied starless image. Brightness provides an artistic depth cue. AstroWeb compares both star exports and screen or additive blending against the final image.</p></article>
+    <article><h3>Nebula relief</h3><p>A smoothed luminance map adds a gentle displacement to the nebula, accompanied by the separated star field. Adjust the depth and pan controls to choose the strength.</p></article>
+    <article><h3>Classic cinematic pan</h3><p>Animate the complete final image along your route. This also works for a single finished photograph of the Sun, Moon, planets or a nightscape.</p></article>
+  </div>
+  <p class="note">Gaia needs a registered field and a capture date. Distances use high signal-to-noise parallaxes; interpolation and the amplified camera motion are artistic choices. Previously fetched catalogue data can be reused offline.</p>
+  <ol class="workflow"><li>Upload four aligned AstroWizard exports and, when available, the final FITS. Studio prefers the FITS <code>OBJECT</code> identifier.</li><li>Choose the method and set the zoom route. Use the parallax depth control to adjust the stellar separation.</li><li>Render a new version. Studio opens the completed film and shows its parameters. You can cancel a render or select a different completed version for the gallery.</li><li>Add another exposure with the same object ID to compare dates. The gallery uses the most recent capture date; the viewer switches the photo and film together.</li></ol>
+</section>
+
 <section class="wrap section"><div class="section-head"><div><p class="kicker">Capture gallery</p><h2>The original light</h2></div><p>Three finished captures from the demonstration collection. Open a photograph to study its structure before watching the corresponding film.</p></div>
 <div class="prints"><figure><button data-print="andromeda" aria-label="Open Andromeda Galaxy photograph"><img src="media/andromeda.webp" loading="lazy" alt="Andromeda’s bright nucleus and dark dust lanes"></button><figcaption>Andromeda Galaxy <small>M31</small></figcaption></figure><figure><button data-print="america" aria-label="Open North America Nebula photograph"><img src="media/america.webp" loading="lazy" alt="A dark coast of dust against glowing red gas"></button><figcaption>North America Nebula <small>NGC 7000</small></figcaption></figure><figure><button data-print="veil" aria-label="Open Eastern Veil Nebula photograph"><img src="media/veil.webp" loading="lazy" alt="Interwoven red and blue filaments of the Veil"></button><figcaption>Eastern Veil Nebula <small>NGC 6992</small></figcaption></figure></div></section>
 <section id="screens" class="wrap section"><div class="section-head"><div><p class="kicker">The interface</p><h2>At the desk. On the sofa.</h2></div><p>Compose the shot in Studio, explore the original in your browser or open the same capture with a TV remote. The interfaces are also available in Dutch.</p></div>
 <div class="switches" id="screen-tabs" aria-label="Choose a screenshot"></div><figure class="screenshot"><button id="expand" aria-label="Enlarge screenshot"><img id="screen-img" src="media/tv-gallery.webp" alt="The Google TV gallery" loading="lazy"></button><figcaption id="screen-caption"></figcaption></figure></section>
 
+
+<section class="band"><div class="wrap section">
+  <div class="section-head"><div><p class="kicker">Google TV</p><h2>Explore with the remote.</h2></div><p>The TV app opens each object with its film. Photos, journeys, charts, the personal atlas and night panorama fill the screen. Use the D-pad to select a destination, zoom or pan. Hold OK on a photo to rotate it.</p></div>
+  <div class="method-grid"><article><h3>Viewing modes</h3><p>Choose the mode, then the capture or starting photograph. The gallery selection is highlighted.</p><ul><li>A five- or fifteen-minute evening programme combines photographs, films, charts and locally prepared journeys.</li><li>A one-hour photo frame fits every capture to the screen, with optional slow movement.</li><li>What am I seeing? visits named features. Up/down changes photograph; left/right selects a feature, continuing to the next capture at the end.</li></ul></article><article><h3>Compare and navigate</h3><ul><li>Compare registered dates with a wipe, blink and shared zoom or pan.</li><li>Compare the capture night and tonight at the observing site, with altitude, sky track, Moon and planet positions.</li><li>Photos and films crossfade after the next frame is ready. English and Dutch are available on the web and TV.</li></ul></article></div>
+</div></section>
+
 <section class="band" id="install"><div class="wrap section"><div class="section-head"><div><p class="kicker">Self-hosted</p><h2>Build your own collection</h2></div><p>The server stores the originals and renders the films. Browsers and the TV app read the published collection. Start on a private network or use an HTTPS host.</p></div>
+<p class="version-links" id="downloads"><a data-product="web" href="https://github.com/RAHoebe/AstroWeb/releases/tag/v1.4.1">AstroWeb v1.4.1</a><a data-product="tv" href="https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.6.0">Google TV 0.6.0</a></p>
 <div class="switches" id="install-tabs" aria-label="Installation options"></div><div id="install-content" class="install-content"></div>
 </div></section>
 
-<section class="wrap section" id="releases" aria-labelledby="release-heading">
-  <div class="section-head"><h2 id="release-heading">Release highlights</h2></div>
-  <div class="release-history">
-    <article>
-      <h3><a data-product="web" href="https://github.com/RAHoebe/AstroWeb/releases/tag/v1.4.1">AstroWeb v1.4.1</a></h3>
-      <time datetime="2026-11-15">15 November 2026</time>
-      <ul>
-        <li>Gaia parallax now responds to camera travel between zoom targets, giving a stronger depth effect even with a small orbit setting.</li>
-        <li>Parallax depth controls a smoothly bounded displacement. Stars retain the shared camera stop at image boundaries.</li>
-      </ul>
-    </article>
-    <article>
-      <h3><a data-product="web" href="https://github.com/RAHoebe/AstroWeb/releases/tag/v1.4.0">AstroWeb v1.4.0</a></h3>
-      <time datetime="2026-11-15">15 November 2026</time>
-      <ul>
-        <li>Choose Gaia parallax in Studio to animate matched stars using distance estimates from Gaia DR3. Studio reports usable matches and the measured distance range.</li>
-        <li>Optionally estimate unmatched stars’ motion from nearby stars with consistent distances. Estimated stars are reported separately.</li>
-        <li>Preserving the starless background removes dark stellar imprints. Gaia stars now share the nebula’s constrained camera and zoom.</li>
-      </ul>
-    </article>
-    <article>
-      <h3><a data-product="web" href="https://github.com/RAHoebe/AstroWeb/releases/tag/v1.3.0">AstroWeb v1.3.0</a></h3>
-      <time datetime="2026-11-15">15 November 2026</time>
-      <ul>
-        <li>Studio opens each newly rendered film, shows the catalogue ID once and offers film orientation for landscape captures.</li>
-        <li>The solar detail journey now visits a prominence on the Sun’s limb in NASA’s photograph of the April 2024 Dallas eclipse.</li>
-        <li>The server aligns repeat captures for TV comparison and calculates sky tracks for the capture night and tonight.</li>
-      </ul>
-      <p>The updated <a href="https://youtu.be/wD7AvMVBKfU">95-second English overview</a> features the Elephant’s Trunk and the eclipse, with narration, captions and image credits.</p>
-    </article>
-    <article>
-      <h3><a data-product="tv" href="https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.6.0">AstroWeb TV 0.6.0</a></h3>
-      <time datetime="2026-11-15">15 November 2026</time>
-      <ul>
-        <li>Choose a starting capture for a 5- or 15-minute evening programme or a one-hour photo frame. Photos and films crossfade when the next image is ready.</li>
-        <li>Compare two capture dates with a wipe or blink, or explore named features and open related archive journeys.</li>
-        <li>Switch between the capture night and tonight to see the target’s path from the observing site.</li>
-      </ul>
-    </article>
-    <article>
-      <h3><a data-product="web" href="https://github.com/RAHoebe/AstroWeb/releases/tag/v1.2.0">AstroWeb v1.2.0</a></h3>
-      <time datetime="2026-11-15">15 November 2026</time>
-      <ul>
-        <li>The gallery and Studio share the warm nebula colours of the TV app.</li>
-        <li>Solar System journeys fly to the object’s position at the time of your exposure.</li>
-        <li>A dedicated Compose setup supports local-network installation and offline viewing.</li>
-      </ul>
-    </article>
-    <article>
-      <h3><a data-product="tv" href="https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.5.5">AstroWeb TV 0.5.5</a></h3>
-      <time datetime="2026-11-15">15 November 2026</time>
-      <ul>
-        <li>Choose an HTTPS or local-network APK and enter your own server address on first launch.</li>
-        <li>Both editions can be installed side by side on the same Google TV.</li>
-      </ul>
-    </article>
-  </div>
-  <a href="https://github.com/RAHoebe/AstroWeb/releases">All releases on GitHub ↗</a>
-</section>
-
-
-</main><footer class="wrap"><a class="brand" href="#"><img width="23" src="mark.svg" alt="">AstroWeb</a><a href="credits.html">Image &amp; film credits</a><a href="#releases">Release highlights</a><a href="https://github.com/RAHoebe/AstroWeb">Source code ↗</a></footer>
+</main><footer class="wrap"><a class="brand" href="#"><img width="23" src="mark.svg" alt="">AstroWeb</a><a href="credits.html">Image &amp; film credits</a><a href="https://github.com/RAHoebe/AstroWeb/releases">Downloads &amp; versions</a><a href="https://github.com/RAHoebe/AstroWeb">Source code ↗</a></footer>
 <dialog id="lightbox"><button id="close" class="ghost">Close ×</button><div id="lightbox-content"></div></dialog>
 </body></html>

@@ -34,7 +34,7 @@ def main():
     if not args.create:
         return
     manager = resolve.GetProjectManager()
-    name = "AstroWeb — Web 1.2.0 and TV 0.5.5"
+    name = "AstroWeb — Web 1.4.1 and TV 0.6.0"
     if name in (manager.GetProjectListInCurrentFolder() or []):
         raise SystemExit("A project with this name already exists. Rename it first if a second assembly is wanted.")
     project = manager.CreateProject(name)

@@ -1,46 +1,38 @@
 # AstroWeb media index
 
-Web v1.2.0 · TV 0.5.5. All MP4 clips are silent. Editing copies in the kit are padded to 1920 × 1080 at 24 fps.
+AstroWeb v1.4.1 · Google TV 0.6.0. The English overview has narration and captions. The screening-room clips are silent.
 
-## Sky journey
+## Through the North America Nebula
 
-Journeys · North America Nebula
+Capture films · NGC 7000 · Gaia + interpolation
 
-Fly from the all-sky photograph through survey tiles to the measured edges of the capture. The final quarter-turn follows the shortest camera roll.
+Four automatic zoom stops visit bright gas and the dark cloud LDN 935 in the 9 November capture. Gaia distances order the stellar motion. Camera travel is amplified for visibility.
 
-[Download clip](../media/journey.mp4) · Capture: Ron Hoebe. Sky: ESO/S. Brunier; optical survey: DSS2 / STScI / CDS.
+[Download clip](../media/gaia-america.mp4) · Capture: Ron Hoebe. Stellar data: Gaia DR3 / ESA / AIP. Locally interpolated stellar motion is an artistic estimate.
 
-## Into Andromeda
+## Depth in the Elephant’s Trunk
 
-Journeys · M31 · Hubble
+Capture films · IC 1396 · Gaia + interpolation
 
-Dust lanes line up as the wide-field capture dissolves into the Hubble mosaic. The camera keeps the selected destination in view.
+Travel between four selected details. Measured Gaia stars and locally estimated stars respond to the camera path, with a shared stop at the image boundaries.
 
-[Download clip](../media/hubble.mp4) · Capture: Ron Hoebe. Hubble image: NASA, ESA, J. Dalcanton, B. F. Williams, L. C. Johnson, the PHAT team and R. Gendler.
+[Download clip](../media/gaia-ic1396.mp4) · Capture: Ron Hoebe. Stellar data: Gaia DR3 / ESA / AIP. Unmatched stellar motion is estimated only in consistent local neighbourhoods.
 
-## At the solar limb
+## Andromeda and its star field
 
-Journeys · Sun · total eclipse
+Capture films · M31 · Gaia + interpolation
 
-Start with Ron Hoebe’s visible-light Sun and approach a pink prominence on the limb during totality in Dallas on 8 April 2024. These are separate observations.
+A multi-stop route visits Andromeda and its neighbours. Gaia supplies distances for matched stars; the main galaxy remains in the starless background. Interpolated motion is a visual estimate.
 
-[Download clip](../media/solar.mp4) · Solar capture: Ron Hoebe. Eclipse photograph: NASA / Keegan Barber.
+[Download clip](../media/gaia-m31.mp4) · Capture: Ron Hoebe. Foreground stellar data: Gaia DR3 / ESA / AIP.
 
-## Apollo 11 landing site
+## Filaments of the Eastern Veil
 
-Journeys · Moon · mission detail
+Capture films · NGC 6992 · Gaia + interpolation
 
-A demonstration moves from a NASA lunar globe to the LRO view of the landing area. These two published images stand in for a lunar upload and its destination.
+The camera approaches the Veil’s fine filaments while matched stars move according to Gaia distance estimates. Uncertain neighbourhoods remain on the background plane.
 
-[Download clip](../media/moon.mp4) · NASA/JPL/USGS (Galileo); NASA/GSFC/Arizona State University (LRO).
-
-## Into the Elephant’s Trunk
-
-Journeys · IC 1396 · nebula detail
-
-Start in Ron Hoebe’s wide-field capture of IC 1396 and follow the dark trunk into a registered Pan-STARRS1 detail of IC 1396A.
-
-[Download clip](../media/elephants-trunk.mp4) · Capture: Ron Hoebe. Detail: Pan-STARRS1 Surveys (PS1) / STScI / CDS.
+[Download clip](../media/gaia-veil.mp4) · Capture: Ron Hoebe. Stellar data: Gaia DR3 / ESA / AIP.
 
 ## Stellar parallax
 
@@ -52,9 +44,9 @@ The isolated star field drifts across the glowing gas. AstroWeb checks which sta
 
 ## Nebula relief
 
-Capture films · Eastern Veil Nebula
+Capture films · Elephant’s Trunk region
 
-A luminance-derived displacement brings out the filaments. The apparent depth is an artistic effect.
+A softly varying depth map gives the starless nebula relief, while the separated stars follow their own motion. This depth is an artistic interpretation.
 
 [Download clip](../media/relief.mp4) · Capture: Ron Hoebe. AstroWeb depth renderer.
 
@@ -62,7 +54,7 @@ A luminance-derived displacement brings out the filaments. The apparent depth is
 
 Capture films · Andromeda Galaxy
 
-The camera approaches the galactic core using the finished image. In Studio, a sequence can visit up to four named regions.
+The camera approaches the galactic core using the finished image. In Studio, a sequence can visit up to eight named regions.
 
 [Download clip](../media/panzoom.mp4) · Capture: Ron Hoebe. AstroWeb pan/zoom renderer.
 
@@ -89,6 +81,38 @@ Capture films · Paranal · single image
 A wide nightscape retains its horizon and original orientation. Studio can add clickable panorama markers to a landscape.
 
 [Download clip](../media/milky-photo.mp4) · ESO/G. Brammer, CC BY 4.0. Adapted for pan/zoom.
+
+## Sky journey
+
+Journeys · North America Nebula
+
+Fly from the all-sky photograph through survey tiles to the measured edges of the capture. The final quarter-turn follows the shortest camera roll.
+
+[Download clip](../media/journey.mp4) · Capture: Ron Hoebe. Sky: ESO/S. Brunier; optical survey: DSS2 / STScI / CDS.
+
+## Into Andromeda
+
+Journeys · M31 · Hubble
+
+Dust lanes line up as the wide-field capture dissolves into the Hubble mosaic. The camera keeps the selected destination in view.
+
+[Download clip](../media/hubble.mp4) · Capture: Ron Hoebe. Hubble image: NASA, ESA, J. Dalcanton, B. F. Williams, L. C. Johnson, the PHAT team and R. Gendler.
+
+## A Hubble field in North America
+
+Journeys · NGC 7000 · HST/WFPC2
+
+Start in the 12 September capture and fly into Hubble’s WFPC2 view of a dust arc around a young star. The destination lies within the measured capture footprint.
+
+[Download clip](../media/hubble-america.mp4) · Capture: Ron Hoebe. NASA, ESA, K. Stapelfeldt (JPL); processing: Gladys Kober (NASA/CUA).
+
+## Into the Elephant’s Trunk
+
+Journeys · IC 1396 · nebula detail
+
+Start in Ron Hoebe’s wide-field capture of IC 1396 and follow the dark trunk into a registered Pan-STARRS1 detail of IC 1396A.
+
+[Download clip](../media/elephants-trunk.mp4) · Capture: Ron Hoebe. Detail: Pan-STARRS1 Surveys (PS1) / STScI / CDS.
 
 ## The observation night
 

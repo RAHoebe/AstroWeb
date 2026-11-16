@@ -1,5 +1,37 @@
 const films = [
  [
+  "gaia-america",
+  "Capture films",
+  "Through the North America Nebula",
+  "NGC 7000 · Gaia + interpolation",
+  "Four automatic zoom stops visit bright gas and the dark cloud LDN 935 in the 9 November capture. Gaia distances order the stellar motion. Camera travel is amplified for visibility.",
+  "Capture: Ron Hoebe. Stellar data: Gaia DR3 / ESA / AIP. Locally interpolated stellar motion is an artistic estimate."
+ ],
+ [
+  "gaia-ic1396",
+  "Capture films",
+  "Depth in the Elephant’s Trunk",
+  "IC 1396 · Gaia + interpolation",
+  "Travel between four selected details. Measured Gaia stars and locally estimated stars respond to the camera path, with a shared stop at the image boundaries.",
+  "Capture: Ron Hoebe. Stellar data: Gaia DR3 / ESA / AIP. Unmatched stellar motion is estimated only in consistent local neighbourhoods."
+ ],
+ [
+  "gaia-m31",
+  "Capture films",
+  "Andromeda and its star field",
+  "M31 · Gaia + interpolation",
+  "A multi-stop route visits Andromeda and its neighbours. Gaia supplies distances for matched stars; the main galaxy remains in the starless background. Interpolated motion is a visual estimate.",
+  "Capture: Ron Hoebe. Foreground stellar data: Gaia DR3 / ESA / AIP."
+ ],
+ [
+  "gaia-veil",
+  "Capture films",
+  "Filaments of the Eastern Veil",
+  "NGC 6992 · Gaia + interpolation",
+  "The camera approaches the Veil’s fine filaments while matched stars move according to Gaia distance estimates. Uncertain neighbourhoods remain on the background plane.",
+  "Capture: Ron Hoebe. Stellar data: Gaia DR3 / ESA / AIP."
+ ],
+ [
   "journey",
   "Journeys",
   "Sky journey",
@@ -16,20 +48,12 @@ const films = [
   "Capture: Ron Hoebe. Hubble image: NASA, ESA, J. Dalcanton, B. F. Williams, L. C. Johnson, the PHAT team and R. Gendler."
  ],
  [
-  "solar",
+  "hubble-america",
   "Journeys",
-  "At the solar limb",
-  "Sun · total eclipse",
-  "Start with Ron Hoebe’s visible-light Sun and approach a pink prominence on the limb during totality in Dallas on 8 April 2024. These are separate observations.",
-  "Solar capture: Ron Hoebe. Eclipse photograph: NASA / Keegan Barber."
- ],
- [
-  "moon",
-  "Journeys",
-  "Apollo 11 landing site",
-  "Moon · mission detail",
-  "A demonstration moves from a NASA lunar globe to the LRO view of the landing area. These two published images stand in for a lunar upload and its destination.",
-  "NASA/JPL/USGS (Galileo); NASA/GSFC/Arizona State University (LRO)."
+  "A Hubble field in North America",
+  "NGC 7000 · HST/WFPC2",
+  "Start in the 12 September capture and fly into Hubble’s WFPC2 view of a dust arc around a young star. The destination lies within the measured capture footprint.",
+  "Capture: Ron Hoebe. NASA, ESA, K. Stapelfeldt (JPL); processing: Gladys Kober (NASA/CUA)."
  ],
  [
   "elephants-trunk",
@@ -51,8 +75,8 @@ const films = [
   "relief",
   "Capture films",
   "Nebula relief",
-  "Eastern Veil Nebula",
-  "A luminance-derived displacement brings out the filaments. The apparent depth is an artistic effect.",
+  "Elephant’s Trunk region",
+  "A softly varying depth map gives the starless nebula relief, while the separated stars follow their own motion. This depth is an artistic interpretation.",
   "Capture: Ron Hoebe. AstroWeb depth renderer."
  ],
  [
@@ -60,7 +84,7 @@ const films = [
   "Capture films",
   "Pan and zoom",
   "Andromeda Galaxy",
-  "The camera approaches the galactic core using the finished image. In Studio, a sequence can visit up to four named regions.",
+  "The camera approaches the galactic core using the finished image. In Studio, a sequence can visit up to eight named regions.",
   "Capture: Ron Hoebe. AstroWeb pan/zoom renderer."
  ],
  [

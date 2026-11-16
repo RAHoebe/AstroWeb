@@ -1,6 +1,6 @@
 # Your sky in motion — English montage
 
-95 seconds, including 16 seconds of end credits.
+AstroWeb v1.4.1 · Google TV 0.6.0. 95 seconds, including 16 seconds of end credits.
 
 ## 00:00 · Your sky in motion
 
@@ -12,11 +12,11 @@ From AstroWizard, export the final image, the starless background, and both star
 
 ## 00:10 · Choose the camera path
 
-In Studio, place zoom frames over the details you want to visit.
+In Studio, choose a method and let an automatic route find the details.
 
-## 00:15 · Depth from layers
+## 00:15 · Gaia depth from stars
 
-Separate layers let the stars drift across the glowing gas.
+Gaia distances give the stars depth as the camera travels.
 
 ## 00:19 · Find the field
 
@@ -30,9 +30,9 @@ Here in Andromeda, dust lanes line up as your own image dissolves into a much de
 
 In Ron Hoebe’s own exposure of the Elephant’s Trunk, the dark dust column lines up with a deeper Pan-STARRS survey image.
 
-## 00:44 · Solar System detail
+## 00:44 · A Hubble field in North America
 
-From Ron’s visible-light Sun, we travel to Dallas during the April twenty twenty-four eclipse. A pink prominence rises above the solar limb.
+In the North America Nebula, follow your own photograph into Hubble’s view of a young star and its surrounding dust.
 
 ## 00:53 · Trace the sky
 
