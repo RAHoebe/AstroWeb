@@ -45,17 +45,25 @@ export function distanceScaffold(ctx,data,view,plane,t,number){
   const board=[[-1,a,-1.7],[1,a,-1.7],[1,-a,-1.7],[-1,-a,-1.7]].map(p=>projectPoint(view,p));
   ctx.globalAlpha=alpha*.32;quad(ctx,plane,board);ctx.globalAlpha=alpha;
   ctx.font='11px Segoe UI,Arial';ctx.lineWidth=1;
+  const occupied=[];
+  function caption(text,x,y,align='right'){
+    if(x<0||x>view.w||y<0||y>view.h)return;
+    const width=ctx.measureText(text).width;
+    const left=clamp(x-(align==='right'?width:width/2),8,Math.max(8,view.w-width-8)),baseline=clamp(y,14,view.h-8);
+    if(occupied.some(([a,b,c,d])=>left<c&&left+width>a&&baseline-12<d&&baseline>b))return;
+    occupied.push([left,baseline-12,left+width,baseline+3]);ctx.textAlign='left';ctx.fillText(text,left,baseline);
+  }
   function line(points,color){const p=points.map(v=>projectPoint(view,v));if(p.some(v=>!v))return;ctx.strokeStyle=color;ctx.beginPath();p.forEach((v,i)=>i?ctx.lineTo(...v):ctx.moveTo(...v));ctx.stroke();}
   const ticks=[view.minPc*3.2615638,...[10,100,1000,10000].filter(v=>v>view.minPc*3.2615638*1.2&&v<view.maxPc*3.2615638*.8),view.maxPc*3.2615638];
   for(const distance of ticks){
     const pc=distance/3.2615638,z=1.8-3.3*Math.log(pc/view.floor)/Math.log(view.maxPc/view.floor);
     line([[-1.1,-a,z],[1.1,-a,z],[1.1,a,z],[-1.1,a,z],[-1.1,-a,z]],'#ed998a55');
-    const p=projectPoint(view,[-1.25,-a,z]);if(p){ctx.fillStyle='#dcc0b8';ctx.textAlign='right';ctx.fillText(number(distance)+' '+t('lightYears'),p[0]-6,p[1]);}
+    const p=projectPoint(view,[-1.25,-a,z]);if(p){ctx.fillStyle='#dcc0b8';caption(number(distance)+' '+t('lightYears'),p[0]-6,p[1]);}
   }
   line([[-1.1,-a,1.8],[-1.1,-a,-1.5]],'#ed998a99');
   const earth=projectPoint(view,[0,0,1.8]);
-  if(earth){ctx.fillStyle='#ed998a';ctx.beginPath();ctx.arc(...earth,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffefe6';ctx.textAlign='center';ctx.fillText(t('obs_earth'),earth[0],earth[1]+19);}
-  if(board[1]){ctx.fillStyle='#dcc0b8';ctx.textAlign='right';ctx.fillText(t('obs_reference_photo'),board[1][0],board[1][1]-9);}
+  if(earth){ctx.fillStyle='#ed998a';ctx.beginPath();ctx.arc(...earth,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffefe6';caption(t('obs_earth'),earth[0],earth[1]+19,'center');}
+  if(board[1]){ctx.fillStyle='#dcc0b8';caption(t('obs_reference_photo'),board[1][0],board[1][1]-9);}
   ctx.restore();
 }
 

@@ -23,6 +23,10 @@ selectButtons($('groups'),groups,index=>{
   });buttons[0].click();
 });
 const screens=[
+ ['TV viewer','tv-viewer','All available actions fit one row; rotate and fullscreen are the two icons at the far right.'],
+ ['TV Explore','tv-explore','Explore stays with the open capture: its capture night and tonight, or the named features within that photograph.'],
+ ['TV viewing modes','tv-viewing-modes','Only Evening programme and Photo frame remain. Both start at a random capture, without a picker.'],
+ ['TV light journey','tv-light-journey','The animation has its own space above the remote instructions and source credit.'],
  ['Stars in 3D','viewer-space','Actual star crops linked to Gaia DR3, unfolded into a distance diagram with a logarithmic depth axis.'],
  ['Light journey','viewer-cosmic','A light pulse travels from the object to Earth; your own photo appears at arrival.'],
  ['Sky mosaic','viewer-mosaic','Overlapping registered captures form a visual mosaic, with every contributing capture date visible.'],

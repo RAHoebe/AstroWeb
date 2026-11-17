@@ -48,7 +48,10 @@ import java.net.HttpURLConnection
         } else uri?.scheme == "https"
         if(uri==null || !validTransport || uri.host==null || uri.rawUserInfo!=null ||
             uri.rawPath.orEmpty() !in listOf("","/") || uri.query!=null || uri.fragment!=null) {
-            status=if(BuildConfig.LAN_ONLY) "http://astroweb.home.arpa:8090" else if(en) "Enter an HTTPS server address." else "Vul een HTTPS-serveradres in.";return
+            status=if(BuildConfig.LAN_ONLY) {
+                if(en) "Use http://astroweb.home.arpa:8090 with local DNS, or the supported example address 192.168.1.50. For development, use localhost."
+                else "Gebruik http://astroweb.home.arpa:8090 met lokale DNS, of het ondersteunde voorbeeldadres 192.168.1.50. Gebruik localhost voor ontwikkeling."
+            } else if(en) "Enter an HTTPS server address." else "Vul een HTTPS-serveradres in.";return
         }
         val origin=fullAddress.trimEnd('/')
         checking=true;status=if(en) "Connecting…" else "Verbinden…"
@@ -63,7 +66,10 @@ import java.net.HttpURLConnection
                 }
                 onConnect(origin)
             } catch(e:CancellationException){throw e}
-            catch(_:Exception){status=if(en) "Could not reach AstroWeb. Check the address and HTTPS certificate." else "AstroWeb is niet bereikbaar. Controleer het adres en HTTPS-certificaat."}
+            catch(_:Exception){status=if(BuildConfig.LAN_ONLY) {
+                if(en) "Could not reach AstroWeb. Check the local address, DNS and network connection."
+                else "AstroWeb is niet bereikbaar. Controleer het lokale adres, DNS en de netwerkverbinding."
+            } else if(en) "Could not reach AstroWeb. Check the address and HTTPS certificate." else "AstroWeb is niet bereikbaar. Controleer het adres en HTTPS-certificaat."}
             finally {checking=false}
         }
     }

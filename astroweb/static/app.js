@@ -92,7 +92,9 @@ function renderNeighbours(){
   for(const [key,id,caption] of [['previous','viewer-prev','previousObject'],['next','viewer-next','nextObject']]){
     const obj=links[key],a=$(id);
     a.href='/viewer/'+encodeURIComponent(obj.id)+location.hash;
-    a.replaceChildren(node('small','',t(caption)),node('strong','',captureLabel(obj)),node('span','',local(obj.name)));
+    const identifier=(obj.catalog_id||obj.id).split('~')[0].replace(/[\s_]+/g,'').toLowerCase();
+    const name=local(obj.name).split('·').map(part=>part.trim()).filter(part=>part.replace(/[\s_]+/g,'').toLowerCase()!==identifier).join(' · ');
+    a.replaceChildren(node('small','',t(caption)),node('strong','',captureLabel(obj)),node('span','',name));
   }
 }
 function renderCaptureDates(object){
@@ -439,7 +441,10 @@ function studioLabel(object){
   return [distinct(captureLabel(object)),distinct(local(object.metadata.name))].filter(Boolean);
 }
 function renderAdminList(){
-  const list=$('admin-object-list');list.replaceChildren();
+  const list=$('admin-object-list');
+  const signature=JSON.stringify([language,state.selected?.id,state.adminObjects.map(object=>[object.id,studioLabel(object),object.capture_date])]);
+  if(list.dataset.signature===signature)return;
+  list.dataset.signature=signature;list.replaceChildren();
   for(const object of state.adminObjects){
     const [label,name]=studioLabel(object);
     const button=node('button','admin-object'+(state.selected?.id===object.id?' selected':''),label);
@@ -448,11 +453,46 @@ function renderAdminList(){
     button.addEventListener('click',()=>selectObject(object.id));list.append(button);
   }
 }
-function renderJobs(){const list=$('job-list');list.replaceChildren();if(!state.jobs.length){list.append(node('p','small muted',t('noJobs')));return;}const active=j=>['running','queued','cancelling'].includes(j.status);for(const job of [...state.jobs.filter(active),...state.jobs.filter(j=>!active(j)).slice(0,8)]){const row=node('div','job-item');row.append(node('strong','',job.object_id.replace('_',' ')),node('span','',t(job.status==='running'&&job.stage==='journey'?'journeyPreparing':job.status)+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));if(['running','queued'].includes(job.status)){const p=node('progress');p.max=100;p.value=job.progress;row.append(p);
-    const cancel=node('button','button secondary cancel-render',t('cancelRender'));
-    cancel.addEventListener('click',async()=>{cancel.disabled=true;try{await api('/api/admin/jobs/'+job.id+'/cancel',{method:'POST'});await refreshAdmin();}catch(e){toast(errorText(e));cancel.disabled=false;}});
-    row.append(cancel);
-  }if(job.status==='failed'){row.append(node('p','small muted',t(job.error)));const retry=node('button','retry-button',t('retry'));retry.addEventListener('click',async()=>{try{await api(`/api/admin/objects/${job.object_id}/render`,{method:'POST',body:job.params});await refreshAdmin();}catch(e){toast(errorText(e));}});row.append(retry);}list.append(row);}}
+function renderJobs(){
+  const list=$('job-list'),active=job=>['running','queued','cancelling'].includes(job.status);
+  const jobs=[...state.jobs.filter(active),...state.jobs.filter(job=>!active(job)).slice(0,8)];
+  const signature=JSON.stringify([language,jobs.map(job=>[job.id,job.object_id,job.status,job.stage,Math.round(job.progress),job.error])]);
+  if(list.dataset.signature===signature)return;
+  list.dataset.signature=signature;
+  const focused=document.activeElement.closest?.('[data-job]')?.dataset.job;
+  list.replaceChildren();
+  if(!jobs.length){list.append(node('p','small muted',t('noJobs')));return;}
+  for(const job of jobs){
+    const row=node('div','job-item');row.dataset.job=job.id;
+    const status=t(job.status==='running'&&job.stage==='journey'?'journeyPreparing':job.status);
+    row.append(node('strong','',job.object_id.replace('_',' ')),node('span','',status+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));
+    if(['running','queued'].includes(job.status)){
+      const progress=node('progress');progress.max=100;progress.value=job.progress;row.append(progress);
+      const cancel=node('button','button secondary cancel-render',t('cancelRender'));
+      cancel.addEventListener('click',async()=>{
+        cancel.disabled=true;
+        try{await api('/api/admin/jobs/'+job.id+'/cancel',{method:'POST'});await refreshAdmin();}
+        catch(error){toast(errorText(error));cancel.disabled=false;}
+      });
+      row.append(cancel);
+    }
+    if(job.status==='failed'){
+      row.append(node('p','small muted',t(job.error)));
+      const retry=node('button','retry-button',t('retry'));
+      retry.addEventListener('click',async()=>{
+        try{await api('/api/admin/objects/'+job.object_id+'/render',{method:'POST',body:job.params});await refreshAdmin();}
+        catch(error){toast(errorText(error));}
+      });
+      row.append(retry);
+    }
+    list.append(row);
+  }
+  if(focused){
+    const row=[...list.children].find(element=>element.dataset.job===focused);
+    row?.querySelector('button:not(:disabled)')?.focus({preventScroll:true});
+  }
+}
+
 let points=[{zoom:1.08,focus_x:.5,focus_y:.5}],pointIndex=0;
 function savePoint(){
   const {zoom,focus_x,focus_y}=activeParams();

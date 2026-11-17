@@ -85,17 +85,22 @@ class Observatory:
             if key in self.pending:
                 return dict(status="preparing")
             cached = self.store.get("settings","observatory-v1:"+key)
-            if cached and cached.get("token"):
+            if cached and cached.get("token") and not retry:
                 folder = self.store.path("observatory/"+cached["token"])
-                if (folder/"result.json").is_file() and not (retry and mode=="solar"):
-                    manifest = json.loads((folder/"result.json").read_text(encoding="utf8"))
-                    data = self.media_values(manifest["data"],cached["token"],manifest["files"])
-                    if record:data["capture"] = {**identity(record),"date":capture_date(record),"poster":f"/media/{record['id']}/poster"}
-                    if mode=='planner':
-                        data['events']=[{**identity(r),'date':capture_date(r),'day':capture_date(r)[:10],
-                                         'time':(r.get('observation') or {}).get('date_obs') if not (r.get('observation') or {}).get('date_only') else None,
-                                         'poster':f"/media/{r['id']}/poster"+('?rotation=90' if r['width']>r['height'] else '')} for r in records if capture_date(r) and capture_date(r).startswith(month)]
-                    return dict(status="ready",data=data)
+                if (folder/"result.json").is_file():
+                    try:
+                        manifest = json.loads((folder/"result.json").read_text(encoding="utf8"))
+                        if any(not isinstance(name,str) or Path(name).name!=name or not (folder/name).is_file() for name in manifest["files"]):
+                            raise OSError("Incomplete exploration cache")
+                        data = self.media_values(manifest["data"],cached["token"],manifest["files"])
+                        if record:data["capture"] = {**identity(record),"date":capture_date(record),"poster":f"/media/{record['id']}/poster"}
+                        if mode=='planner':
+                            data['events']=[{**identity(r),'date':capture_date(r),'day':capture_date(r)[:10],
+                                             'time':(r.get('observation') or {}).get('date_obs') if not (r.get('observation') or {}).get('date_only') else None,
+                                             'poster':f"/media/{r['id']}/poster"+('?rotation=90' if r['width']>r['height'] else '')} for r in records if capture_date(r) and capture_date(r).startswith(month)]
+                        return dict(status="ready",data=data)
+                    except (OSError,ValueError,KeyError,TypeError):
+                        logging.warning("Rebuilding incomplete exploration cache %s",cached["token"])
             if cached and cached.get('error'):
                 age=time.time()-cached['time'];recoverable=cached['error']=='gaia_depth_unavailable'
                 if (not retry and (not recoverable or age<60)) or (retry and age<1):
@@ -197,10 +202,10 @@ def register(app, store, queue, get_object):
         if not manifest.is_file():abort(404)
         value = json.loads(manifest.read_text(encoding="utf8"))
         if value["private_site"] and not session.get("admin"):abort(404)
-        for identifier in value["ids"]:get_object(identifier)
+        sources = [get_object(identifier) for identifier in value["ids"]]
         if filename not in value["files"]:abort(404)
         response = send_file(folder/filename,conditional=True,max_age=86400)
-        if value["private_site"] or any(not store.get("objects",i)["published"] for i in value["ids"]):
+        if value["private_site"] or any(not record["published"] for record in sources):
             response.headers["Cache-Control"] = "private, no-store"
         return response
 

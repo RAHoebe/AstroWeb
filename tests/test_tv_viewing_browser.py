@@ -1,6 +1,8 @@
-"""Check TV photo framing and navigation with a single catalogue feature."""
+"""Contextual exploration, random playback and decoded-frame transitions."""
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from PIL import Image
 import pytest
@@ -9,64 +11,113 @@ pw = pytest.importorskip("playwright.sync_api")
 ASSETS = Path(__file__).resolve().parents[1] / "tv/app/src/main/assets"
 
 
-def test_portrait_fits_and_single_feature_advances_to_another_capture():
-    page_html = (ASSETS / "viewing.html").read_text(encoding="utf8")
+def viewing_fixture(page, mode="modes", lang="en", primary="A"):
+    html = (ASSETS / "viewing.html").read_text(encoding="utf8")
     for token, script in [("PHOTO_CAMERA", "photo-camera.js"), ("NIGHT_CHART", "night-chart.js"), ("VIEWING", "viewing.js")]:
-        page_html = page_html.replace(f"__{token}__", (ASSETS / script).read_text(encoding="utf8"))
-    page_html = page_html.replace("__LANG__", "en").replace("__CAPTURE__", "A").replace("__MAP__", "modes")
-    rows = [{"id": x, "catalog_id": x, "name": {"en": x}, "date": "2026-11-15",
-             "field": {"kind": "gaia"}} for x in "AB"]
-    rows[0].update(video="/media/A/movie", final="/media/A/final")
+        html = html.replace(f"__{token}__", (ASSETS / script).read_text(encoding="utf8"))
+    html = html.replace("__LANG__", lang).replace("__CAPTURE__", primary).replace("__MAP__", mode)
+    rows = [{"id": ident, "catalog_id": ident, "name": {"en": ident, "nl": ident}, "date": "2026-11-15",
+             "field": {"kind": "gaia"}, "final": f"/media/{ident}/final"} for ident in "AB"]
+    rows[0]["video"] = "/media/A/movie"
     photo = BytesIO()
     Image.new("RGB", (200, 360), "navy").save(photo, "JPEG")
+    requests = []
+    stamp = datetime(2026, 11, 15, tzinfo=timezone.utc).timestamp()
+    sequence = dict(day="2026-11-15", start=stamp, step=600, target=[[180, 30], [190, 40]], hours=[0, 1], peak=1,
+                    bodies={"sun": [[10, -30], [20, -35]]})
 
     def serve(route):
-        path = route.request.url.split(".test", 1)[1]
+        path = urlsplit(route.request.url).path
+        requests.append(path)
         if path == "/":
-            route.fulfill(content_type="text/html", body=page_html)
+            route.fulfill(content_type="text/html", body=html)
         elif path == "/api/objects":
             route.fulfill(json={"objects": rows})
         elif path == "/api/atlas":
             route.fulfill(json={"captures": rows})
+        elif path in ("/api/objects/A", "/api/objects/B"):
+            route.fulfill(json=next(row for row in rows if row["id"] == path.split("/")[-1]))
         elif path.endswith("/discover"):
             target = path.split("/")[-2]
-            route.fulfill(json={"objects": [{"id": target, "name": target + " feature", "x": .5,
-                                             "y": .5, "ra": 10, "dec": 30, "type": "star"}]})
-        elif path.endswith("/poster"):
+            route.fulfill(json={"objects": [{"id": target + str(i), "name": target + " feature " + str(i),
+                                             "x": .4 + i * .1, "y": .5, "ra": 10, "dec": 30, "type": "star"}
+                                            for i in (1, 2)]})
+        elif path.endswith("/night-tracks"):
+            route.fulfill(json=dict(capture=sequence, tonight=sequence, observed=stamp, now=stamp,
+                                    timezone="UTC", default_site=True, day_only=False))
+        elif path.endswith("/poster") or path.endswith("/final"):
             route.fulfill(content_type="image/jpeg", body=photo.getvalue())
+        elif path.endswith("/tv-program"):
+            route.fulfill(json={"journey": None, "trips": []})
         else:
             route.fulfill(json={"observations": []})
 
+    page.route("http://tv.test/**", serve)
+    return requests
+
+
+@pytest.mark.parametrize("lang", ["nl", "en"])
+def test_explore_only_uses_selected_capture_and_has_two_actions(lang):
     with pw.sync_playwright() as runtime:
         browser = runtime.chromium.launch(channel="chrome")
         page = browser.new_page(viewport={"width": 960, "height": 540})
-        page.route("http://tv.test/**", serve)
+        requests = viewing_fixture(page, mode="explore", lang=lang, primary="B")
         page.goto("http://tv.test/")
-        page.get_by_role("button", name="Photo frame").click()
-        page.get_by_role("button", name="A ·").click()
-        page.get_by_role("button", name="Slow movement").click()
-        plane = page.locator(".photo-plane.tall")
-        pw.expect(plane).to_be_visible()
-        assert plane.bounding_box() == pytest.approx({"x": 0, "y": 0, "width": 960, "height": 540})
-        for _ in range(3):
-            assert page.evaluate("collectionBack()")
-        page.get_by_role("button", name="What am I seeing?").click()
-        page.get_by_role("button", name="A ·").click()
-        pw.expect(page.locator("#hud")).to_contain_text("A feature")
-        page.evaluate("mapKey('next')")
+        expected = ["Opnamenacht en vanavond", "Wat zie ik?"] if lang == "nl" else ["Capture night and tonight", "What am I seeing?"]
+        pw.expect(page.locator("#choices button")).to_have_text(expected)
+        pw.expect(page.locator("#menu h1")).to_have_text("Verken" if lang == "nl" else "Explore")
+        page.get_by_role("button", name=expected[1], exact=True).click()
+        pw.expect(page.locator("#hud")).to_contain_text("B feature 1")
+        page.evaluate("()=>{for(let i=0;i<7;i++)mapKey('next');mapKey('previous');mapKey('out');mapKey('in');}")
         pw.expect(page.locator("#hud")).to_contain_text("B feature")
-        page.evaluate("mapKey('in')")
-        pw.expect(page.locator("#hud")).to_contain_text("A feature")
-        page.evaluate("collectionBack()")
-        page.evaluate("collectionBack()")
+        assert not any("/objects/A" in path for path in requests)
+        assert "/api/objects" not in requests and "/api/atlas" not in requests
+        assert page.evaluate("collectionBack()")
+        pw.expect(page.locator("#choices button")).to_have_text(expected)
+        page.get_by_role("button", name=expected[0], exact=True).click()
+        pw.expect(page.locator("#hud strong")).to_have_text("Opnamenacht" if lang == "nl" else "Capture night")
+        assert "/api/objects/B/night-tracks" in requests
+        page.evaluate("mapKey('out')")
+        pw.expect(page.locator("#hud strong")).to_have_text("Vanavond" if lang == "nl" else "Tonight")
+        browser.close()
+
+
+@pytest.mark.parametrize("lang", ["nl", "en"])
+def test_home_modes_start_randomly_without_capture_or_settings_picker(lang):
+    with pw.sync_playwright() as runtime:
+        browser = runtime.chromium.launch(channel="chrome")
+        page = browser.new_page(viewport={"width": 960, "height": 540})
+        viewing_fixture(page, lang=lang)
+        page.add_init_script("Math.random=()=>.99")
+        page.goto("http://tv.test/")
+        expected = ["Avondvoorstelling", "Fotolijst"] if lang == "nl" else ["Evening programme", "Photo frame"]
+        pw.expect(page.locator("#choices button")).to_have_text(expected)
+        page.get_by_role("button", name=expected[1], exact=True).click()
+        pw.expect(page.locator("#menu")).to_be_hidden()
+        pw.expect(page.locator(".scene.visible .photo-plane img[src='/media/B/poster']")).to_be_visible()
+        plane = page.locator(".photo-plane.tall")
+        assert plane.bounding_box() == pytest.approx({"x": 0, "y": 0, "width": 960, "height": 540})
+        assert page.evaluate("collectionBack()")
+        pw.expect(page.locator("#choices button")).to_have_text(expected)
+        page.get_by_role("button", name=expected[0], exact=True).click()
+        pw.expect(page.locator("#menu")).to_be_hidden()
+        pw.expect(page.locator(".scene.visible .photo-plane img[src='/media/B/poster']")).to_be_visible()
+        pw.expect(page.locator("#hud strong")).to_contain_text("B")
+        browser.close()
+
+
+def test_evening_preserves_photo_until_next_video_has_a_decoded_frame():
+    with pw.sync_playwright() as runtime:
+        browser = runtime.chromium.launch(channel="chrome")
+        page = browser.new_page(viewport={"width": 960, "height": 540})
+        viewing_fixture(page)
+        page.add_init_script("Math.random=()=>0")
+        page.goto("http://tv.test/")
         held = []
         page.route("**/media/A/movie", lambda route: held.append(route))
         page.get_by_role("button", name="Evening programme").click()
-        page.get_by_role("button", name="A ·").click()
-        page.get_by_role("button", name="5 min", exact=True).click()
         pw.expect(page.locator(".scene.visible .photo-plane")).to_be_visible()
         pw.expect(page.locator(".scene")).to_have_count(1)
-        pw.expect(page.locator(".scene.visible img[src='/media/A/poster']")).to_be_visible()
         page.evaluate("mapKey('next')")
         pw.expect(page.locator("video")).to_have_count(1)
         page.wait_for_function("document.querySelector('video').networkState === 2")

@@ -27,7 +27,7 @@ const detail=p=>p.final?Promise.resolve(p):cached(details,p.id,()=>api(endpoint(
 const nightData=p=>cached(tracks,p.id,()=>api(endpoint(p.id,'/night-tracks')));
 let visibleScene=null,fadeTimer;
 function releaseVideo(v){
-  v.onended=v.onerror=v.onplaying=null;v.pause();v.remove();v.removeAttribute('src');v.load();
+  v.onended=v.onerror=v.onplaying=v.onloadedmetadata=null;v.pause();v.remove();v.removeAttribute('src');v.load();
 }
 function freezeVideo(layer){
   const v=layer.querySelector('video');
@@ -128,52 +128,37 @@ window.viewActive=value=>{
 };
 let last=performance.now();
 setInterval(()=>{const now=performance.now(),dt=Math.min(1,(now-last)/1000);last=now;if(active&&tick)tick(dt);},150);
-const modes=[
-  [tr('Avondvoorstelling','Evening programme'),tr('Speel films, foto’s en kaarten uit je collectie af.','Play films, photographs and charts from your collection.'),showSettings],
-  [tr('Fotolijst','Photo frame'),tr('Bekijk alle opnamen één voor één op het hele scherm.','Show every capture in turn, fitted to the screen.'),frameSettings],
-  [tr('Wat zie ik?','What am I seeing?'),tr('Ontdek de benoemde onderdelen in een foto.','Explore the named features inside a photograph.'),discover],
-  [tr('Vergelijk opnamen','Compare captures'),tr('Leg twee datums van hetzelfde object over elkaar.','Overlay two dates of the same object.'),compareMenu],
-  [tr('Opnamenacht en vanavond','Capture night and tonight'),tr('Vergelijk de hemel op de opnamelocatie op twee datums.','Compare two dates in the sky at the capture site.'),()=>nightView(current,pickCapture)]
+const exploring=root.dataset.mode==='explore';
+const modes=exploring?[
+  [tr('Opnamenacht en vanavond','Capture night and tonight'),tr('Bekijk de hemelbaan van dit object op de opnamenacht en vanavond.','See this object on its capture night and tonight.'),()=>nightView(current,main)],
+  [tr('Wat zie ik?','What am I seeing?'),tr('Ontdek de benoemde onderdelen in deze opname.','Explore the named features in this capture.'),discover]
+]:[
+  [tr('Avondvoorstelling','Evening programme'),tr('Vijf minuten films, foto’s en kaarten. Begint bij een willekeurige opname.','Five minutes of films, photos and charts, starting with a random capture.'),()=>evening(5)],
+  [tr('Fotolijst','Photo frame'),tr('Een uur lang alle opnamen. Begint bij een willekeurige foto.','One hour of photographs, starting with a random capture.'),()=>frame(false)]
 ];
+function runMode(index){
+  selectedMenu=index;
+  if(!exploring)current=collection[Math.floor(Math.random()*collection.length)];
+  modes[index][2]();
+}
 function main(){
-  choices(tr('Kijkmodi','Viewing modes'),tr('Kies hoe je wilt kijken','Choose how to explore'),modes.map(([label],i)=>[label,()=>{
-    selectedMenu=i;pickCapture();
-  }]),null,selectedMenu,poster(current),i=>modes[i][1]);
-}
-function candidates(){
-  if(selectedMenu===3)return collection.filter(p=>registered(p)&&collection.some(q=>q.id!==p.id&&q.catalog_id===p.catalog_id&&registered(q)));
-  if(selectedMenu===2)return collection.filter(registered);
-  if(selectedMenu===4)return collection.filter(p=>p.sky_available!==false&&!p.capture_kind);
-  return collection;
-}
-const registered=p=>!p.field||['gaia','wcs'].includes(p.field.kind);
-function pickCapture(){
-  const list=candidates(), [label,description,open]=modes[selectedMenu];
-  if(!list.length){
-    choices(label,description,[[tr('Terug naar kijkmodi','Back to viewing modes'),main]],main,0,null,
-      ()=>tr('Geen passende opnamen in deze collectie.','No eligible captures in this collection.'));return;
-  }
-  const idx=Math.max(0,list.findIndex(p=>p.id===current.id));
-  const prompt=selectedMenu<2?tr('Met welke foto wil je beginnen?','Which capture should play first?'):
-    tr('Welke opname wil je bekijken?','Which capture would you like to explore?');
-  choices(label,prompt,list.map(p=>[title(p),()=>{current=p;open();}]),main,idx,poster(list[idx]),i=>{
-    const path=poster(list[i]),bg=stage.querySelector('img');
-    if(bg&&bg.getAttribute('src')!==path)bg.src=path;
-    return (list[i].id===primary?(root.dataset.mode==='explore'?tr('Open in de viewer','Open in the viewer'):tr('Jouw galerijkeuze','Your gallery selection'))+' · ':'')+description;
-  });
+  choices(tr(exploring?'Verken':'Kijkmodi',exploring?'Explore':'Viewing modes'),
+    exploring?title(current):tr('Start direct met een willekeurige opname.','Start immediately with a random capture.'),
+    modes.map(([label],i)=>[label,()=>runMode(i)]),null,selectedMenu,poster(current),i=>modes[i][1]);
 }
 function start(){
-  const g=clear(null);status(tr('Galerij laden…','Loading gallery…'));
-  Promise.all([api('/api/objects'),api('/api/atlas')]).then(([gallery,atlas])=>{
-    if(g!==generation)return;
+  const g=clear(null);status(exploring?tr('Opname laden…','Loading capture…'):tr('Galerij laden…','Loading gallery…'));
+  const load=exploring?api(endpoint(primary)).then(p=>[p]):Promise.all([api('/api/objects'),api('/api/atlas')]).then(([gallery,atlas])=>{
     const latest=new Map(gallery.objects.map(p=>[p.id,p]));
     const rank=new Map(gallery.objects.map((p,i)=>[p.catalog_id,i]));
-    collection=atlas.captures.map(p=>({...p,...latest.get(p.id)})).sort((a,b)=>
+    return atlas.captures.map(p=>({...p,...latest.get(p.id)})).sort((a,b)=>
       (rank.get(a.catalog_id)??Infinity)-(rank.get(b.catalog_id)??Infinity)||date(b).localeCompare(date(a)));
-    if(!collection.length)throw Error('empty');
-    current=collection.find(p=>p.id===primary)||collection[0];
-    selectedMenu=root.dataset.mode==='explore'?2:0;main();
-  }).catch(()=>{if(g===generation)choices(tr('Galerij niet beschikbaar','Gallery unavailable'),'',[[tr('Opnieuw proberen','Try again'),start]],null,0,null);});
+  });
+  load.then(rows=>{
+    if(g!==generation)return;
+    if(!rows.length)throw Error('empty');
+    collection=rows;current=collection.find(p=>p.id===primary)||collection[0];main();
+  }).catch(()=>{if(g===generation)choices(exploring?tr('Opname niet beschikbaar','Capture unavailable'):tr('Galerij niet beschikbaar','Gallery unavailable'),'',[[tr('Opnieuw proberen','Try again'),start]],null,0,null);});
 }
 function nightView(p,backTo){
   loadView(backTo,()=>nightData(p),data=>{
@@ -198,10 +183,6 @@ function nightView(p,backTo){
     };
   },()=>nightView(p,backTo));
 }
-function showSettings(){
-  choices(tr('Avondvoorstelling','Evening programme'),tr('Begin bij','Starting with')+' '+name(current),
-    [5,15].map(n=>[n+' min',()=>evening(n)]),pickCapture);
-}
 function evening(minutes){
   const first=collection.findIndex(p=>p.id===current.id);
   const photos=[...collection.slice(first),...collection.slice(0,first)];
@@ -225,7 +206,7 @@ function evening(minutes){
   }
   const labels={photo:tr('Opname','Capture'),film:'Film',sky:tr('Hemelreis','Sky journey'),chart:tr('Skykaart','Sky chart'),hubble:tr('Archiefreis','Archive journey')};
   async function next(step){
-    const g=clear(showSettings,true),layer=elm('div','scene');
+    const g=clear(main,true),layer=elm('div','scene');
     let p=photos[object],list=chapters(p);
     scene+=step;
     if(scene>=list.length||scene<0){
@@ -258,22 +239,18 @@ function evening(minutes){
       }
     };
     tick=dt=>{if(failed){next(1);return;}if(paused||!ready)return;elapsed+=dt;remaining-=dt;
-      if(remaining<=0){choices(tr('Einde voorstelling','End of programme'),'',[[tr('Opnieuw afspelen','Play again'),()=>evening(minutes)],[tr('Kijkmodi','Viewing modes'),main]],main);return;}
+      if(remaining<=0){choices(tr('Einde voorstelling','End of programme'),'',[[tr('Opnieuw afspelen','Play again'),()=>runMode(0)],[tr('Kijkmodi','Viewing modes'),main]],main);return;}
       if(elapsed>4)hud.hidden=true;layer.querySelector('canvas')?.update?.();
       if(elapsed>=duration)next(1);
     };
   }
   next(0);
 }
-function frameSettings(){
-  choices(tr('Fotolijst','Photo frame'),title(current)+' · '+tr('Eén uur · alle opnamen','One hour · all captures'),
-    [[tr('Stilstaande foto’s','Still photographs'),()=>frame(false)],[tr('Langzame beweging','Slow movement'),()=>frame(true)]],pickCapture);
-}
 function frame(motion){
   const rows=collection, cache=new Map();
   let index=rows.findIndex(p=>p.id===current.id),remaining=3600,age=0,paused=false;
   function slide(){
-    const session=clear(frameSettings,true);
+    const session=clear(main,true);
     let plane=null;
     let request=0,ready=false;
     function getSlide(i){
@@ -329,64 +306,12 @@ function frame(motion){
     };
     tick=dt=>{
       if(paused||!ready)return;age+=dt;remaining-=dt;
-      if(remaining<=0)return frameSettings();
+      if(remaining<=0)return main();
       if(age>5)hud.hidden=true;
       if(age>=25)show(index+1);
     };
   }
   slide();
-}
-function compareMenu(){
-  const others=candidates().filter(p=>p.id!==current.id&&p.catalog_id===current.catalog_id);
-  if(!others.length){
-    choices(tr('Vergelijk opnamen','Compare captures'),tr('Voor dit object is één opnamedatum beschikbaar.','This object has one capture date.'),
-      [[tr('Terug','Back'),main]],main);return;
-  }
-  choices(tr('Vergelijk met','Compare with'),title(current),others.map(p=>[date(p)||p.id,()=>compare(p)]),pickCapture);
-}
-function compare(other){
-  const again=()=>compare(other);
-  loadView(compareMenu,()=>Promise.all([image(poster(current)),image('/media/'+enc(current.id)+'/aligned/'+enc(other.id))]),([a,b])=>{
-    const session=clear(compareMenu),camera=new PhotoCamera();
-    const base=elm('canvas'),overlay=elm('canvas'),line=elm('div','divider');
-    const w=Math.round(innerWidth*devicePixelRatio),h=Math.round(innerHeight*devicePixelRatio);
-    for(const canvas of [base,overlay]){
-      canvas.width=w;canvas.height=h;
-      Object.assign(canvas.style,{position:'absolute',inset:'0'});
-    }
-    const modes=[tr('Scheidslijn','Wipe'),tr('Knipperen','Blink'),tr('Zoomen','Zoom'),tr('Schuiven','Pan')];
-    let mode=0,split=.5,blink=false,elapsed=0,loadingFull=false;
-    function renderLayers(){
-      for(const [canvas,img] of [[base,a],[overlay,b]]){
-        const ctx=canvas.getContext('2d');
-        ctx.clearRect(0,0,w,h);camera.draw(ctx,img,w,h);
-      }
-    }
-    function controls(){
-      overlay.style.opacity=mode===1&&!blink?'0':'1';
-      overlay.style.clipPath=mode===1?'none':'inset(0 0 0 '+split*100+'%)';
-      line.hidden=mode===1;line.style.left=split*100+'%';
-      const dates=mode===1?(blink?date(other):date(current)):date(current)+'   |   '+date(other);
-      status(name(current)+' · '+dates+' · '+modes[mode]+' · '+camera.scaleLabel(en),
-        [tr('← →  Scheidslijn','← →  Wipe'),tr('← →  Wissel datum','← →  Switch date'),tr('↑ ↓  Zoom','↑ ↓  Zoom'),tr('Pijlen  Schuiven','Arrows  Pan')][mode]
-        +'     OK  '+modes[(mode+1)%4]);
-    }
-    tick=dt=>{if(mode===1&&(elapsed+=dt)>.85){elapsed=0;blink=!blink;controls();}};
-    key=k=>{
-      if(k==='reset'){mode=(mode+1)%4;camera.pan=mode===3;}
-      else if(mode===0){if(k==='previous'||k==='next')split=Math.max(0,Math.min(1,split+(k==='next'?.04:-.04)));}
-      else if(mode===1){if(k==='previous'||k==='next'){blink=!blink;elapsed=0;}}
-      else{
-        camera.key(k);renderLayers();
-        if(camera.zoom>1&&!loadingFull){
-          loadingFull=true;
-          detail(current).then(d=>image(photoSrc(d))).then(full=>{if(generation===session){a=full;renderLayers();}}).catch(()=>{loadingFull=false;});
-        }
-      }
-      controls();
-    };
-    renderLayers();controls();
-  },again);
 }
 function destinationFor(obj,options){
   const norm=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
@@ -396,22 +321,16 @@ function destinationFor(obj,options){
     options.find(o=>ids.includes(norm(o.id))||ids.includes(norm(o.target))||(o.id==='nucleus'&&ids.includes('M31')));
 }
 function discover(){
-  const photos=candidates(),catalogs=new Map(),archive=new Map();
-  let photoIndex=photos.findIndex(p=>p.id===current.id);
-  function movePhoto(step){
-    photoIndex=mod(photoIndex+step,photos.length);
-    current=photos[photoIndex];openPhoto(step<0?-1:0);
-  }
-  function openPhoto(first){
-    const p=current,g=clear(pickCapture,true);
+  const catalogs=new Map(),archive=new Map();
+  function openPhoto(){
+    const p=current,g=clear(main,true);
     status(title(p),tr('Onderdelen opzoeken…','Finding features…'));
-    key=k=>{if(k==='out'||k==='in')movePhoto(k==='out'?1:-1);};
-    Promise.all([cached(catalogs,p.id,()=>api(endpoint(p.id,'/discover'))),image(poster(p))]).then(([data,img])=>{
+    Promise.all([cached(catalogs,p.id,()=>api(endpoint(p.id,'/discover')).catch(error=>{if(['400','404'].includes(error.message))return {objects:[]};throw error;})),image(poster(p))]).then(([data,img])=>{
       if(g!==generation)return;
       const objects=data.objects;
-      let index=first===-1?Math.max(0,objects.length-1):0,zoomed=false;
+      let index=0,zoomed=false;
       function guide(){
-        const session=clear(pickCapture,true),layer=elm('div','scene');
+        const session=clear(main,true),layer=elm('div','scene');
         const field=elm('div','guide-camera',layer);
         const photo=img.isConnected?img.cloneNode():img;field.append(photo);
         const ring=elm('div','guide-ring',layer);ring.hidden=!objects.length;
@@ -428,12 +347,12 @@ function discover(){
           const left=offset(dw*z,w,x),top=offset(dh*z,h,y);
           field.style.transform='translate('+left+'px,'+top+'px) scale('+z+')';
           ring.style.transform='translate('+(left+x*dw*z)+'px,'+(top+y*dh*z)+'px) translate(-50%,-50%)';
-          const controls=tr('↑ ↓  Andere foto','↑ ↓  Change photo');
-          if(!point){status(title(p),tr('Geen benoemde onderdelen in deze opname.','No named features in this capture.')+'    '+controls);return;}
+          const controls=tr('↑  Inzoomen    ↓  Overzicht','↑  Zoom in    ↓  Overview');
+          if(!point){status(title(p),tr('Geen benoemde onderdelen in deze opname.','No named features in this capture.')+'    '+tr('Terug  Verken','Back  Explore'));return;}
           const trip=destinationFor(point,options);
           const heading=(text(point.name)||point.id)+' · '+text(point.type)+' · '+(index+1)+'/'+objects.length;
           status(heading,[title(p),text(point.summary)||[...(point.aliases||[]),'RA '+point.ra.toFixed(3)+'°','Dec '+point.dec.toFixed(3)+'°'].join(' · '),
-            (objects.length>1?tr('← →  Onderdeel','← →  Feature')+'     '+controls:tr('Pijlen  Andere foto','Arrows  Change photo'))+
+            (objects.length>1?tr('← →  Onderdeel','← →  Feature')+'     ':'')+controls+
             '     OK  '+(zoomed?tr('Overzicht','Overview'):tr('Inzoomen','Zoom in'))+(trip?tr('     Houd OK vast  Archiefreis','     Hold OK  Archive journey'):'')].join('\n'));
         }
         paint();reveal(layer);
@@ -444,11 +363,10 @@ function discover(){
           if(session===generation){options=r.observations||[];paint();}
         }).catch(()=>{});
         key=k=>{
-          if(k==='out'||k==='in')return movePhoto(k==='out'?1:-1);
+          if((k==='out'||k==='in')&&objects.length){zoomed=k==='in';paint();return;}
           if(k==='next'||k==='previous'){
-            const step=k==='next'?1:-1,other=index+step;
-            if(other<0||other>=objects.length)return movePhoto(step);
-            index=other;zoomed=true;paint();return;
+            if(!objects.length)return;
+            index=mod(index+(k==='next'?1:-1),objects.length);zoomed=true;paint();return;
           }
           if(k==='reset'&&objects.length){zoomed=!zoomed;paint();}
           if(k==='rotate'&&objects.length){
@@ -464,8 +382,8 @@ function discover(){
         };
       }
       guide();
-    }).catch(()=>{if(g===generation)problem(tr('Opname niet beschikbaar','Capture unavailable'),pickCapture,()=>openPhoto(first));});
+    }).catch(()=>{if(g===generation)problem(tr('Opname niet beschikbaar','Capture unavailable'),main,openPhoto);});
   }
-  openPhoto(0);
+  openPhoto();
 }
 start();

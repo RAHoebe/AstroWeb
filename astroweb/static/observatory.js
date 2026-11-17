@@ -12,7 +12,9 @@ if(['nl','en'].includes(query.get('lang')))setLanguage(query.get('lang'));
 const modes=['mosaic','space','cosmic','planner','solar'];
 const cards=[...document.querySelectorAll('.mode-card')];
 const surface=$('obs-surface'),canvas=$('obs-canvas'),ctx=canvas.getContext('2d'),glCanvas=$('obs-gl');
-let gpu;try{gpu=new SpaceStars(glCanvas);}catch{gpu=null;}
+// Calendar, solar and mosaic views do not need to reserve a WebGL context.
+let gpu=null,gpuAttempted=false;
+glCanvas.addEventListener('webglcontextlost',()=>{gpu=null;gpuAttempted=true;glCanvas.hidden=true;schedule();});
 let captures=[],capture=null,mode=null,data=null,images={},modeIndex=0,frameIndex=0,referenceIndex=0;
 let generation=0,aborter=null,pollTimer=0,frame=0,lastTime=0,lastReadout=0,clock=0,playing=false,active=true;
 let zoom=1,targetZoom=1,pan=[.5,.5],targetPan=[.5,.5],progress=0,targetProgress=0,orbit=0,rotation=0,selectedDay=0;
@@ -23,6 +25,8 @@ let solarLandmark=null;
 let calendarTarget='',dayView=false,photoIndex=0,calendarInitial=true,requestedDay=null;
 let calendarRestore=null;
 try{if(tv&&calendarPage)calendarRestore=JSON.parse(localStorage.getItem('astroweb-calendar-position'));}catch{}
+if(query.has('day')||(query.has('month')&&query.get('month')!==calendarRestore?.month))calendarRestore=null;
+let calendarMonthData=null,calendarMonthLanguage=null,calendarDayData=null,calendarDayIndex=-1,calendarDayLanguage=null;
 try{const p=JSON.parse(localStorage.getItem('astroweb-solar-landmark'));if(p&&Number.isFinite(p.lat)&&Number.isFinite(p.lon)&&typeof p.epoch==='string')solarLandmark=p;}catch{}
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const ease=n=>{n=clamp(n,0,1);return n*n*(3-2*n);};
@@ -157,12 +161,13 @@ async function open(value,keepPlaying=false){
       if(version!==generation)return;
       data=next;images=loaded;frameIndex=Math.max(0,next.captures?.findIndex(c=>c.id===capture?.id)||0);referenceIndex=0;
       if(value==='space'){
+        if(!gpuAttempted){gpuAttempted=true;try{gpu=new SpaceStars(glCanvas);}catch{gpu=null;}}
         const blend=next.blend==='screen'?'screen':'plus-lighter';
         const available=gpu&&CSS.supports('mix-blend-mode',blend)&&gpu.set(next,images.stars);
         glCanvas.style.mixBlendMode=blend;glCanvas.hidden=!available;
       }
       if(value==='planner'){
-        if(calendarInitial){const restored=query.get('day')||calendarRestore?.day,recent=(next.events||[]).map(e=>e.day).sort().at(-1);selectedDay=Math.max(0,next.days.findIndex(d=>d.date===(restored?.startsWith(next.month)?restored:recent||next.best[0])));dayView=calendarPage&&!!(query.get('day')||calendarRestore?.dayView);photoIndex=calendarRestore?.photoIndex||0;calendarRestore=null;calendarInitial=false;}
+        if(calendarInitial){const restored=query.get('day')||calendarRestore?.day,recent=(next.events||[]).map(e=>e.day).sort().at(-1),restoredIndex=next.days.findIndex(d=>d.date===restored);selectedDay=restoredIndex>=0?restoredIndex:Math.max(0,next.days.findIndex(d=>d.date===(recent||next.best[0])));dayView=calendarPage&&restoredIndex>=0&&!!(query.get('day')||calendarRestore?.dayView);photoIndex=Math.max(0,Number(calendarRestore?.photoIndex)||0);calendarRestore=null;calendarInitial=false;}
         if(requestedDay?.startsWith(next.month)){selectedDay=Math.max(0,next.days.findIndex(d=>d.date===requestedDay));requestedDay=null;dayView=false;}
         selectedDay=clamp(selectedDay,0,next.days.length-1);renderCalendar();
       }
@@ -186,7 +191,10 @@ function dimensions(){
 function fit(image,w,h,scale=1){const f=Math.min(w/image.width,h/image.height)*scale;return [image.width*f,image.height*f];}
 function picture(image,w,h,scale=1,alpha=1){const [iw,ih]=fit(image,w,h,scale);ctx.globalAlpha=alpha;ctx.drawImage(image,(w-iw)/2,(h-ih)/2,iw,ih);ctx.globalAlpha=1;}
 function readouts(items){
-  $('obs-readouts').replaceChildren(...items.map(([large,small])=>{const e=document.createElement('div');e.className='readout';e.append(textNode('strong',large),textNode('small',small));return e;}));
+  const host=$('obs-readouts'),signature=JSON.stringify(items);
+  if(host.dataset.signature===signature&&host.childElementCount===items.length)return;
+  host.dataset.signature=signature;
+  host.replaceChildren(...items.map(([large,small])=>{const e=document.createElement('div');e.className='readout';e.append(textNode('strong',large),textNode('small',small));return e;}));
 }
 function mosaicDates(){return [...new Set((data?.captures||[]).map(c=>c.date?.slice(0,10)).filter(Boolean))].sort().map(dateLabel).join(' · ');}
 function mosaicCamera(){
@@ -317,55 +325,65 @@ function renderCalendar(){
   $('obs-calendar-month').hidden=dayView;$('obs-calendar-day').hidden=!dayView;
   const day=data.days[selectedDay],events=dayEvents();
   if(dayView){
-    $('obs-day-title').textContent=dateLabel(day.date);
-    const host=$('obs-day-photos');host.replaceChildren();
-    photoIndex=clamp(photoIndex,0,Math.max(0,events.length-1));
-    events.forEach((event,i)=>{
-      const a=document.createElement('a');a.href=photoHref(event);a.className='day-photo';a.classList.toggle('selected',i===photoIndex);
-      a.append(eventImage(event),textNode('strong',eventName(event)));if(eventName(event).replace(/[^a-z0-9]/gi,'').toLowerCase()!==event.catalog_id.replace(/[^a-z0-9]/gi,'').toLowerCase())a.append(textNode('span',event.catalog_id.replace('_',' ')));
-      const actual=event.time?new Date(event.time):null;
-      if(actual&&Number.isFinite(actual.getTime()))a.append(textNode('small','DATE-OBS · '+new Intl.DateTimeFormat(language,{dateStyle:'short',timeStyle:'short',timeZone:data.timezone}).format(actual)));
-      host.append(a);
-    });
-    $('obs-day-empty').hidden=events.length>0;$('obs-day-night').textContent=nightText(day);
-    const timeline=$('obs-day-timeline');timeline.replaceChildren();
-    for(let hour=0;hour<=24;hour+=4){const tick=textNode('span',String(hour).padStart(2,'0')+':00');tick.style.left=hour/24*100+'%';timeline.append(tick);}
-    for(const event of events){
-      if(!event.time)continue;const time=new Date(event.time);if(!Number.isFinite(time.getTime()))continue;
-      if(new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:data.timezone}).format(time)!==day.date)continue;
-      const parts=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:data.timezone}).formatToParts(time);
-      const hour=+parts.find(p=>p.type==='hour').value,minute=+parts.find(p=>p.type==='minute').value;
-      const pin=document.createElement('a');pin.href=photoHref(event);pin.title=local(event.name)+' · DATE-OBS';pin.className='timeline-photo';pin.style.left=(hour+minute/60)/24*100+'%';pin.append(eventImage(event));timeline.append(pin);
-    }
-    if(tv)host.querySelector('.selected')?.scrollIntoView({block:'nearest',inline:'center'});
-  }else{
-    const seasons=$('obs-season');seasons.replaceChildren();
-    data.seasons.forEach((night,i)=>{
-      const button=document.createElement('button');button.classList.toggle('current',i===month-1);
-      const bar=document.createElement('i');bar.style.height=clamp(night.hours/10*35,2,35)+'px';
-      const title=new Intl.DateTimeFormat(language,{month:'short',timeZone:'UTC'}).format(new Date(Date.UTC(year,i,15)));
-      button.append(bar,textNode('span',title));button.title=t('obs_midmonth')+' · '+number(night.hours)+' h';
-      button.addEventListener('click',()=>setMonth(year+'-'+String(i+1).padStart(2,'0')));seasons.append(button);
-    });
-    $('obs-weekdays').replaceChildren(...Array.from({length:7},(_,i)=>textNode('span',new Intl.DateTimeFormat(language,{weekday:'short',timeZone:'UTC'}).format(new Date(Date.UTC(2026,10,16+i))))));
-    const days=$('obs-days');days.replaceChildren();const offset=(new Date(Date.UTC(year,month-1,1)).getUTCDay()+6)%7;
-    for(let i=0;i<offset;i++)days.append(document.createElement('span'));
-    data.days.forEach((night,i)=>{
-      const cell=document.createElement('div');cell.className='calendar-day';cell.classList.toggle('selected',i===selectedDay);
-      const button=document.createElement('button');button.className='day-select';button.dataset.index=i;
-      button.classList.toggle('good',night.hours>0);button.classList.toggle('best',data.best.includes(night.date));button.classList.toggle('selected',i===selectedDay);
-      button.append(textNode('span',String(i+1)),textNode('small',number(night.hours)+' h'));
-      button.addEventListener('click',()=>selectCalendarDay(i,true));
-      button.addEventListener('keydown',e=>{const d={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];if(d){e.preventDefault();selectCalendarDay(clamp(i+d,0,data.days.length-1));days.querySelector('[data-index="'+selectedDay+'"]').focus();}});
-      cell.append(button);
-      const shots=(data.events||[]).filter(e=>e.day===night.date);
-      if(shots.length){
-        const strip=document.createElement('div');strip.className='day-thumbs';
-        shots.slice(0,2).forEach(event=>{const a=document.createElement('a');a.href='/viewer/'+encodeURIComponent(event.id)+'?'+new URLSearchParams({from:'calendar',month:data.month,day:night.date})+'#original';a.title=local(event.name);a.append(eventImage(event));strip.append(a);});
-        if(shots.length>2)strip.append(textNode('span','+'+(shots.length-2)));cell.append(strip);
+    const refresh=calendarDayData!==data||calendarDayIndex!==selectedDay||calendarDayLanguage!==language;
+    if(refresh){
+      $('obs-day-title').textContent=dateLabel(day.date);
+      const host=$('obs-day-photos');host.replaceChildren();
+      photoIndex=clamp(photoIndex,0,Math.max(0,events.length-1));
+      events.forEach((event,i)=>{
+        const a=document.createElement('a');a.href=photoHref(event);a.className='day-photo';a.classList.toggle('selected',i===photoIndex);
+        a.append(eventImage(event),textNode('strong',eventName(event)));if(eventName(event).replace(/[^a-z0-9]/gi,'').toLowerCase()!==event.catalog_id.replace(/[^a-z0-9]/gi,'').toLowerCase())a.append(textNode('span',event.catalog_id.replace('_',' ')));
+        const actual=event.time?new Date(event.time):null;
+        if(actual&&Number.isFinite(actual.getTime()))a.append(textNode('small','DATE-OBS · '+new Intl.DateTimeFormat(language,{dateStyle:'short',timeStyle:'short',timeZone:data.timezone}).format(actual)));
+        host.append(a);
+      });
+      $('obs-day-empty').hidden=events.length>0;$('obs-day-night').textContent=nightText(day);
+      const timeline=$('obs-day-timeline');timeline.replaceChildren();
+      for(let hour=0;hour<=24;hour+=4){const tick=textNode('span',String(hour).padStart(2,'0')+':00');tick.style.left=hour/24*100+'%';timeline.append(tick);}
+      for(const event of events){
+        if(!event.time)continue;const time=new Date(event.time);if(!Number.isFinite(time.getTime()))continue;
+        if(new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:data.timezone}).format(time)!==day.date)continue;
+        const parts=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:data.timezone}).formatToParts(time);
+        const hour=+parts.find(p=>p.type==='hour').value,minute=+parts.find(p=>p.type==='minute').value;
+        const pin=document.createElement('a');pin.href=photoHref(event);pin.title=local(event.name)+' · DATE-OBS';pin.className='timeline-photo';pin.style.left=(hour+minute/60)/24*100+'%';pin.append(eventImage(event));timeline.append(pin);
       }
-      days.append(cell);
-    });
+      calendarDayData=data;calendarDayIndex=selectedDay;calendarDayLanguage=language;
+    }
+    photoIndex=clamp(photoIndex,0,Math.max(0,events.length-1));
+    $('obs-day-photos').querySelectorAll('.day-photo').forEach((a,i)=>a.classList.toggle('selected',i===photoIndex));
+    if(tv)$('obs-day-photos').querySelector('.selected')?.scrollIntoView({block:'nearest',inline:'center'});
+  }else{
+    if(calendarMonthData!==data||calendarMonthLanguage!==language){
+      const seasons=$('obs-season');seasons.replaceChildren();
+      data.seasons.forEach((night,i)=>{
+        const button=document.createElement('button');button.classList.toggle('current',i===month-1);
+        const bar=document.createElement('i');bar.style.height=clamp(night.hours/10*35,2,35)+'px';
+        const title=new Intl.DateTimeFormat(language,{month:'short',timeZone:'UTC'}).format(new Date(Date.UTC(year,i,15)));
+        button.append(bar,textNode('span',title));button.title=t('obs_midmonth')+' · '+number(night.hours)+' h';
+        button.addEventListener('click',()=>setMonth(year+'-'+String(i+1).padStart(2,'0')));seasons.append(button);
+      });
+      $('obs-weekdays').replaceChildren(...Array.from({length:7},(_,i)=>textNode('span',new Intl.DateTimeFormat(language,{weekday:'short',timeZone:'UTC'}).format(new Date(Date.UTC(2026,10,16+i))))));
+      const days=$('obs-days');days.replaceChildren();const offset=(new Date(Date.UTC(year,month-1,1)).getUTCDay()+6)%7;
+      for(let i=0;i<offset;i++)days.append(document.createElement('span'));
+      data.days.forEach((night,i)=>{
+        const cell=document.createElement('div');cell.className='calendar-day';cell.classList.toggle('selected',i===selectedDay);
+        const button=document.createElement('button');button.className='day-select';button.dataset.index=i;
+        button.classList.toggle('good',night.hours>0);button.classList.toggle('best',data.best.includes(night.date));button.classList.toggle('selected',i===selectedDay);
+        button.append(textNode('span',String(i+1)),textNode('small',number(night.hours)+' h'));
+        button.addEventListener('click',()=>selectCalendarDay(i,true));
+        button.addEventListener('keydown',e=>{const d={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];if(d){e.preventDefault();selectCalendarDay(clamp(i+d,0,data.days.length-1));days.querySelector('[data-index="'+selectedDay+'"]').focus();}});
+        cell.append(button);
+        const shots=(data.events||[]).filter(e=>e.day===night.date);
+        if(shots.length){
+          const strip=document.createElement('div');strip.className='day-thumbs';
+          shots.slice(0,2).forEach(event=>{const a=document.createElement('a');a.href='/viewer/'+encodeURIComponent(event.id)+'?'+new URLSearchParams({from:'calendar',month:data.month,day:night.date})+'#original';a.title=local(event.name);a.append(eventImage(event));strip.append(a);});
+          if(shots.length>2)strip.append(textNode('span','+'+(shots.length-2)));cell.append(strip);
+        }
+        days.append(cell);
+      });
+      calendarMonthData=data;calendarMonthLanguage=language;
+    }
+    $('obs-days').querySelectorAll('.calendar-day').forEach((cell,i)=>{cell.classList.toggle('selected',i===selectedDay);cell.querySelector('button').classList.toggle('selected',i===selectedDay);});
     $('obs-night').textContent=dateLabel(day.date)+' · '+nightText(day);
     const preview=$('obs-day-preview');preview.replaceChildren();
     if(!events.length)preview.append(textNode('span',t('calendarNoCaptures')));
@@ -457,6 +475,7 @@ function full(){
   else document.body.classList.toggle('obs-full');schedule();
 }
 function remote(command){
+  if(!$('obs-startup').hidden){if(!$('obs-startup-retry').hidden&&['select','reset','toggle'].includes(command))boot();return;}
   if(!mode){
     if(command==='previous'||command==='next')selectCard(modeIndex+(command==='next'?1:-1));
     if(command==='in'||command==='out'){const i=captures.indexOf(capture);selectCapture(captures[(i+(command==='in'?-1:1)+captures.length)%captures.length]?.id);}
@@ -558,17 +577,26 @@ reduced.addEventListener('change',()=>{if(reduced.matches){playing=false;sceneTe
 document.addEventListener('fullscreenchange',schedule);
 window.addEventListener('message',event=>{if(event.origin!==location.origin||event.source!==parent)return;if(event.data?.type==='astroweb-active')window.viewActive(event.data.active===true);if(event.data?.type==='astroweb-language'&&['nl','en'].includes(event.data.language)){setLanguage(event.data.language);translated();}});
 async function boot(){
+  function startup(key){$('obs-startup-status').dataset.i18n=key;$('obs-startup-status').textContent=t(key);$('obs-startup').querySelector('.spinner').hidden=key!=='loading';}
+  $('obs-startup').hidden=false;startup('loading');$('obs-startup-retry').hidden=true;$('obs-hub').hidden=true;
   try{
     const result=await json('/api/observatory');captures=result.captures;
     const wanted=query.get('month')||calendarRestore?.month;$('obs-month').value=/^(20\d\d|2100)-(0[1-9]|1[0-2])$/.test(wanted||'')?wanted:result.month;
     if(calendarPage){calendarTarget=query.get('target')||calendarRestore?.target||'';if(!captures.some(c=>c.id===calendarTarget&&c.features.planner))calendarTarget='';}
-    translated();if(!captures.length&&!calendarPage){$('obs-hub-status').textContent=t('emptyGallery');return;}
+    translated();if(!captures.length&&!calendarPage){startup('emptyGallery');return;}
     selectCapture(query.get('capture'));if(capture)selectCard(Math.max(0,modes.findIndex(m=>capture.features[m])));
     if(calendarPage){document.querySelector('.obs-header>span').dataset.i18n='captureCalendar';document.querySelector('.obs-header>span').textContent=t('captureCalendar');open('planner');}
     else if(modes.includes(query.get('mode')))open(query.get('mode'));
-    document.body.dataset.loaded='true';
-  }catch{$('obs-hub-status').textContent=t('network_error');}
+    else $('obs-hub').hidden=false;
+    $('obs-startup').hidden=true;document.body.dataset.loaded='true';
+  }catch{startup('network_error');$('obs-startup-retry').hidden=false;}
 }
+$('obs-startup-retry').addEventListener('click',boot);
+// TV instructions need their own space; canvas captions must remain visible
+// above them, including when a source URL wraps onto an additional line.
+if(tv&&!calendarPage)surface.after($('obs-remote-help'));
 if(embedded||calendarPage)document.querySelector('.control-buttons').append($('obs-full'));
 if(embedded){document.querySelector('.control-buttons').append($('obs-open'));$('obs-open').target='_top';}
-setLanguage(language);boot();
+setLanguage(language);
+if(calendarPage){const heading=document.querySelector('.obs-header>span');heading.dataset.i18n='captureCalendar';heading.textContent=t('captureCalendar');document.title='AstroWeb · '+t('captureCalendar');}
+boot();

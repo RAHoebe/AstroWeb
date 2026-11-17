@@ -1,6 +1,5 @@
 import io
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -9,7 +8,7 @@ from PIL import Image
 
 from astroweb.app import create_app
 from astroweb.jobs import JobQueue
-from astroweb.media import identify_files, import_object, normalize_id, validate_images
+from astroweb.media import import_object, normalize_id, validate_images
 from astroweb.observation import public_observation, read_observation
 from astroweb.render import Parameters, Scene, compose, read_rgb, render_video
 from astroweb.store import Store

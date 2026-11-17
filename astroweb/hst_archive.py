@@ -7,7 +7,6 @@ import re
 import time
 import uuid
 
-import astropy.units as u
 import cv2
 import numpy as np
 import requests

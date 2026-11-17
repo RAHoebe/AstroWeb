@@ -18,6 +18,70 @@ from astroweb.render import compose
 from astroweb.store import Store
 
 
+def test_missing_corrupt_and_explicitly_retried_exploration_cache_is_rebuilt(tmp_path, monkeypatch):
+    import time
+
+    app = create_app(tmp_path, testing=True)
+    store = app.extensions["store"]
+    record = capture(store)
+    service = app.extensions["observatory"]
+    calls = []
+
+    def build(store, record, folder):
+        calls.append(1)
+        (folder / "frame.jpg").write_bytes(b"derived image")
+        return dict(image="frame.jpg", revision=len(calls))
+
+    def ready(retry=False):
+        state = service.state("space", record, [record], "2026-11", retry=retry)
+        for _ in range(100):
+            if state["status"] == "ready":
+                return state["data"]
+            time.sleep(.01)
+            state = service.state("space", record, [record], "2026-11")
+        pytest.fail("Preparation did not finish")
+
+    monkeypatch.setattr(stellar_space, "build", build)
+    try:
+        data = ready()
+        assert data["revision"] == 1
+        store.path(data["image"].removeprefix("/media/")).unlink()
+        data = ready()
+        assert data["revision"] == 2
+        data = ready(retry=True)
+        assert data["revision"] == 3
+        folder = store.path(data["image"].removeprefix("/media/")).parent
+        (folder / "result.json").write_text("interrupted write")
+        assert ready()["revision"] == 4
+    finally:
+        app.extensions["jobs"].shutdown()
+
+
+def test_cached_exploration_media_follows_renamed_capture_and_privacy(tmp_path):
+    app = create_app(tmp_path, testing=True)
+    store = app.extensions["store"]
+    record = capture(store)
+    token = "a" * 32
+    folder = store.path("observatory/" + token)
+    folder.mkdir(parents=True)
+    (folder / "view.jpg").write_bytes(b"cached image")
+    (folder / "result.json").write_text(json.dumps(dict(ids=[record["id"]], files=["view.jpg"], private_site=False)))
+    try:
+        renamed = store.rename_object(record["id"], "IC_1396", record["metadata"])
+        client = app.test_client()
+        url = f"/media/observatory/{token}/view.jpg"
+        assert client.get(url).status_code == 200
+        store.update("objects", renamed["id"], published=False)
+        assert client.get(url).status_code == 404
+        with client.session_transaction() as session:
+            session["admin"] = True
+        response = client.get(url)
+        assert response.status_code == 200
+        assert response.headers["Cache-Control"] == "private, no-store"
+    finally:
+        app.extensions["jobs"].shutdown()
+
+
 def capture(store,identifier="M_31",ra=359.99,sign=-1,published=True):
     h,w=120,160
     yy,xx=np.mgrid[:h,:w]
@@ -121,7 +185,7 @@ def test_solar_rejects_unrelated_epoch_before_loading_image(monkeypatch,tmp_path
 
 
 def test_background_explorations_and_media_enforce_visibility(tmp_path,monkeypatch):
-    app=create_app(tmp_path,testing=True);store=app.extensions["store"];record=capture(store,published=False)
+    app=create_app(tmp_path,testing=True);store=app.extensions["store"];capture(store,published=False)
     monkeypatch.setattr(cosmic,"build",lambda *args:dict(method="catalogue",lookback_years=10))
     client=app.test_client()
     try:

@@ -4,6 +4,10 @@ import android.annotation.SuppressLint
 import android.net.Uri
 import android.view.KeyEvent
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceError
+import android.webkit.WebResourceResponse
+import android.webkit.SslErrorHandler
+import android.net.http.SslError
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -75,7 +79,13 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
     }
     var web by remember { mutableStateOf<WebView?>(null) }
     val focus=remember { FocusRequester() }
+    val errorFocus=remember { FocusRequester() }
+    var loadFailed by remember(asset,id,mode,en) { mutableStateOf(false) }
+    var loading by remember(asset,id,mode,en) { mutableStateOf(asset=="observatory.html") }
+    val currentForeground by rememberUpdatedState(foreground)
+    LaunchedEffect(loadFailed) { if(loadFailed) errorFocus.requestFocus() }
     LaunchedEffect(web,foreground) {
+        web?.let { if(foreground) it.onResume() else it.onPause(); it.keepScreenOn=foreground && asset=="viewing.html" }
         if(asset=="viewing.html") web?.evaluateJavascript("window.viewActive?.($foreground)",null)
         if(asset=="observatory.html") web?.evaluateJavascript("window.viewActive?.($foreground)",null)
         if(!foreground && asset=="map.html") web?.evaluateJavascript("window.mapKey?.('pause')",null)
@@ -87,6 +97,7 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
         }
     }
     Box(Modifier.fillMaxSize().background(ink).focusRequester(focus).onPreviewKeyEvent { key ->
+        if(loadFailed) return@onPreviewKeyEvent false
         val ev=key.nativeKeyEvent
         val command=when(ev.keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> "in"
@@ -133,6 +144,20 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
             if(asset=="viewing.html") settings.mediaPlaybackRequiresUserGesture=false
             settings.allowFileAccess=false;settings.allowContentAccess=false
             webViewClient=object:WebViewClient() {
+                override fun onPageFinished(view:WebView,url:String) {
+                    loading=false
+                    view.evaluateJavascript("window.viewActive?.($currentForeground)",null)
+                    if(!currentForeground && asset=="map.html")view.evaluateJavascript("window.mapKey?.('pause')",null)
+                }
+                override fun onReceivedError(view:WebView,request:WebResourceRequest,error:WebResourceError) {
+                    if(request.isForMainFrame){loading=false;loadFailed=true}
+                }
+                override fun onReceivedHttpError(view:WebView,request:WebResourceRequest,response:WebResourceResponse) {
+                    if(request.isForMainFrame){loading=false;loadFailed=true}
+                }
+                override fun onReceivedSslError(view:WebView,handler:SslErrorHandler,error:SslError) {
+                    handler.cancel();loading=false;loadFailed=true
+                }
                 override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean {
                     val origin=Uri.parse(server);val url=request.url
                     if(openCapture!=null && url.scheme==origin.scheme && url.host==origin.host && url.port==origin.port && url.pathSegments.size==2 && url.pathSegments[0]=="viewer") {
@@ -149,6 +174,14 @@ private enum class Chart(val slug:String,val nl:String,val en:String) {
             else loadDataWithBaseURL("$server/",page,"text/html","utf-8",null)
             web=this
         } },modifier=Modifier.fillMaxSize(),onRelease={ it.stopLoading();it.destroy();web=null })
+        if(loading)Box(Modifier.fillMaxSize().background(ink),contentAlignment=Alignment.Center) {
+            Text(if(en) "Loading view…" else "Weergave laden…",color=quiet,fontSize=16.sp)
+        }
+        if(loadFailed)Column(Modifier.fillMaxSize().background(ink),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+            Text(if(en) "View unavailable" else "Weergave niet beschikbaar",color=light)
+            Spacer(Modifier.height(12.dp))
+            Action(if(en) "Try again" else "Opnieuw proberen",Modifier.focusRequester(errorFocus)) {loadFailed=false;loading=true;web?.reload();focus.requestFocus()}
+        }
     }
     LaunchedEffect(Unit) { focus.requestFocus() }
 }

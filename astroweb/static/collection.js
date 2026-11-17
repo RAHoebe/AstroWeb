@@ -7,7 +7,13 @@ let items=[],stars=new Map(),lines=[],selected=null,peer=null,ra=180,dec=0,zoom=
 const wrap=x=>((x+180)%360+360)%360-180;
 const clamp=(x,l,h)=>Math.max(l,Math.min(h,x));
 const displayId=v=>v.capture_kind?t(v.capture_kind):(v.catalog_id||v.id).replace('_',' ');
-const label=v=>[displayId(v),v.session_name,local(v.name)].filter(Boolean).join(' · ');
+const label=v=>{
+  const seen=new Set();
+  return [displayId(v),v.session_name,...local(v.name).split('·')].filter(Boolean).map(part=>part.trim()).filter(part=>{
+    const key=part.toLowerCase().replace(/[\s_]+/g,'');
+    if(!key||seen.has(key))return false;seen.add(key);return true;
+  }).join(' · ');
+};
 function center(v){
   if(v.field.center)return v.field.center;
   if(!v.field.corners)return null;
@@ -107,7 +113,7 @@ function render(){
     $('atlas-open').href='/viewer/'+encodeURIComponent(selected.id)+'#original';
     $('atlas-compare').hidden=items.length<2;
     const choices=$('atlas-peer');choices.replaceChildren(new Option(t('chooseCapture'),''));
-    for(const v of items.filter(v=>v!==selected))choices.add(new Option(label(v),v.id));
+    for(const v of items.filter(v=>v!==selected))choices.add(new Option([label(v),v.date?.slice(0,10)].filter(Boolean).join(' · '),v.id));
     choices.value=peer?.id||'';$('atlas-pair').replaceChildren();
     for(const v of [selected,peer].filter(Boolean)){
         const a=document.createElement('a');a.href='/viewer/'+encodeURIComponent(v.id)+'#original';const im=new Image();im.src=posterURL(v.id);im.alt=label(v);const txt=document.createElement('span');txt.textContent=label(v);a.append(im,txt);$('atlas-pair').append(a);

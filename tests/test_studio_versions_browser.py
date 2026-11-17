@@ -49,6 +49,12 @@ def test_finished_render_and_capture_labels(tmp_path, monkeypatch):
             page.locator("#studio [data-lang=en]").click()
             pw.expect(page.locator("#edit-object-title")).to_have_text("IC 1396 · The Elephant’s Trunk region")
             assert options.filter(has_text="IC 1396").inner_text().count("IC 1396") == 1
+            # Polling must keep an unchanged object button connected and focused.
+            button = options.filter(has_text="IC 1396")
+            button.focus()
+            with page.expect_response(lambda r: r.url.endswith("/api/admin/objects")):
+                pass
+            pw.expect(button).to_be_focused()
             versions = page.locator("#version-list")
             pw.expect(versions).to_have_value(job["id"])
             page.locator("#render-button").click()

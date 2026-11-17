@@ -1,7 +1,5 @@
 import numpy as np
-import astropy.units as u
 import pytest
-from astropy.coordinates import SkyCoord
 from astropy.wcs import WCS
 
 from astroweb.discovery import project, discover

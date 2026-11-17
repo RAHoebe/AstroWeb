@@ -5,7 +5,6 @@ import uuid
 
 import cv2
 import numpy as np
-import requests
 from . import external_http
 
 from .hubble import HEIGHT, WIDTH, encode

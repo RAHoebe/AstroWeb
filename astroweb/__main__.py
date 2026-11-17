@@ -1,6 +1,7 @@
 import argparse
 import getpass
 import os
+import signal
 from pathlib import Path
 
 
@@ -17,10 +18,20 @@ def main():
         from waitress import serve
         app = create_app()
         print(f"AstroWeb: http://{args.host}:{args.port}", flush=True)
+        # Python as container PID 1 needs an explicit SIGTERM handler. Let
+        # Waitress close and the durable worker finish before Docker's timeout.
+        def terminate(signum, frame):
+            raise KeyboardInterrupt
+        previous = signal.signal(signal.SIGTERM, terminate)
         try:
             serve(app, host=args.host, port=args.port, threads=6, max_request_body_size=600 * 1024 * 1024)
+        except KeyboardInterrupt:
+            pass
         finally:
-            app.extensions["jobs"].shutdown()
+            try:
+                app.extensions["jobs"].shutdown()
+            finally:
+                signal.signal(signal.SIGTERM, previous)
         return
     from .store import Store
     store = Store(os.environ.get("ASTROWEB_DATA", Path.cwd() / "data"))

@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable internal fun Action(label: String, modifier: Modifier = Modifier, selected: Boolean = false, icon:Int? = null, iconOnly:Boolean = false, run: () -> Unit) {
+@Composable internal fun Action(label: String, modifier: Modifier = Modifier, selected: Boolean = false, icon:Int? = null, iconOnly:Boolean = false, compact:Boolean = false, run: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val shape=RoundedCornerShape(7.dp)
     val fg=if(focused) ink else light
@@ -89,13 +89,13 @@ class MainActivity : ComponentActivity() {
     Row(modifier.then(description).onFocusChanged { focused=it.isFocused }.clip(shape)
         .background(if(focused) coral else if(selected) copper else surface.copy(alpha=.94f))
         .border(if(focused) 1.5.dp else 1.dp,if(focused) light else copper.copy(alpha=.62f),shape)
-        .clickable(onClick=run).heightIn(min=29.dp).padding(horizontal=9.dp,vertical=4.dp),
+        .clickable(onClick=run).heightIn(min=29.dp).padding(horizontal=if(compact) 7.dp else 9.dp,vertical=4.dp),
         verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.Center) {
         if(icon!=null) {
-            Glyph(icon,if(focused) ink else quiet,if(iconOnly) 18.dp else 14.dp)
-            if(!iconOnly) Spacer(Modifier.width(5.dp))
+            Glyph(icon,if(focused) ink else quiet,if(iconOnly) 18.dp else if(compact) 13.dp else 14.dp)
+            if(!iconOnly) Spacer(Modifier.width(if(compact) 4.dp else 5.dp))
         }
-        if(!iconOnly) Text(label,color=fg,fontSize=13.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+        if(!iconOnly) Text(label,color=fg,fontSize=if(compact) 12.sp else 13.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
     }
 }
 
@@ -145,7 +145,12 @@ class MainActivity : ComponentActivity() {
         val mode=survey
         when {
             mode != null -> RemoteCanvas(when(mode) { "observatory","calendar" -> "observatory.html"; "modes" -> "viewing.html"; else -> "collection-tv.html" },selected,if(mode=="observatory") "calendar" else mode,en,foreground=foreground,openCapture={chosen->selected=list?.firstOrNull { it.id==chosen || it.catalog==chosen.substringBefore('~') }?.id ?: chosen;opened=chosen;returnCalendar=mode in listOf("calendar","observatory");survey=null;entry="photo"}) { lastSurvey=mode;survey=null }
-            current != null -> key(current,invocation) { Viewer(current, en, foreground,entry) { opened = null;if(returnCalendar){survey="calendar";returnCalendar=false} } }
+            current != null -> key(current,invocation) {
+                Viewer(current,en,foreground,entry,gallery={chosen ->
+                    selected=list?.firstOrNull { it.id==chosen || it.catalog==chosen.substringBefore('~') }?.id ?: chosen
+                    opened=null;survey=null;returnCalendar=false;lastSurvey=null
+                }) { opened=null;if(returnCalendar){survey="calendar";returnCalendar=false} }
+            }
             failed || list?.isEmpty() == true -> {
                 val focus = remember { FocusRequester() }
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {

@@ -10,6 +10,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -22,8 +24,9 @@ import androidx.tv.material3.Text
 import coil.request.ImageRequest
 import coil.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.CancellationException
+import kotlin.math.roundToInt
 
-@Composable internal fun Viewer(initialId: String, en: Boolean, foreground: Boolean, entry:String="film", leave: ()->Unit) {
+@Composable internal fun Viewer(initialId: String, en: Boolean, foreground: Boolean, entry:String="film", gallery:(String)->Unit, leave: ()->Unit) {
     var capture by rememberSaveable { mutableStateOf(initialId) }
     var full by rememberSaveable { mutableStateOf(false) }
     var film by rememberSaveable { mutableStateOf(entry!="photo") }
@@ -82,7 +85,7 @@ import kotlinx.coroutines.CancellationException
         } else if (failed) first.requestFocus()
     }
     if(full && p!=null && (!film || p.film==null)) {
-        RemoteCanvas("photo.html",p.id,"photo",en,turns=turns,onRotate={ turns=(turns+1)%4 })
+        RemoteCanvas("photo.html",p.id,"photo",en,foreground=foreground,turns=turns,onRotate={ turns=(turns+1)%4 })
         return
     }
     if (explore && p != null) {
@@ -151,7 +154,7 @@ import kotlinx.coroutines.CancellationException
                             Text(p.catalog.replace('_',' ')+"   ·   "+dateLabel(p.date,en),color=quiet,fontSize=14.sp)
                         }
                         Spacer(Modifier.height(7.dp))
-                        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        ViewerActionRow(choosingDate) {
                             if (choosingDate) {
                                 for (item in p.captures) {
                                     val isCurrent = item.id == capture
@@ -160,21 +163,21 @@ import kotlinx.coroutines.CancellationException
                                     }
                                 }
                             } else {
-                                if(p.film!=null) Action("Film", Modifier.focusRequester(first),film,icon=R.drawable.ic_film) { if(!film) playing=true;film=true }
-                                Action(if(en) "Photo" else "Foto",if(p.film==null) Modifier.focusRequester(first) else Modifier,!film || p.film==null,icon=R.drawable.ic_photo) { film=false }
+                                if(p.film!=null) Action("Film", Modifier.focusRequester(first),film,icon=R.drawable.ic_film,compact=true) { if(!film) playing=true;film=true }
+                                Action(if(en) "Photo" else "Foto",if(p.film==null) Modifier.focusRequester(first) else Modifier,!film || p.film==null,icon=R.drawable.ic_photo,compact=true) { film=false }
                                 if(film && p.film!=null) Action(if(playing) (if(en) "Pause" else "Pauze") else (if(en) "Play" else "Afspelen"),
-                                    icon=if(playing) R.drawable.ic_pause else R.drawable.ic_play) { playing=!playing }
-                                Action(if(en) "Journeys" else "Reizen", Modifier.focusRequester(tripsButton),icon=R.drawable.ic_route) { trips=true }
-                                if (p.maps) Action(if(en) "Maps" else "Kaarten", Modifier.focusRequester(mapsButton),icon=R.drawable.ic_maps) { maps=true }
-                                if (p.captures.size>1) Action(if(en) "Capture date" else "Opnamedatum",Modifier.focusRequester(dates),icon=R.drawable.ic_date) { choosingDate=true }
-                                Action(if(en) "Rotate 90°" else "Draai 90°",icon=R.drawable.ic_rotate) { turns=(turns+1)%4 }
-                                Action(if(en) "Full screen" else "Volledig scherm", Modifier.focusRequester(fullButton),icon=R.drawable.ic_full) { full=true }
-                                Action(if(en) "Explore" else "Verkennen", Modifier.focusRequester(exploreButton)) { explore=true }
+                                    icon=if(playing) R.drawable.ic_pause else R.drawable.ic_play,compact=true) { playing=!playing }
+                                Action(if(en) "Journeys" else "Reizen", Modifier.focusRequester(tripsButton),icon=R.drawable.ic_route,compact=true) { trips=true }
+                                if (p.maps) Action(if(en) "Maps" else "Kaarten", Modifier.focusRequester(mapsButton),icon=R.drawable.ic_maps,compact=true) { maps=true }
+                                if (p.captures.size>1) Action(if(en) "Capture date" else "Opnamedatum",Modifier.focusRequester(dates),icon=R.drawable.ic_date,compact=true) { choosingDate=true }
+                                Action(if(en) "Explore" else "Verken", Modifier.focusRequester(exploreButton),icon=R.drawable.ic_explore,compact=true) { explore=true }
                                 for(feature in listOf("space","cosmic","mosaic","solar").filter { it in p.explorations }) {
                                     val name=when(feature) {"space" -> if(en) "Stars in 3D" else "Sterren in 3D";"cosmic" -> if(en) "Light journey" else "Lichtreis";"mosaic" -> if(en) "Mosaic" else "Mozaïek";else -> if(en) "Solar comparison" else "Zonvergelijking"}
-                                    Action(name,Modifier.focusRequester(featureFocus.getValue(feature)),icon=R.drawable.ic_star) {observatoryMode=feature;observatory=true}
+                                    Action(name,Modifier.focusRequester(featureFocus.getValue(feature)),icon=R.drawable.ic_star,compact=true) {observatoryMode=feature;observatory=true}
                                 }
-                                Action(if(en) "Gallery" else "Galerij",icon=R.drawable.ic_gallery, run=leave)
+                                Action(if(en) "Gallery" else "Galerij",icon=R.drawable.ic_gallery,compact=true) { gallery(capture) }
+                                Action(if(en) "Rotate 90°" else "Draai 90°",icon=R.drawable.ic_rotate,iconOnly=true,compact=true) { turns=(turns+1)%4 }
+                                Action(if(en) "Full screen" else "Volledig scherm",Modifier.focusRequester(fullButton),icon=R.drawable.ic_full,iconOnly=true,compact=true) { full=true }
                             }
                         }
                     }
@@ -196,6 +199,34 @@ import kotlinx.coroutines.CancellationException
                     true
                 } else false
             }.focusable())
+        }
+    }
+}
+
+// Fit every available action on one row. The last two icon buttons stay at the
+// right edge; proportional scaling is only needed for captures with many views.
+@Composable private fun ViewerActionRow(dates:Boolean, content:@Composable ()->Unit) {
+    if(dates) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)) { content() }
+        return
+    }
+    Layout(content=content,modifier=Modifier.fillMaxWidth()) { measurables,limits ->
+        val items=measurables.map { it.measure(limits.copy(minWidth=0,maxWidth=Constraints.Infinity,minHeight=0)) }
+        val gap=5.dp.roundToPx()
+        val natural=items.sumOf { it.width }+gap*(items.size-1).coerceAtLeast(0)
+        val width=if(limits.hasBoundedWidth) limits.maxWidth else natural
+        val scale=if(natural>0) minOf(1f,width.toFloat()/natural) else 1f
+        val height=((items.maxOfOrNull { it.height } ?: 0)*scale).roundToInt()
+        layout(width,limits.constrainHeight(height)) {
+            var x=0f
+            val spare=(width-natural*scale).coerceAtLeast(0f)
+            items.forEachIndexed { index,item ->
+                if(index==items.size-2)x+=spare
+                item.placeWithLayer(x.roundToInt(),0) {
+                    scaleX=scale;scaleY=scale;transformOrigin=TransformOrigin(0f,0f)
+                }
+                x+=(item.width+gap)*scale
+            }
         }
     }
 }
@@ -228,7 +259,7 @@ import kotlinx.coroutines.CancellationException
         onDispose { player.removeListener(listener);player.release() }
     }
     LaunchedEffect(player,playing,foreground) { player.playWhenReady=playing && foreground }
-    AndroidView(factory={ ctx -> android.view.LayoutInflater.from(ctx).inflate(R.layout.movie_surface,null) as PlayerView },update={ it.player=player; it.resizeMode=androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT;it.keepScreenOn=playing && foreground && !failed },modifier=Modifier.fillMaxSize().quarterTurns(turns - if(tall) 1 else 0))
+    AndroidView(factory={ ctx -> android.view.LayoutInflater.from(ctx).inflate(R.layout.movie_surface,null) as PlayerView },update={ it.player=player; it.resizeMode=androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT;it.keepScreenOn=playing && foreground && !failed },onRelease={it.player=null;it.keepScreenOn=false},modifier=Modifier.fillMaxSize().quarterTurns(turns - if(tall) 1 else 0))
     if (buffering) Message(if(en) "Loading film…" else "Film laden…")
     if (failed) Action(if(en) "Reload film" else "Film opnieuw laden", Modifier.focusRequester(errorFocus)) { failed=false;player.prepare() }
 }

@@ -43,7 +43,13 @@ internal fun Photo.gallerySummary(en:Boolean):String {
         catalog=="IC_1396" || catalog=="M_31" -> "het $short"
         else -> "de $short"
     }
-    return exact.replace(summaryText) { if(it.range.first==0) replacement.replaceFirstChar(Char::uppercase) else replacement }
+    return exact.replace(summaryText) {
+        val article=Regex("""(?i)\b(?:het|de|the)\s+$""").containsMatchIn(summaryText.substring(0,it.range.first))
+        val value=if(article) {
+            if(exact.containsMatchIn(short)) "object" else short.removePrefix("The ")
+        } else replacement
+        if(it.range.first==0)value.replaceFirstChar(Char::uppercase) else value
+    }
 }
 
 private suspend fun json(path: String): JSONObject = withContext(Dispatchers.IO) {
