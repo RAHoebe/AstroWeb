@@ -188,6 +188,8 @@ def register(app, store, queue, get_object):
         if mode not in MODES:
             abort(404)
         record = get_object(request.args.get("capture",""))
+        if mode == "mosaic":
+            queue.retry_alignments(visible(store,bool(session.get("admin"))))
         month = request.args.get("month") or datetime.now(ZoneInfo("Europe/Amsterdam")).strftime("%Y-%m")
         if not re.fullmatch(r"(?:20\d\d|2100)-(?:0[1-9]|1[0-2])",month):
             raise ValueError("invalid_parameters")

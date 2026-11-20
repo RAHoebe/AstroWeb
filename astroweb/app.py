@@ -216,8 +216,14 @@ def create_app(data_dir=None, testing=False):
         primary=groups.get(catalog,[record])[0]
         allowed=records if session.get("admin") else [r for r in records if r["published"]]
         dates=capture_groups([r for r in allowed if group_id(r)==catalog]).get(catalog,[])
+        if queue.retry_alignments(dates):
+            # A cached solve may finish before the first browser poll.
+            allowed=[r for r in store.all("objects") if r["published"] or session.get("admin")]
+            record=next((r for r in allowed if r["id"]==record["id"]),record)
+            dates=capture_groups([r for r in allowed if group_id(r)==catalog]).get(catalog,[])
+        alignment_pending = any((r.get("gaia") or {}).get("status") in {"pending","running"} for r in dates)
         features=app.extensions['observatory'].features(record,allowed)
-        return jsonify({**present(record), "captures":[date_option(r) for r in dates],"neighbours":neighbours(visible,primary["id"]), "physical":field_scale(store,record), "hubble_available":hubble_target(record), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record)),"explorations":features})
+        return jsonify({**present(record), "alignment_pending":alignment_pending,"captures":[date_option(r) for r in dates],"neighbours":neighbours(visible,primary["id"]), "physical":field_scale(store,record), "hubble_available":hubble_target(record), "galaxy":galactic_map(record), "environment_available":bool(target_galaxy(record)),"explorations":features})
 
     @app.get("/api/objects/<identifier>/environment")
     def environment(identifier):

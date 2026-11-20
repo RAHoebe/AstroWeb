@@ -18,7 +18,7 @@ The object viewer exposes relevant extra tabs only. The capture calendar is a se
 
 On TV, **Stars in 3D**, **Light journey**, **Mosaic** and **Solar comparison** are object-viewer actions. **Calendar** sits beside **Sky atlas** in the gallery. Left/right selects a day and up/down changes month. OK opens the day view, where left/right selects a capture and OK opens its photo. Back restores the calendar. Each mode displays its controls.
 
-Heavy preparation uses the bounded server queue. Results live outside the source tree under `data/observatory/`; downloaded Gaia measurements remain usable offline. Missing source data are reported and temporary Gaia outages are retried. Private captures stay protected and public observing windows do not use private sites. Update the website and TV app together. Available in [web v1.5.2](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.2) and [TV 0.8.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.0).
+Heavy preparation uses the bounded server queue. Results live outside the source tree under `data/observatory/`; downloaded Gaia measurements remain usable offline. Missing source data are reported and temporary Gaia outages are retried. Private captures stay protected and public observing windows do not use private sites. Use [web v1.5.3](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.3) and [TV 0.8.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.0).
 
 TV 0.8 fits the viewer actions on one row, with rotate and fullscreen icons at the right. **Explore** offers only the capture-night/tonight chart and named features for the open capture. **Viewing modes** on the home screen starts a random five-minute evening programme or a one-hour photo frame immediately. Gallery opens the main collection with the current object selected; Back preserves the route, including the capture calendar.
 
@@ -61,11 +61,14 @@ Use PNG, JPEG or single-frame TIFF. The four images must have the same dimension
 | Sky journey | A flight through the sky panorama and detailed survey mosaics into the photograph. Gaia registration or verified FITS WCS determines its footprint. A known pointing alone gives a marker. Object labels are optional. The final photo uses the quarter-turn requiring the least camera roll. |
 | Milky Way | An animated face-on map for recognised Galactic targets with a distance. Toggle object names, pause or scrub the zoom. For other confirmed Galactic objects, enter a distance in Studio. Positions are projected onto the Galactic plane. |
 | Archive journeys | Fly from your capture into a registered Hubble, Euclid or JWST image, with its telescope, filter and source. The destination stays visible during the flight on the website and Google TV. |
+| Lunar detail flights | Register your Moon capture against the dated NASA SVS reference, then zoom through georeferenced LRO mosaics to Apollo 11, 12 or 14, Tycho, Copernicus, Plato, Aristarchus, Clavius or the seas Tranquillitatis and Imbrium. Apollo regions add NAC detail; craters and seas use the 100 m/pixel WAC mosaic. Previously cached imagery works offline. Unreliable registration is reported rather than replaced with an arbitrary fade. |
 | Galaxy environment | Explore nearby galaxies and their documented relationships. |
 | Polar sky chart | A circular equatorial chart centred on the northern or southern celestial pole, with constellation lines, hour divisions and a zoom to the target. |
 | Skykaart | A reconstruction of the observing night using the time, coordinates and site, with stars, constellation lines and the target track. |
 
 Parallax depth is artistic. The astrometric footprint is measured separately using local star matching against Gaia DR3. New catalogue fields, source descriptions and survey tiles require internet access. Photographs stay local. Exact site coordinates are private by default. See the [data and artwork credits](THIRD_PARTY.md).
+
+Gaia alignment tries AIP and the official ESA archive. Transient failures retry in the background after 1 minute, 5 minutes, 30 minutes, 2 hours and then every 6 hours. Retry state survives a restart; active film renders take priority, and offline mode suppresses network retries. Opening an object's viewer or mosaic can schedule a due retry without waiting for it. A newly available mosaic tab appears automatically while the viewer is open. Failed matching or missing pointing metadata requires corrected input instead of repeated catalogue requests. Existing source files, films and archive destination selections are retained.
 
 ## Storage and deployment
 

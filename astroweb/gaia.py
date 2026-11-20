@@ -137,15 +137,23 @@ def catalog_stars(store, ra, dec, radius):
     query = (f"SELECT TOP 10000 ra,dec,phot_g_mean_mag FROM gaiadr3.gaia_source WHERE "
              f"1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.7f},{dec:.7f},{radius:.6f})) "
              "AND phot_g_mean_mag<14 ORDER BY phot_g_mean_mag")
-    response = external_http.get("https://gaia.aip.de/tap/sync", params={"REQUEST":"doQuery","LANG":"ADQL",
-                            "QUERY":query, "FORMAT":"votable"}, timeout=(5,35))
-    response.raise_for_status()
-    table = Table.read(io.BytesIO(response.content), format="votable")
-    values = np.column_stack([np.ma.filled(table[k], np.nan) for k in ("ra","dec","phot_g_mean_mag")])
-    values = values[np.isfinite(values).all(axis=1)]
-    values = values[values[:, 2].argsort()]
-    store.put("settings", key, values.tolist())
-    return values
+    errors = []
+    for endpoint in ("https://gaia.aip.de/tap/sync", "https://gea.esac.esa.int/tap-server/tap/sync"):
+        try:
+            response = external_http.get(endpoint, params={"REQUEST":"doQuery","LANG":"ADQL",
+                                        "QUERY":query, "FORMAT":"votable"}, timeout=(5,35))
+            response.raise_for_status()
+            table = Table.read(io.BytesIO(response.content), format="votable", use_names_over_ids=True)
+            values = np.asarray(np.column_stack([np.ma.filled(table[k], np.nan)
+                                for k in ("ra","dec","phot_g_mean_mag")]), dtype=float)
+            values = values[np.isfinite(values).all(axis=1)]
+            values = values[values[:, 2].argsort()]
+        except (requests.RequestException, ValueError, KeyError, ET.ParseError, OSError) as error:
+            errors.append(error)
+            continue
+        store.put("settings", key, values.tolist())
+        return values
+    raise requests.ConnectionError("Gaia alignment catalogues unavailable") from errors[-1]
 
 
 def pointing(record):

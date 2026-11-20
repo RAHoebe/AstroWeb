@@ -12,18 +12,12 @@ from .journey import smooth, disk_in_photo
 from .camera import FocusZoom
 
 LOCK = threading.Lock()
-LRO = "NASA/GSFC/Arizona State University"
 CASSINI = "NASA/JPL/Space Science Institute"
 
 # The focus is measured on the published mission image, never on the upload.
 FEATURES = {
     "SUN": [
         ("NHQ202404080107","orig.jpg","Protuberans aan de zonsrand · eclips van 8 april 2024","Solar limb prominence · eclipse of 8 April 2024","NASA / Keegan Barber",.214,.835)],
-    "MOON": [
-        ("PIA12909","orig.jpg","Landingsplaats Apollo 11","Apollo 11 landing site",LRO,.42,.43),
-        ("PIA12922","orig.jpg","Landingsplaats Apollo 12","Apollo 12 landing site",LRO,.50,.50),
-        ("PIA12897","medium.jpg","Apollo 14 bij de Cone-krater","Apollo 14 near Cone crater",LRO,.55,.40),
-        ("GSFC_20171208_Archive_e001828","orig.png","Centrale berg van de Tycho-krater","Central peak of Tycho crater",LRO,.40,.39)],
     "MERCURY":[("PIA12034","orig.jpg","Drie inslagkraters in Caloris","Three impact craters in Caloris","NASA/JHUAPL/Carnegie Institution of Washington",.55,.52)],
     "VENUS":[("PIA23791","orig.jpg","Wolkenbanden in ultraviolet","Cloud bands in ultraviolet","Mariner 10 · NASA/JPL-Caltech",.73,.50)],
     "MARS":[("PIA01167","large.jpg","Gesteentelagen in Valles Marineris","Rock layers in Valles Marineris","NASA/JPL/Malin Space Science Systems",.83,.52)],
@@ -37,6 +31,9 @@ FEATURES = {
 
 
 def options(body):
+    if body == "MOON":
+        from .lunar_detail import options as lunar_options
+        return lunar_options()
     return [{"id":ident,"name":{"nl":nl,"en":en},"credit":credit,
              "source":"https://images.nasa.gov/details/"+ident}
             for ident, _, nl, en, credit, _, _ in FEATURES.get(body, [])]
@@ -174,24 +171,37 @@ def aligned_limb_frames(photo,image,focus):
 
 
 def movie(store,record,ident):
-    item=next((f for f in FEATURES.get(record.get("body"),[]) if f[0]==ident),None)
-    if not item:
-        raise ValueError("solarDetailMissing")
-    _,file,_,_,credit,x,y=item
+    lunar = record.get("body") == "MOON"
+    if lunar:
+        from . import lunar_detail
+        from .collection import capture_date
+        if ident not in lunar_detail.SITES:
+            raise ValueError("solarDetailMissing")
+        item = lunar_detail.SITES[ident]
+        credit = lunar_detail.CREDIT
+        signature = (lunar_detail.VERSION,item,record["sha256"]["final"],capture_date(record))
+    else:
+        item=next((f for f in FEATURES.get(record.get("body"),[]) if f[0]==ident),None)
+        if not item:
+            raise ValueError("solarDetailMissing")
+        _,file,_,_,credit,x,y=item
+        signature = ("limb-registered-v6" if ident=="NHQ202404080107" else "solar-tour-v1",item,record["sha256"]["final"])
     limb=ident=="NHQ202404080107"
-    key=hashlib.sha256(str(("limb-registered-v6" if limb else "solar-tour-v1",item,record["sha256"]["final"])).encode()).hexdigest()[:20]
+    key=hashlib.sha256(str(signature).encode()).hexdigest()[:20]
     folder=store.path(f"objects/{record.get('storage_id',record['id'])}/solar-system")
     output=folder/(key+".mp4")
     with LOCK:
         if not output.is_file():
-            image=mission_image(store,ident,file)
+            if not lunar:
+                image=mission_image(store,ident,file)
             photo=cv2.imread(str(store.path(record["poster"])))
             if photo is None:
                 raise ValueError("invalid_image")
             folder.mkdir(parents=True,exist_ok=True)
             tmp=folder/(uuid.uuid4().hex+".part.mp4")
             try:
-                sequence=aligned_limb_frames(photo,image,(x,y)) if limb and disk_in_photo(photo)[1] is not None else frames(photo,image,(x,y),keep_edges=limb)
+                sequence=(lunar_detail.sequence(store,record,ident,photo,WIDTH,HEIGHT) if lunar else
+                          aligned_limb_frames(photo,image,(x,y)) if limb and disk_in_photo(photo)[1] is not None else frames(photo,image,(x,y),keep_edges=limb))
                 encode(sequence,credit.replace(" · "," / "),tmp)
                 tmp.replace(output)
             finally:

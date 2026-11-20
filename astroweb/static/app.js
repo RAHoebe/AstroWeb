@@ -133,6 +133,7 @@ async function loadViewer(){
   catch(e){$('viewer-title').textContent=errorText(e);return;}
   state.current=object;
   for(const name of ['mosaic','space','cosmic','solar'])$('exploration-'+name).hidden=!object.explorations?.[name];
+  if(object.alignment_pending)watchViewerAlignment(object.id);
   $('hubble-tab').hidden=!object.hubble_available;
   if(object.body){
     document.querySelector('[data-view="polar"]').hidden=true;
@@ -172,6 +173,19 @@ async function loadViewer(){
   const requested=object.body&&tab==='hubble'?'solar-system':tab;
   selectTab([...document.querySelectorAll('[data-view]:not([hidden])')].some(el=>el.dataset.view===requested)?requested:'film');
   if(object.video&&!$('film-panel').hidden&&!reducedMotion.matches)$('viewer-video').play().catch(()=>{});}
+function watchViewerAlignment(id,attempt=0){
+  if(attempt>=36)return;
+  setTimeout(async()=>{
+    if(state.current?.id!==id)return;
+    if(document.hidden){watchViewerAlignment(id,attempt+1);return;}
+    try{
+      const updated=await api('/api/objects/'+encodeURIComponent(id));
+      state.current.explorations=updated.explorations;
+      for(const name of ['mosaic','space','cosmic','solar'])$('exploration-'+name).hidden=!updated.explorations?.[name];
+      if(updated.alignment_pending)watchViewerAlignment(id,attempt+1);
+    }catch{/* A failed optional refresh must not interrupt the current film. */}
+  },5000);
+}
 function selectTab(name){const exploration=['mosaic','space','cosmic','solar'].includes(name);document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','hubble','sky','polar','exploration'])$(panel+'-panel').hidden=panel!==(exploration?'exploration':name==='solar-system'?'hubble':name);history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
   const frame=$('exploration-frame');
   if(exploration){
@@ -334,6 +348,7 @@ function hubbleCaption(){
   $('hubble-description').textContent=active?.provider?t('archiveMissionNote')+(active.provider==='jwst'?' '+t('archiveInfrared'):'')+' · '+active.telescope+' · '+active.filter:active?.name?t('solarMissionNote'):active?t('hubble_'+active.relation)+' · '+t(active.id.startsWith('skymap-')?'skymapNote':active.full_footprint?'fullHstNote':active.telescope?'hstPlateNote':active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
   const status=state.current?.body?({hubbleLoading:'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
   if(active?.full_footprint)$('hubble-description').textContent+=' RA '+active.ra.toFixed(4)+'° · Dec '+active.dec.toFixed(4)+'°';
+  if(active?.alignment==='lunar-map')$('hubble-description').textContent=t('lunarMissionNote');
   $('hubble-status').textContent=status?t(status):'';
   $('hubble-retry').hidden=hubbleState!=='hubble_unavailable';
 }

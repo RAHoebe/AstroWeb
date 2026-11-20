@@ -2,6 +2,7 @@
 import logging
 import os
 import threading
+import time
 import uuid
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -36,6 +37,9 @@ class JobQueue:
         self.lock = threading.RLock()
         self.futures = {}
         self.file_lock = threading.Lock()
+        self.stopping = threading.Event()
+        self.retry_thread = None
+        self.retry_future = None
         self.restore_versions()
         for record in store.all("objects"):
             if record.get("pending_movie_cleanup"):
@@ -50,10 +54,52 @@ class JobQueue:
                     self.futures[job["id"]] = self.executor.submit(self.run, job["id"])
 
             for record in store.all("objects"):
-                if (record.get("gaia") or {}).get("status") in (None, "pending", "running"):
-                    self.executor.submit(self.prepare_capture, record["id"])
+                alignment = record.get("gaia") or {}
+                if alignment.get("status") in (None, "pending", "running"):
+                    if alignment.get("retry_only"):
+                        store.update("objects", record["id"], gaia={**alignment, "status":"unavailable"})
+                    else:
+                        self.executor.submit(self.prepare_capture, record["id"])
                 if record.get("video"):
                     self.executor.submit(self.ensure_preview, record["video"])
+            self.retry_thread = threading.Thread(target=self.retry_loop, name="astro-gaia-retry", daemon=True)
+            self.retry_thread.start()
+
+    def retry_loop(self):
+        while not self.stopping.wait(60):
+            try:
+                self.retry_alignments()
+            except Exception:
+                logging.exception("Could not schedule Gaia alignment retry")
+
+    def retry_alignments(self, records=None, timestamp=None):
+        """One due transient failure per sweep, without blocking a page or render."""
+        if self.stopping.is_set() or os.environ.get("ASTROWEB_OFFLINE") == "1":
+            return False
+        timestamp = time.time() if timestamp is None else timestamp
+        candidates = records if records is not None else self.store.all("objects")
+        candidates = [r for r in candidates if (r.get("gaia") or {}).get("status") == "unavailable"]
+        if not candidates:
+            return False
+        with self.store.lock:
+            if self.stopping.is_set() or (self.retry_future is not None and not self.retry_future.done()):
+                return False
+            # Catalogue retries wait behind explicit user work, not vice versa.
+            if any(j["status"] in {"running","queued","cancelling"} for j in self.store.all("jobs")):
+                return False
+            for candidate in sorted(candidates, key=lambda r:r["gaia"].get("retry_after",0)):
+                record = self.store.get("objects",candidate["id"])
+                if not record or record.get("body") or record.get("capture_kind"):
+                    continue
+                previous = record.get("gaia") or {}
+                if (previous.get("status") != "unavailable" or previous.get("retry_after",0)>timestamp
+                        or not {"stars","stars_laid"} <= record.get("assets",{}).keys()):
+                    continue
+                self.store.update("objects", record["id"], gaia={**previous,"status":"pending","request":uuid.uuid4().hex,"retry_only":True})
+                # Retry alignment alone: preserve the selected archive destinations.
+                self.retry_future = self.executor.submit(self.align,record["id"])
+                return True
+        return False
 
     def restore_versions(self):
         jobs = self.store.all("jobs")
@@ -129,7 +175,8 @@ class JobQueue:
             record = self.store.get("objects", identifier)
             if not record:
                 raise ValueError("object_not_found")
-            if record.get("capture_kind") or record.get("body") or (record.get("gaia") or {}).get("status") == "solved":
+            previous = record.get("gaia") or {}
+            if record.get("capture_kind") or record.get("body") or previous.get("status") in {"solved","pending","running"}:
                 return
             self.store.update("objects", identifier, gaia={"status":"pending", "request":uuid.uuid4().hex})
             self.executor.submit(self.prepare_capture, identifier)
@@ -168,7 +215,7 @@ class JobQueue:
             if previous.get("status") not in (None, "pending", "running"):
                 return
             token = previous.get("request") or uuid.uuid4().hex
-            self.store.update("objects", identifier, gaia={"status":"running", "request":token})
+            self.store.update("objects", identifier, gaia={**previous,"status":"running", "request":token})
         try:
             from .gaia import solve
             result = solve(self.store, record)
@@ -177,7 +224,12 @@ class JobQueue:
             result = {"status":"unavailable"}
         with self.store.lock:
             latest = self.store.get("objects", identifier)
-            if latest["gaia"].get("request") == token:
+            if latest and latest["gaia"].get("request") == token:
+                if result.get("status") == "unavailable":
+                    attempts = min(1000,int(previous.get("retry_attempts",0)))+1
+                    delays = (60,300,1800,7200,21600)
+                    result.update(retry_attempts=attempts,retry_after=time.time()+delays[min(attempts-1,len(delays)-1)],
+                                  checked_at=result.get("checked_at") or now())
                 self.store.update("objects", identifier, gaia=result)
 
     def submit(self, identifier, raw_params=None):
@@ -305,5 +357,8 @@ class JobQueue:
                     self.store.update("jobs", job_id, status="failed", error=known, finished_at=now())
 
     def shutdown(self):
+        self.stopping.set()
+        if self.retry_thread:
+            self.retry_thread.join(timeout=2)
         self.executor.shutdown(wait=True)
         self.worker_lock.close()

@@ -1,7 +1,7 @@
 services:
   astroweb:
     build: .
-    image: astroweb:1.5.2
+    image: astroweb:1.5.3
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8090"
