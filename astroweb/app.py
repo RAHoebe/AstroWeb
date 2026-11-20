@@ -298,7 +298,20 @@ def create_app(data_dir=None, testing=False):
     @app.get("/api/objects/<identifier>/discover")
     def discover_objects(identifier):
         from .discovery import discover
-        return jsonify(discover(store, get_object(identifier)))
+        record = get_object(identifier)
+        result = discover(store,record)
+        if record.get("body") and session.get("admin"):
+            from .surface_labels import presets
+            result["presets"] = presets(record["body"])
+        return jsonify(result)
+
+    @app.put("/api/admin/objects/<identifier>/surface-label")
+    @admin_required
+    def update_surface_label(identifier):
+        from .surface_labels import save
+        with store.lock:
+            label = save(store,get_object(identifier),json_body())
+        return jsonify(id=label)
 
     @app.get("/api/objects/<identifier>/journey")
     def journey_info(identifier):

@@ -268,7 +268,7 @@ def frames(photo, registration, data, center, radius, layers, site, width, heigh
         yield scene
 
 
-def sequence(store, record, ident, photo, width, height):
+def registered_view(store, record, photo):
     ref,data,center,radius = reference(store,record)
     key = VERSION+":"+record["sha256"]["final"]+":"+str(data["time"])
     measured = store.get("settings",key)
@@ -276,5 +276,10 @@ def sequence(store, record, ident, photo, width, height):
         matrix,report = register(photo,ref)
         measured = dict(matrix=matrix.tolist(),report=report)
         store.put("settings",key,measured)
+    return np.array(measured["matrix"]),data,center,radius
+
+
+def sequence(store, record, ident, photo, width, height):
+    matrix,data,center,radius = registered_view(store,record,photo)
     site = SITES[ident]
-    return frames(photo,np.array(measured["matrix"]),data,center,radius,tiles(store,site),site,width,height)
+    return frames(photo,matrix,data,center,radius,tiles(store,site),site,width,height)

@@ -79,6 +79,9 @@ def project(store, record, sky):
 
 
 def discover(store, record):
+    if record.get("body"):
+        from .surface_labels import discover as surface_discovery
+        return surface_discovery(store,record)
     rows,sky = entries()
     kind,xy = project(store,record,sky)
     objects = []

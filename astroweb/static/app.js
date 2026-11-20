@@ -144,7 +144,7 @@ async function loadViewer(){
     $('hubble-video').dataset.i18nAria='solarTour';$('hubble-video').setAttribute('aria-label',t('solarTour'));
     $('skymap-link').hidden=true;
     setLabel($('sky-panel').querySelector('.eyebrow'),'solarSkyDay');
-    for(const id of ['ir-toggle','discover-toggle'])$(id).closest('label').hidden=true;
+    $('ir-toggle').closest('label').hidden=true;
   }
   const query=new URLSearchParams(location.search);
   if(query.get('from')==='calendar'){
@@ -166,11 +166,11 @@ async function loadViewer(){
     $('capture-panorama').hidden=false;
     $('capture-panorama').href='/panorama?capture='+encodeURIComponent(object.id);
     for(const tab of document.querySelectorAll('[data-view]'))tab.hidden=!['film','original'].includes(tab.dataset.view);
-    for(const id of ['ir-toggle','discover-toggle'])$(id).closest('label').hidden=true;
+    $('ir-toggle').closest('label').hidden=true;
   }
   renderViewerText();
   const tab=location.hash.slice(1);
-  const requested=object.body&&tab==='hubble'?'solar-system':tab;
+  const requested=query.has('discover')&&tab==='original'?'discover':object.body&&tab==='hubble'?'solar-system':tab;
   selectTab([...document.querySelectorAll('[data-view]:not([hidden])')].some(el=>el.dataset.view===requested)?requested:'film');
   if(object.video&&!$('film-panel').hidden&&!reducedMotion.matches)$('viewer-video').play().catch(()=>{});}
 function watchViewerAlignment(id,attempt=0){
@@ -186,7 +186,18 @@ function watchViewerAlignment(id,attempt=0){
     }catch{/* A failed optional refresh must not interrupt the current film. */}
   },5000);
 }
-function selectTab(name){const exploration=['mosaic','space','cosmic','solar'].includes(name);document.querySelectorAll('[data-view]').forEach(tab=>{const selected=tab.dataset.view===name;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;});for(const panel of ['film','original','journey','galaxy','environment','hubble','sky','polar','exploration'])$(panel+'-panel').hidden=panel!==(exploration?'exploration':name==='solar-system'?'hubble':name);history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
+function selectTab(name){
+  const exploration=['mosaic','space','cosmic','solar'].includes(name);
+  const activePanel=exploration?'exploration':({'solar-system':'hubble',discover:'original'}[name]||name);
+  for(const tab of document.querySelectorAll('[data-view]')){
+    const selected=tab.dataset.view===name;
+    tab.setAttribute('aria-selected',String(selected));
+    tab.tabIndex=selected?0:-1;
+  }
+  for(const panel of ['film','original','journey','galaxy','environment','hubble','sky','polar','exploration']){
+    $(panel+'-panel').hidden=panel!==activePanel;
+  }
+  history.replaceState(null,'',location.pathname+location.search+(name==='film'?'':'#'+name));
   const frame=$('exploration-frame');
   if(exploration){
     if(frame.dataset.mode!==name){frame.dataset.mode=name;frame.title=t('obs_'+name);frame.src='/observatory?'+new URLSearchParams({embed:'1',capture:state.current.id,mode:name,lang:language});}
@@ -194,16 +205,23 @@ function selectTab(name){const exploration=['mosaic','space','cosmic','solar'].i
   }else frame.contentWindow?.postMessage({type:'astroweb-active',active:false},location.origin);
   const object=state.current;
   const note=$('viewer-interpretation');note.dataset.i18n=exploration?'obs_note_'+name:'artisticNote';note.textContent=t(note.dataset.i18n);
-  if(name==='original'&&!$('viewer-original').hasAttribute('src')){
+  if(['original','discover'].includes(name)&&!$('viewer-original').hasAttribute('src')){
     $('viewer-original').src=object.original_view||object.final;
   }
   if(name==='film'&&object.video&&!$('viewer-video').hasAttribute('src')){
     $('viewer-video').poster=object.poster;
     $('viewer-video').src=object.video;
   }
-  if(name==='original'&&!object.body&&!object.capture_kind&&new URLSearchParams(location.search).has('discover')){
-    $('discover-toggle').checked=true;
+  if(name==='discover'){
+    if($('ir-toggle').checked){
+      $('ir-toggle').checked=false;
+      $('ir-toggle').dispatchEvent(new Event('change'));
+    }
+    $('discovery-card').hidden=$('discovery-pins').hidden=false;
     loadDiscovery();
+  }else{
+    $('discovery-card').hidden=$('discovery-pins').hidden=true;
+    closeSurfaceForm();
   }
   if(name==='polar')openPolar(state.current.id);else closePolar();
   renderNeighbours();
@@ -252,6 +270,8 @@ function zoomOriginal(value,x=0,y=0,nx=x,ny=y){
   control.value=String(value);
   const next=Number(control.value),ratio=next/photoZoom;
   photoX=nx+(photoX-x)*ratio;photoY=ny+(photoY-y)*ratio;
+  guideZoom=false;
+  $('discovery-zoom').textContent=t('zoomFeature');
   photoZoom=next;layoutOriginal();
 }
 function photoAnchor(e){
@@ -266,14 +286,16 @@ originalStage.addEventListener('wheel',e=>{
   if(next===photoZoom)return;
   e.preventDefault();zoomOriginal(next,...photoAnchor(e));
 },{passive:false});
-originalStage.addEventListener('dblclick',e=>zoomOriginal(photoZoom===1?+$('original-scale').max:1,...photoAnchor(e)));
+originalStage.addEventListener('dblclick',e=>{
+  if(!surfaceEdit&&!e.target.closest('.discovery-pin'))zoomOriginal(photoZoom===1?+$('original-scale').max:1,...photoAnchor(e));
+});
 enablePinch(originalStage,{
   getZoom:()=>photoZoom,
   begin(){photoDrag=null;originalStage.classList.remove('dragging');},
   transform(value,previous,next){zoomOriginal(value,previous.x,previous.y,next.x,next.y);}
 });
 originalStage.addEventListener('pointerdown',e=>{
-  if(e.target.closest('.discovery-pin')||photoZoom===1||!e.isPrimary||e.button!==0)return;
+  if(surfaceEdit||e.target.closest('.discovery-pin')||photoZoom===1||!e.isPrimary||e.button!==0)return;
   photoDrag={id:e.pointerId,x:e.clientX-photoX,y:e.clientY-photoY};
   originalStage.setPointerCapture(e.pointerId);originalStage.classList.add('dragging');
 });
@@ -285,49 +307,191 @@ originalStage.addEventListener('lostpointercapture',()=>{photoDrag=null;original
 originalImage.addEventListener('load',()=>zoomOriginal(1));
 new ResizeObserver(layoutOriginal).observe(originalStage);
 
-let discoveries=null,discoveryId=null;
+let discoveries=null, discoveryPending=null, discoveryId=null, guideZoom=false, surfaceEdit=null;
 async function loadDiscovery(){
-  const enabled=$('discover-toggle').checked;
-  $('discovery-card').hidden=$('discovery-pins').hidden=!enabled;
-  if(!enabled||!state.current)return;
-  if(!discoveries){
+  if(!$('discovery-card').hidden && !discoveries){
     $('discovery-status').textContent=t('discoverLoading');
-    try{discoveries=await api('/api/objects/'+encodeURIComponent(state.current.id)+'/discover');}
+    discoveryPending??=api('/api/objects/'+encodeURIComponent(state.current.id)+'/discover');
+    try{discoveries=await discoveryPending;}
     catch(e){$('discovery-status').textContent=errorText(e);return;}
+    finally{discoveryPending=null;}
   }
   renderDiscovery();
 }
-function renderDiscovery(){
-  if(!discoveries||!$('discover-toggle').checked)return;
-  const objects=discoveries.objects;
-  const current=objects.find(o=>o.id===discoveryId)||objects[0];
-  const pins=$('discovery-pins'),list=$('discovery-list');
-  pins.replaceChildren();list.replaceChildren();
-  $('discovery-selection').hidden=!current;
-  $('discovery-status').textContent=current?'':t(discoveries.kind==='missing'?'discoverMissing':'discoverEmpty');
-  if(!current)return;
-  discoveryId=current.id;
-  for(const o of objects){
-    const label=local(o.name);
-    const button=node('button','discovery-pin');
-    button.type='button';button.title=label;button.dataset.label=o.id;
-    button.setAttribute('aria-label',label);button.setAttribute('aria-pressed',String(o.id===discoveryId));
-    button.style.left=o.x*100+'%';button.style.top=o.y*100+'%';
-    button.addEventListener('click',()=>{discoveryId=o.id;renderDiscovery();$('discovery-list').focus({preventScroll:true});});
-    pins.append(button);
-    list.add(new Option(label===o.id?label:label+' · '+o.id,o.id));
-  }
-  list.value=discoveryId;
-  $('discovery-description').textContent=[local(current.type),local(current.summary)].filter(Boolean).join(' · ');
-  const details=['RA '+current.ra.toFixed(4)+'°','Dec '+current.dec.toFixed(4)+'°',...current.aliases];
-  if(current.ly)details.push('≈ '+current.ly.toLocaleString(language)+' '+t('lightYears'));
-  $('discovery-data').textContent=details.join(' · ');
-  $('discovery-source').href=current.source;
-  $('discovery-studio').href='/admin?'+new URLSearchParams({capture:state.current.id,landmark:current.id});
+
+function currentFeature(){
+  return discoveries?.objects.find(o=>o.id===discoveryId)||discoveries?.objects[0];
+}
+
+function zoomToFeature(){
+  const feature=currentFeature();
+  if(!feature||!originalImage.naturalWidth)return;
+  const width=originalStage.clientWidth, height=originalStage.clientHeight;
+  const fit=Math.min(width/originalImage.naturalWidth,height/originalImage.naturalHeight);
+  $('original-scale').value='3';
+  photoZoom=3;
+  photoX=(.5-feature.x)*originalImage.naturalWidth*fit*photoZoom;
+  photoY=(.5-feature.y)*originalImage.naturalHeight*fit*photoZoom;
   layoutOriginal();
 }
-$('discover-toggle').addEventListener('change',loadDiscovery);
-$('discovery-list').addEventListener('change',e=>{discoveryId=e.target.value;renderDiscovery();});
+
+function pickFeature(id){
+  if(surfaceEdit)return;
+  discoveryId=id;
+  renderDiscovery();
+  if(guideZoom)zoomToFeature();
+}
+
+function stepFeature(step){
+  const objects=discoveries?.objects||[];
+  if(objects.length<2)return;
+  const index=objects.findIndex(o=>o.id===discoveryId);
+  pickFeature(objects[(index+step+objects.length)%objects.length].id);
+}
+
+function positionPin(button,x,y){
+  button.style.left=(x*100)+'%';
+  button.style.top=(y*100)+'%';
+  button.classList.toggle('label-left',x>.65);
+}
+
+function renderDiscovery(){
+  if(!discoveries||$('discovery-card').hidden)return;
+  const {objects,kind,presets}=discoveries;
+  const current=currentFeature();
+  const pins=$('discovery-pins'), list=$('discovery-list');
+  pins.replaceChildren();list.replaceChildren();
+  $('surface-tools').hidden=!presets||!!surfaceEdit;
+  $('surface-move').hidden=!current;
+  $('surface-remove').hidden=current?.placement!=='manual';
+  $('discovery-selection').hidden=!current||!!surfaceEdit;
+  const missing=kind==='surface'?'surfaceEmpty':kind==='missing'?'discoverMissing':'discoverEmpty';
+  $('discovery-status').textContent=current||surfaceEdit?'':t(missing);
+  if(surfaceEdit)renderSurfaceForm();
+  for(const o of objects){
+    const label=local(o.name)||o.id;
+    if(!surfaceEdit){
+      const button=node('button','discovery-pin');
+      button.type='button';button.title=label;button.dataset.label=label;
+      button.setAttribute('aria-label',label);
+      button.setAttribute('aria-pressed',String(o.id===current?.id));
+      positionPin(button,o.x,o.y);
+      button.addEventListener('click',()=>{pickFeature(o.id);list.focus({preventScroll:true});});
+      pins.append(button);
+    }
+    list.add(new Option(label,o.id));
+  }
+  if(current&&!surfaceEdit){
+    discoveryId=current.id;
+    list.value=discoveryId;
+    $('discovery-prev').disabled=$('discovery-next').disabled=objects.length<2;
+    $('discovery-zoom').textContent=t(guideZoom?'fitPhoto':'zoomFeature');
+    $('discovery-description').textContent=[local(current.type),local(current.summary)].filter(Boolean).join(' · ');
+    const details=[];
+    if(Number.isFinite(current.ra)&&Number.isFinite(current.dec)){
+      details.push('RA '+current.ra.toFixed(4)+'°','Dec '+current.dec.toFixed(4)+'°',...(current.aliases||[]));
+    }
+    if(current.placement)details.push(t(current.placement==='manual'?'surfaceManual':'surfaceRegistered'));
+    if(current.ly)details.push('≈ '+current.ly.toLocaleString(language)+' '+t('lightYears'));
+    $('discovery-data').textContent=details.join(' · ');
+    $('discovery-source').hidden=!current.source;
+    if(current.source)$('discovery-source').href=current.source;
+    $('discovery-journey').hidden=!current.journey;
+    if(current.journey){
+      const query=new URLSearchParams({destination:current.journey});
+      $('discovery-journey').href=location.pathname+'?'+query+'#solar-system';
+    }
+    $('discovery-studio').href='/admin?'+new URLSearchParams({capture:state.current.id,landmark:current.id});
+  }
+  if(surfaceEdit?.point){
+    const {x,y}=surfaceEdit.point;
+    const marker=node('span','discovery-pin discovery-draft');
+    marker.setAttribute('aria-hidden','true');
+    positionPin(marker,x,y);
+    pins.append(marker);
+  }
+  layoutOriginal();
+}
+
+function openSurfaceForm(feature){
+  const preset=discoveries.presets.find(entry=>entry.id===feature?.id);
+  surfaceEdit={id:feature?.placement==='manual'?feature.id:null,preset:preset?.id||'',point:null,saving:false};
+  $('surface-name').value=feature&&!preset?local(feature.name):'';
+  zoomOriginal(1);
+  renderDiscovery();
+  $('surface-preset').focus();
+}
+function closeSurfaceForm(){
+  if(!surfaceEdit)return;
+  surfaceEdit=null;
+  $('surface-form').hidden=true;
+  originalStage.classList.remove('placing-label');
+}
+function renderSurfaceForm(){
+  $('surface-form').hidden=false;
+  originalStage.classList.add('placing-label');
+  const pick=$('surface-preset');
+  pick.replaceChildren(new Option(t('surfaceCustom'),''));
+  for(const preset of discoveries.presets)pick.add(new Option(local(preset.name),preset.id));
+  pick.value=surfaceEdit.preset;
+  $('surface-name').hidden=!!surfaceEdit.preset;
+  $('surface-name').required=!surfaceEdit.preset;
+  $('surface-save').disabled=!surfaceEdit.point||surfaceEdit.saving;
+}
+async function saveSurface(payload){
+  state.session??=await api('/api/session');
+  const result=await api('/api/admin/objects/'+encodeURIComponent(state.current.id)+'/surface-label',{method:'PUT',body:payload});
+  discoveryId=payload.remove?null:result.id;
+  closeSurfaceForm();
+  discoveries=null;
+  await loadDiscovery();
+  toast(t('saved'));
+}
+
+$('discovery-list').addEventListener('change',e=>pickFeature(e.target.value));
+$('discovery-prev').addEventListener('click',()=>stepFeature(-1));
+$('discovery-next').addEventListener('click',()=>stepFeature(1));
+$('discovery-zoom').addEventListener('click',()=>{
+  guideZoom=!guideZoom;
+  if(guideZoom)zoomToFeature();else zoomOriginal(1);
+  $('discovery-zoom').textContent=t(guideZoom?'fitPhoto':'zoomFeature');
+});
+$('surface-add').addEventListener('click',()=>openSurfaceForm());
+$('surface-move').addEventListener('click',()=>openSurfaceForm(currentFeature()));
+$('surface-cancel').addEventListener('click',()=>{closeSurfaceForm();renderDiscovery();$('surface-add').focus();});
+$('surface-preset').addEventListener('change',e=>{surfaceEdit.preset=e.target.value;renderSurfaceForm();});
+originalStage.addEventListener('click',e=>{
+  if(!surfaceEdit||surfaceEdit.saving)return;
+  const rect=originalImage.getBoundingClientRect();
+  if(!rect.width||!rect.height)return;
+  const x=(e.clientX-rect.left)/rect.width, y=(e.clientY-rect.top)/rect.height;
+  if(x<0||x>1||y<0||y>1)return;
+  surfaceEdit.point={x,y};
+  renderDiscovery();
+});
+$('surface-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const edit=surfaceEdit;
+  if(!edit?.point||edit.saving)return;
+  edit.saving=true;
+  $('surface-save').disabled=true;
+  try{
+    await saveSurface({id:edit.id,preset:edit.preset,name:$('surface-name').value,...edit.point});
+    $('surface-add').focus();
+  }catch(error){
+    edit.saving=false;
+    if(surfaceEdit===edit)$('surface-save').disabled=false;
+    toast(errorText(error));
+  }
+});
+$('surface-remove').addEventListener('click',async ()=>{
+  const feature=currentFeature();
+  if(feature?.placement!=='manual'||!confirm(t('surfaceRemovePrompt')))return;
+  $('surface-remove').disabled=true;
+  try{await saveSurface({id:feature.id,remove:true});$('surface-add').focus();}
+  catch(error){toast(errorText(error));}
+  finally{$('surface-remove').disabled=false;}
+});
 
 let hubbleFields=null,hubblePending=null,hubbleState='',hubbleObservations=[];
 function hubbleCaption(){
@@ -370,7 +534,11 @@ async function openHubble(){
       hubbleObservations=observations||[];
       if(!hubbleFields){
         hubbleFields=fields;
-        $('hubble-field').replaceChildren(...fields.map(k=>new Option(t('hubble_'+k),k)));
+        const select=$('hubble-field');
+        select.replaceChildren(...fields.map(k=>new Option(k,k)));
+        const destination=new URLSearchParams(location.search).get('destination');
+        if(fields.includes(destination))select.value=destination;
+        hubbleCaption();
       }
     }
     $('hubble-field').disabled=!hubbleFields.length;
@@ -613,7 +781,7 @@ $('gaia-retry').addEventListener('click',async()=>{
   try{await api('/api/admin/objects/'+state.selected.id+'/align',{method:'POST'});await refreshAdmin();}
   catch(e){toast(errorText(e));}
 });
-function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;editPanorama(object,state.adminObjects,api);$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'?discover=1#original';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);updateCaptureKind();const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
+function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;editPanorama(object,state.adminObjects,api);$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'#discover';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);updateCaptureKind();const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
 let pendingLandmark=null;
 const draftKey=id=>'astroweb-discovery-draft-'+id;
 function clearImportControls(){
