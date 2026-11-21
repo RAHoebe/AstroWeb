@@ -18,7 +18,7 @@ The object viewer exposes relevant extra tabs only. The capture calendar is a se
 
 On TV, **Stars in 3D**, **Light journey**, **Mosaic** and **Solar comparison** are object-viewer actions. **Calendar** sits beside **Sky atlas** in the gallery. Left/right selects a day and up/down changes month. OK opens the day view, where left/right selects a capture and OK opens its photo. Back restores the calendar. Each mode displays its controls.
 
-Heavy preparation uses the bounded server queue. Results live outside the source tree under `data/observatory/`; downloaded Gaia measurements remain usable offline. Missing source data are reported and temporary Gaia outages are retried. Private captures stay protected and public observing windows do not use private sites. Use [web v1.5.8](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.8) and [TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2).
+Heavy preparation uses the bounded server queue. Results live outside the source tree under `data/observatory/`; downloaded Gaia measurements remain usable offline. Missing source data are reported and temporary Gaia outages are retried. Private captures stay protected and public observing windows do not use private sites. Use [web v1.5.9](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.9) and [TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2).
 
 TV 0.8 fits the viewer actions on one row, with rotate and fullscreen icons at the right. **Explore** offers only the capture-night/tonight chart and named features for the open capture. **Viewing modes** on the home screen starts a random five-minute evening programme or a one-hour photo frame immediately. Gallery opens the main collection with the current object selected; Back preserves the route, including the capture calendar.
 
@@ -51,7 +51,7 @@ Open the [local gallery](http://127.0.0.1:8090/), then [Studio](http://127.0.0.1
 
 Studio recognises common names such as **Pleiades**, **Seven Sisters** and **Melotte 22** for M45 using its offline catalogue. When the FITS `OBJECT` name is unfamiliar, Studio can look up a Wikipedia title through Wikidata. A match must have a SIMBAD reference and a supported catalogue ID. Studio falls back to the file prefix when a unique match is unavailable.
 
-Use PNG, JPEG or single-frame TIFF. All images must have the same dimensions. Limits are 40 megapixels and 100 MiB per image, 512 MiB per FITS and 600 MiB per upload. AstroWeb retains the original files and hashes the four images with SHA-256. For bulk import, stop the server and run `python -m astroweb import --source AstroPhotos --render` with one subdirectory per object.
+Use PNG, JPEG or single-frame TIFF. All images must have the same dimensions. Limits are 40 megapixels and 100 MiB per image, 512 MiB per FITS and 600 MiB per upload. AstroWeb retains the original files and hashes the uploaded images with SHA-256. For bulk import, stop the server and run `python -m astroweb import --source AstroPhotos --render` with one subdirectory per object.
 
 ## Explore an observation
 
@@ -83,7 +83,7 @@ docker compose run --rm astroweb python -m astroweb admin
 docker compose up -d
 ```
 
-Make the `./data` bind mount writable by UID/GID `10001:10001`. For Synology, configure the host and volume in [compose.synology.yaml](compose.synology.yaml), use it alongside [compose.yaml](compose.yaml), and point the HTTPS reverse proxy to `127.0.0.1:8090`. The overlay enables secure session cookies. Use a valid certificate for the public hostname. For an empty NAS installation, set the Studio password in the container before enabling the reverse proxy.
+Make the `./data` bind mount writable by UID/GID `10001:10001`. Docker also uses this directory to buffer incoming uploads. For Synology, configure the host and volume in [compose.synology.yaml](compose.synology.yaml), use it alongside [compose.yaml](compose.yaml), and point the HTTPS reverse proxy to `127.0.0.1:8090`. The overlay enables secure session cookies. Use a valid certificate for the public hostname. For an empty NAS installation, set the Studio password in the container before enabling the reverse proxy.
 
 ## Development
 

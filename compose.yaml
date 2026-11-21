@@ -1,12 +1,14 @@
 services:
   astroweb:
     build: .
-    image: astroweb:1.5.8
+    image: astroweb:1.5.9
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8090"
     environment:
       ASTROWEB_DATA: /data
+      # Waitress and Werkzeug can spool up to 600 MiB per upload.
+      TMPDIR: /data
       ASTROWEB_HOSTS: "localhost,127.0.0.1"
     volumes:
       - ./data:/data

@@ -1,6 +1,6 @@
 # Optional English installation chapter
 
-Use the released packages for every shot: [AstroWeb v1.5.8](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.8) and [AstroWeb TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2). The short overview uses the storyboard; this additional segment can extend the YouTube cut.
+Use the released packages for every shot: [AstroWeb v1.5.9](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.9) and [AstroWeb TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2). The short overview uses the storyboard; this additional segment can extend the YouTube cut.
 
 | Picture to record | English narration |
 | --- | --- |

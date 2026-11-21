@@ -18,7 +18,7 @@ De objectviewer toont alleen de relevante extra tabs. De opnamekalender staat ap
 
 Op TV staan **Sterren in 3D**, **Lichtreis**, **Mozaïek** en **Zonvergelijking** bij het object. In de galerij staat **Kalender** naast **Hemelatlas**. Links/rechts kiest een dag; omhoog/omlaag wisselt de maand. OK opent de dagweergave, waar links/rechts een opname kiest en OK de foto opent. Terug herstelt de kalender. De uitleg per modus staat in beeld.
 
-Zware voorbereiding loopt in de begrensde serverwachtrij. Resultaten staan buiten de broncode onder `data/observatory/`; opgehaalde Gaia-metingen blijven offline bruikbaar. Ontbrekende brongegevens worden gemeld en tijdelijke Gaia-uitval wordt opnieuw geprobeerd. Privé-opnamen blijven afgeschermd; openbare kijktijden gebruiken geen privé-locatie. Gebruik [web v1.5.8](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.8) en [TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2).
+Zware voorbereiding loopt in de begrensde serverwachtrij. Resultaten staan buiten de broncode onder `data/observatory/`; opgehaalde Gaia-metingen blijven offline bruikbaar. Ontbrekende brongegevens worden gemeld en tijdelijke Gaia-uitval wordt opnieuw geprobeerd. Privé-opnamen blijven afgeschermd; openbare kijktijden gebruiken geen privé-locatie. Gebruik [web v1.5.9](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.9) en [TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2).
 
 TV 0.8 houdt de viewerknoppen op één rij, met draaien en volledig scherm rechts als icoonknoppen. **Verken** biedt alleen de opnamenacht/vanavond en de benoemde onderdelen van de geopende opname. **Kijkmodi** op het hoofdscherm start direct een willekeurige avondvoorstelling van vijf minuten of een fotolijst van één uur. Galerij opent de hoofdgalerij met je object geselecteerd; Terug behoudt de herkomst, bijvoorbeeld de kalender.
 
@@ -94,7 +94,7 @@ docker compose run --rm astroweb python -m astroweb admin
 docker compose up -d
 ```
 
-De bindmount `./data` moet schrijfbaar zijn voor UID/GID `10001:10001`. Voor Synology bevat [compose.synology.yaml](compose.synology.yaml) een overlay met HTTPS-cookies. Pas hostnaam en datamap aan en laat de HTTPS-reverseproxy doorsturen naar `127.0.0.1:8090`. Gebruik beide composebestanden samen. Gebruik een geldig certificaat voor de publieke hostnaam. Stel bij een lege NAS-installatie het Studio-wachtwoord via de container in voordat je de proxy opent.
+De bindmount `./data` moet schrijfbaar zijn voor UID/GID `10001:10001`. Docker gebruikt deze map ook voor de tijdelijke uploadbuffer. Voor Synology bevat [compose.synology.yaml](compose.synology.yaml) een overlay met HTTPS-cookies. Pas hostnaam en datamap aan en laat de HTTPS-reverseproxy doorsturen naar `127.0.0.1:8090`. Gebruik beide composebestanden samen. Gebruik een geldig certificaat voor de publieke hostnaam. Stel bij een lege NAS-installatie het Studio-wachtwoord via de container in voordat je de proxy opent.
 
 ## Ontwikkelen
 
