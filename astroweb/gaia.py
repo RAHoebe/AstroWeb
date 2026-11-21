@@ -81,7 +81,7 @@ def correspondences(tree, prediction, tolerance):
     return near[first], indices[near[first]]
 
 
-def fit_field(pixels, catalog, center, width, height, scales):
+def fit_field(pixels, catalog, center, width, height, scales, *, registration=None):
     if min(len(pixels), len(catalog)) < 50:
         return None
     stars = SkyCoord(catalog[:, 0]*u.deg, catalog[:, 1]*u.deg)
@@ -95,11 +95,20 @@ def fit_field(pixels, catalog, center, width, height, scales):
     # Keep every fourth detection out of both triangle voting and fitting.
     hold = np.arange(len(pixels)) % 4 == 3
     train = pixels[~hold]
-    seed = seed_transform(train, coords, scales)
-    if seed is None:
-        return None
-    matrix, offset, scale = seed
-    predicted = train@matrix.T+offset
+    if registration:
+        wcs, flip_x, flip_y = registration
+        x, y = train.T
+        predicted = plane(wcs.pixel_to_world(x if flip_x == 1 else width-1-x,
+                                             y if flip_y == 1 else height-1-y))
+        scale = 3600 * math.sqrt(abs(np.linalg.det(wcs.pixel_scale_matrix)))
+        if not np.isfinite(predicted).all() or not scales[0] < scale < scales[1]:
+            return None
+    else:
+        seed = seed_transform(train, coords, scales)
+        if seed is None:
+            return None
+        matrix, offset, scale = seed
+        predicted = train@matrix.T+offset
     tree = cKDTree(coords)
     for factor in (4, 2.5, 1.7):
         tolerance = np.clip(scale*factor, 1.5, 12)
@@ -197,5 +206,13 @@ def solve(store, record, *, timeout=(5,35)):
     except (requests.RequestException, ValueError, KeyError, ET.ParseError, OSError):
         logging.warning("Gaia catalog or name lookup unavailable for %s", record["id"], exc_info=True)
         return {**result, "status":"unavailable"}
-    fit = fit_field(points, catalog, center, record["width"], record["height"], bounds)
+    width, height = record["width"], record["height"]
+    fit = None
+    if record.get("fits"):
+        from .journey import fits_registration
+        registration = fits_registration(store.path(record["fits"]), store.path(record["poster"]), width, height)
+        if registration:
+            fit = fit_field(points, catalog, center, width, height, bounds, registration=registration)
+    if fit is None:
+        fit = fit_field(points, catalog, center, width, height, bounds)
     return {**result, **fit, "status":"solved"} if fit else result

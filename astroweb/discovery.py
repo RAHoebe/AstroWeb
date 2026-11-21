@@ -168,7 +168,8 @@ def discover(store, record, *, search=False, links=True):
             seed = known_target(row["id"])
             code = LOCAL_TYPES.get(row["id"]) or row.get("type") or {"S":"*","H":"GCl"}.get(row.get("src"))
             nl,en = TYPES.get(code,("Catalogusobject","Catalogue object"))
-            item = {"id":row["id"],"name":{"nl":row["nl"],"en":row["en"]},
+            trusted_name = seed and canonical(seed["target"]) == canonical(row["id"])
+            item = {"id":row["id"],"name":seed["name"] if trusted_name else {"nl":row["nl"],"en":row["en"]},
                             "type":seed["type"] if seed else {"nl":nl,"en":en},
                             "summary":seed["summary"] if seed else None,
                             "ra":row["ra"],"dec":row["dec"],"aliases":row.get("aliases",[]),

@@ -89,3 +89,48 @@ def test_wikipedia_failure_uses_filename_and_is_not_cached(tmp_path,monkeypatch)
     for _ in range(2):
         assert upload_identity(["Orion_Nebula_final.png"],"Unknown title",store=store)==("M_42","prefix","M_42")
     assert len(calls)==2
+
+
+def test_fireworks_uses_dutch_catalogue_text_with_an_english_only_caption(tmp_path,monkeypatch):
+    monkeypatch.setenv("ASTROWEB_OFFLINE","1")
+    assert upload_identity(["field_final.png"],"Vuurwerkstelsel",store=Store(tmp_path))[:2]==("NGC_6946","fits")
+    metadata=initial_metadata("NGC_6946")
+    metadata.update(name={"nl":"NGC 6946","en":"Fireworks Galaxy"},translation="unavailable",
+                    external={"provider":"NASA Image and Video Library","fetched_at":metadata["updated_at"],
+                              "text":{"nl":"","en":"Public NASA caption."}})
+    repaired=refresh_metadata(metadata)
+    assert repaired["name"]["nl"]=="Vuurwerkstelsel" and repaired["translation"]=="curated"
+    assert "supernova" in repaired["summary"]["nl"] and repaired["external"]==metadata["external"]
+    assert initial_metadata("NGC_6939")["type"]["nl"]=="Open sterrenhoop"
+
+
+def test_wikipedia_leads_are_language_specific_and_match_the_wikidata_item(tmp_path,monkeypatch):
+    identity={"identifier":"NGC_1788","name":{"en":"Catalogue Example"},"sources":[
+        {"label":"Wikidata","url":"https://www.wikidata.org/wiki/Q123"},
+        {"label":"Wikipedia NL","url":"https://nl.wikipedia.org/wiki/NGC_1788"},
+        {"label":"Wikipedia EN","url":"https://en.wikipedia.org/wiki/NGC_1788"}]}
+    monkeypatch.setattr(wikimedia,"lookup",lambda *_:identity)
+    def fetch(url,**kwargs):
+        correct=url.startswith("https://nl.")
+        return response({"query":{"pages":[{"pageprops":{"wikibase_item":"Q123" if correct else "Q456"},
+                          "extract":"Nederlandse catalogusbeschrijving." if correct else "Unrelated English text."}]}})
+    monkeypatch.setattr(wikimedia.external_http,"get",fetch)
+    metadata=refresh_metadata(initial_metadata("NGC_1788"),store=Store(tmp_path))
+    assert metadata["external"]["text"]=={"nl":"Nederlandse catalogusbeschrijving.","en":""}
+    assert metadata["external"]["provider"]=="Wikipedia / Wikidata"
+    assert any("CC BY-SA" in link["label"] for link in metadata["sources"])
+
+
+def test_cached_english_caption_can_be_translated_when_service_is_configured(monkeypatch):
+    monkeypatch.setenv("ASTROWEB_TRANSLATE_URL","https://translate.example.org")
+    def translate(url,**kwargs):
+        assert url=="https://translate.example.org/translate"
+        assert kwargs["json"]["q"]=="Public English description."
+        return response({"translatedText":"Openbare Nederlandse beschrijving."})
+    monkeypatch.setattr(wikimedia.external_http,"post",translate)
+    metadata=initial_metadata("NGC_1788")
+    metadata["external"]={"provider":"NASA Image and Video Library","fetched_at":metadata["updated_at"],
+                          "translation":"unavailable","text":{"nl":"","en":"Public English description."}}
+    translated=refresh_metadata(metadata)["external"]
+    assert translated["translation"]=="machine"
+    assert translated["text"]["nl"]=="Openbare Nederlandse beschrijving."

@@ -77,6 +77,47 @@ SEEDS = {
             {"label": "CDS/SIMBAD · IC 1848", "url": "https://simbad.harvard.edu/simbad/sim-id?Ident=IC+1848"},
         ],
     },
+    "NGC_6946": {
+        "target": "NGC 6946",
+        "name": {"nl": "Vuurwerkstelsel", "en": "Fireworks Galaxy"},
+        "type": {"nl": "Spiraalstelsel", "en": "Spiral galaxy"},
+        "constellation": {"nl": "Cepheus / Zwaan", "en": "Cepheus / Cygnus"},
+        "aliases": ["NGC 6946", "Caldwell 12", "C 12", "Fireworks Galaxy", "Vuurwerkstelsel",
+                    "Vuurwerksterrenstelsel", "Arp 29", "UGC 11597", "PGC 65001"],
+        "summary": {"nl": "Van bovenaf zien we de spiraalarmen van het Vuurwerkstelsel. De bijnaam verwijst naar de vele supernova’s die er zijn waargenomen.",
+                    "en": "The nearly face-on Fireworks Galaxy shows its spiral arms. Its nickname comes from the many supernovae observed in it."},
+        "description": {
+            "nl": "In de spiraalarmen liggen stofbanen en gebieden waar nieuwe sterren ontstaan. Hubble brengt deze gebieden op verschillende golflengten in beeld. Webb onderzocht het stof rond de supernova’s SN 2004et en SN 2017eaw. In een breed opnameveld staat de open sterrenhoop NGC 6939 vlakbij aan de hemel. Die sterrenhoop bevindt zich in onze Melkweg, veel dichterbij dan het Vuurwerkstelsel.",
+            "en": "The spiral arms contain dust lanes and regions where new stars form. Hubble images these regions at several wavelengths. Webb studied dust around the supernovae SN 2004et and SN 2017eaw. The open cluster NGC 6939 appears nearby in wide views. That cluster lies in our Milky Way, much closer than the Fireworks Galaxy.",
+        },
+        "sources": [
+            {"label": "NASA · Caldwell 12", "url": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-12/"},
+            {"label": "ESA · Fireworks Galaxy", "url": "https://www.esa.int/ESA_Multimedia/Images/2021/01/A_galaxy_to_take_your_breath_away"},
+            {"label": "NASA · Webb en supernova’s", "url": "https://science.nasa.gov/missions/webb/webb-locates-dust-reservoirs-in-two-supernovae/"},
+            {"label": "APOD Nederlands · NGC 6946 en NGC 6939", "url": "https://apod.nl/ap250704_nl.html"},
+            {"label": "Wikipedia NL · NGC 6946", "url": "https://nl.wikipedia.org/wiki/NGC_6946"},
+            {"label": "DeepSpace · Fireworks Galaxy", "url": "https://deepspace.to/ngc-6946-c12-fireworks-galaxy/"},
+        ],
+    },
+    "NGC_6939": {
+        "target": "NGC 6939",
+        "name": {"nl": "Sterrenhoop NGC 6939", "en": "Open cluster NGC 6939"},
+        "type": {"nl": "Open sterrenhoop", "en": "Open star cluster"},
+        "constellation": {"nl": "Cepheus", "en": "Cepheus"},
+        "aliases": ["NGC 6939", "OCL 217"],
+        "summary": {"nl": "NGC 6939 is een open sterrenhoop in Cepheus. Op brede opnamen deelt hij het beeldveld met het Vuurwerkstelsel NGC 6946.",
+                    "en": "NGC 6939 is an open star cluster in Cepheus. In wide photographs it shares the field with the Fireworks Galaxy, NGC 6946."},
+        "description": {
+            "nl": "De sterrenhoop ligt vanaf de aarde gezien ruim een halve graad ten noordwesten van NGC 6946. Op een foto vormen de sterren van de hoop een compacte groep. Het spiraalstelsel ernaast ligt veel verder weg, buiten onze Melkweg.",
+            "en": "As seen from Earth, the cluster lies just over half a degree northwest of NGC 6946. Its stars form a compact group in a photograph. The nearby-looking spiral galaxy lies much farther away, beyond our Milky Way.",
+        },
+        "sources": [
+            {"label": "NASA APOD · NGC 6946 and NGC 6939", "url": "https://apod.nasa.gov/apod/ap250704.html"},
+            {"label": "APOD Nederlands · NGC 6946 en NGC 6939", "url": "https://apod.nl/ap250704_nl.html"},
+            {"label": "CDS/SIMBAD · NGC 6939", "url": "https://simbad.harvard.edu/simbad/sim-id?Ident=NGC+6939"},
+            {"label": "Wikipedia NL · NGC 6939", "url": "https://nl.wikipedia.org/wiki/NGC_6939"},
+        ],
+    },
     "NGC_6888": {
         "target": "NGC 6888",
         "name": {"nl": "Sikkelnevel", "en": "Crescent Nebula"},
@@ -176,7 +217,7 @@ def use_catalogue_metadata(metadata):
     generic = all(name_key(v)==name_key(target) for v in result["name"].values())
     translation = result.get("translation")
     lookup_only = (result.get("external") or {}).get("provider") == "CDS/SIMBAD"
-    needs_description = known and (translation == "pending" or lookup_only)
+    needs_description = known and (translation != "curated" or lookup_only)
     if translation != "admin" and (needs_description or (generic and (known or canonical(target) in catalogue_labels()))):
         # Older records can have a catalogue name with only a coordinate lookup.
         current = initial_metadata(canonical(target))
@@ -188,12 +229,12 @@ def use_catalogue_metadata(metadata):
     return result
 
 
-def renamed_metadata(identifier):
+def renamed_metadata(identifier, *, store=None):
     result = initial_metadata(identifier)
     if identifier in SEEDS or identifier in BODIES:
         return result
     try:
-        result = refresh_metadata(result)
+        result = refresh_metadata(result, store=store)
     except (requests.RequestException, ValueError):
         return result
     external = result["external"]
@@ -245,7 +286,7 @@ def clean_text(value):
     return html.unescape(re.sub(r"<[^>]+>", " ", value or "")).strip()
 
 
-def refresh_metadata(metadata, force=False):
+def refresh_metadata(metadata, force=False, *, store=None):
     result = use_catalogue_metadata(metadata)
     external = result.get("external")
     target = result["target"]
@@ -258,9 +299,17 @@ def refresh_metadata(metadata, force=False):
         result.update(aliases=known["aliases"].copy(), translation="curated")
     if known:
         result["sources"] = list({s["url"]:s for s in result.get("sources", []) + known["sources"]}.values())
-    if external and not force and not (known and external.get("provider") == "CDS/SIMBAD"):
+    current_dutch = (external or {}).get("text", {}).get("nl")
+    from .wikimedia import description as wikipedia_description
+    wikipedia = None
+    if store is not None and not known and (force or not current_dutch):
+        wikipedia = wikipedia_description(store, target)
+    found_dutch = wikipedia and wikipedia["text"]["nl"] and not current_dutch
+    if external and not force and not found_dutch and not (known and external.get("provider") == "CDS/SIMBAD"):
         age = datetime.now(timezone.utc) - datetime.fromisoformat(external["fetched_at"])
         if age.days < 30:
+            if external.get("translation") != "failed":
+                translate_description(external)
             return result
     aliases = list(dict.fromkeys([target, *result.get("aliases", []), *(known["aliases"] if known else [])]))
     # Query additional designations, but accept a media caption only when it
@@ -268,8 +317,8 @@ def refresh_metadata(metadata, force=False):
     queries = list(aliases)
     if known is SEEDS["NGC_6992"]:
         queries.extend(["Eastern Veil Nebula", "Caldwell 33"])
-    external = None
-    for query in queries:
+    external = wikipedia
+    for query in queries if external is None else ():
         try:
             response = external_http.get("https://images-api.nasa.gov/search", params={"q": query, "media_type": "image", "page_size": 30}, headers={"User-Agent": "AstroWeb/0.1"}, timeout=(4, 12))
             response.raise_for_status()
@@ -309,18 +358,25 @@ def refresh_metadata(metadata, force=False):
         external = {"provider":"CDS/SIMBAD", "title":name, "text":{"en":f"Catalogue identification: {name}{position}.",
                     "nl":f"Catalogusidentificatie: {name}{position}."}, "credit":"CDS, Strasbourg",
                     "url":"https://simbad.cds.unistra.fr/simbad/sim-id?Ident="+requests.utils.quote(name,safe="")}
+    if extra := external.pop("sources", []):
+        result["sources"] = list({s["url"]:s for s in result.get("sources", []) + extra}.values())
     result["external"] = external
     external.update(fetched_at=now(), translation="curated" if external["text"]["nl"] else "unavailable")
-    description = external["text"]["en"]
+    translate_description(external)
+    return result
+
+
+def translate_description(external):
+    text = external.get("text", {})
+    description = text.get("en")
     translate_url = os.environ.get("ASTROWEB_TRANSLATE_URL", "").rstrip("/")
-    if translate_url and description and not external["text"]["nl"]:
+    if translate_url and description and not text.get("nl"):
         try:
             translated = external_http.post(translate_url + "/translate", json={"q": description, "source": "en", "target": "nl", "format": "text", "api_key": os.environ.get("ASTROWEB_TRANSLATE_KEY", "")}, timeout=(5, 60))
             translated.raise_for_status()
             value = translated.json().get("translatedText", "")
             if isinstance(value, str) and value.strip():
-                result["external"]["text"]["nl"] = value.strip()[:6000]
-                result["external"]["translation"] = "machine"
+                external["text"]["nl"] = value.strip()[:6000]
+                external["translation"] = "machine"
         except (requests.RequestException, ValueError):
-            result["external"]["translation"] = "failed"
-    return result
+            external["translation"] = "failed"

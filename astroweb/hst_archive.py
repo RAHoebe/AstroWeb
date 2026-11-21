@@ -29,6 +29,8 @@ SIZE=1800
 # Archive target designations associated with documented portions of these
 # extended objects. Unrelated objects and untargeted parallels remain field-only.
 REGIONS = {
+    "NGC6946": ("NGC6946-BH1", "SN2017EAW", "SN-2017EAW",
+                "SN 2017EAW", "SN2004ET", "SN-2004ET", "SN 2004ET"),
     "NGC7000": ("V1057-CYG","V1057 CYG","CYGNUS WALL","LDN 935"),
     "NGC6992": ("CYGLOOP-NENR","CYGLOOP-NENR1","CYGLOOP-NENR2","NGC6995-A","CYGLOOP-SE-CLOUD","CYGLOOP-SE-CLOUD-TWEAK"),
     "IC1396": ("IC1396A","IC 1396A","IC1396-TAIL","ELEPHANT TRUNK","TRUMPLER 37","TR37","HD206267","HD-206267"),

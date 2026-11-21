@@ -52,3 +52,22 @@ def test_failed_mirrors_do_not_cache_an_empty_catalogue(tmp_path, monkeypatch):
         with pytest.raises(requests.ConnectionError):
             gaia.catalog_stars(store, 10, 41, 1.5)
     assert len(calls) == 4
+
+
+def test_verified_fits_is_a_seed_for_gaia_with_independent_stars():
+    from astropy.wcs import WCS
+
+    rng = np.random.default_rng(6946)
+    width, height = 1200, 1500
+    pixels = rng.uniform([0, 0], [width-1, height-1], size=(440, 2))
+    header = WCS(naxis=2)
+    header.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    header.wcs.crpix = [600, 750]
+    header.wcs.crval = [308.8, 60.3]
+    header.wcs.cd = [[-.00025, -.00016], [-.00016, .00025]]
+    stars = header.pixel_to_world(pixels[:,0], height-1-pixels[:,1])
+    catalogue = np.column_stack((stars.ra.deg,stars.dec.deg,np.zeros(len(stars))))
+    solved = gaia.fit_field(pixels, catalogue, (308.8,60.3), width, height, (.3,3.),
+                           registration=(header,1,-1))
+    assert solved is not None and solved["verified"] == 110
+    assert solved["median_arcsec"] < .05

@@ -1,7 +1,7 @@
 """Resolve an exact Wikipedia title through its linked astronomical catalogue entry."""
 from datetime import datetime, timezone
 import re
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 import requests
 
@@ -83,6 +83,40 @@ def lookup(store, value):
             return None
     store.put("settings",key,{"until":current+86400,"identity":None})
     return None
+
+
+def description(store, target):
+    """Return short NL/EN introductions only from articles for the verified ID."""
+    identity = lookup(store, target)
+    if not identity or identity["identifier"] != canonical(target):
+        return None
+    qid = urlsplit(identity["sources"][0]["url"]).path.rsplit("/", 1)[-1]
+    text = {"nl":"", "en":""}
+    articles = []
+    for source in identity["sources"]:
+        url = urlsplit(source["url"])
+        if url.hostname not in ("nl.wikipedia.org", "en.wikipedia.org") or not url.path.startswith("/wiki/"):
+            continue
+        lang = url.hostname[:2]
+        try:
+            response = external_http.get(f"https://{url.hostname}/w/api.php", headers=CONTACT, timeout=(2,4),
+                params={"action":"query","prop":"extracts|pageprops","ppprop":"wikibase_item","exintro":1,
+                        "explaintext":1,"exchars":800,"format":"json","formatversion":2,
+                        "titles":unquote(url.path.removeprefix("/wiki/"))})
+            response.raise_for_status()
+            pages = response.json().get("query", {}).get("pages", [])
+            page = next((page for page in pages if page.get("pageprops", {}).get("wikibase_item")==qid), {})
+            extract = page.get("extract")
+        except (requests.RequestException, ValueError, TypeError, AttributeError):
+            continue
+        if isinstance(extract, str) and extract.strip():
+            text[lang] = " ".join(extract.split())[:800]
+            articles.append({**source, "label":source["label"]+" · CC BY-SA 4.0"})
+    if not articles:
+        return None
+    return {"provider":"Wikipedia / Wikidata","title":identity["name"].get("en",target),"text":text,
+            "credit":"Wikipedia contributors · CC BY-SA 4.0","url":articles[0]["url"],
+            "sources":[*articles,identity["sources"][0]]}
 
 
 def add_metadata(store, metadata, value):

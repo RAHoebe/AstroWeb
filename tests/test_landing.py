@@ -64,3 +64,20 @@ def test_eastern_veil_rejects_unrelated_caldwell_search_hits(monkeypatch):
     assert refreshed["description"]["nl"] == "Eigen tekst"
     assert refreshed["external"]["url"].startswith("https://science.nasa.gov/")
     assert refreshed["external"]["text"]["nl"]
+
+
+def test_fits_texture_alignment_keeps_faint_stars_and_checks_parity():
+    import cv2
+
+    from astroweb.journey import match_fits_texture
+
+    rng=np.random.default_rng(6946)
+    raw=np.zeros((1800,1200),np.float32)
+    y=rng.integers(2,1798,24000)
+    x=rng.integers(2,1198,24000)
+    raw[y,x]=rng.uniform(.06,1,len(x))
+    raw=cv2.GaussianBlur(raw,(0,0),1.1)+.017
+    photo=cv2.resize(raw[::-1],(490,735),interpolation=cv2.INTER_AREA)
+    photo=np.uint8(np.clip(15+120*np.log1p(30*photo),0,255))
+    assert match_fits_texture(raw,photo)==(1,-1)
+    assert match_fits_texture(raw,rng.integers(0,255,photo.shape,dtype=np.uint8)) is None

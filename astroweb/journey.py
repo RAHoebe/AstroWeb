@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 import uuid
+from functools import lru_cache
 from pathlib import Path
 
 import cv2
@@ -27,6 +28,16 @@ WIDTH, HEIGHT, FPS, FRAMES = 1280, 720, 24, 264
 
 def fits_registration(path, poster, width, height):
     """Check raster row order against the actual final export before using WCS."""
+    path, poster = Path(path), Path(poster)
+    try:
+        stamps = tuple((info.st_size, info.st_mtime_ns) for info in (path.stat(), poster.stat()))
+    except OSError:
+        return None
+    return cached_fits_registration(path, poster, width, height, stamps)
+
+
+@lru_cache(maxsize=32)
+def cached_fits_registration(path, poster, width, height, stamps):
     try:
         with fits.open(path, memmap=True, do_not_scale_image_data=True) as hdus:
             hdu = hdus[0]
@@ -37,6 +48,7 @@ def fits_registration(path, poster, width, height):
             if wcs.pixel_n_dim != 2 or (header["NAXIS1"], header["NAXIS2"]) != (width, height):
                 return None
             data = hdu.data
+            intensity = data[1] if data.ndim == 3 and data.shape[0] == 3 else None
             if data.ndim == 3:
                 data = data[0]
             if data.ndim != 2:
@@ -54,11 +66,50 @@ def fits_registration(path, poster, width, height):
                       for x in (1, -1) for y in (1, -1)]
             scores.sort(reverse=True)
             score, flip_x, flip_y = scores[0]
-            if score < .45 or score - scores[1][0] < .12:
-                return None
-            return wcs, flip_x, flip_y
+            if score >= .45 and score - scores[1][0] >= .12:
+                return wcs, flip_x, flip_y
+            if width*height <= 40_000_000:
+                flips = match_fits_texture(data if intensity is None else intensity, photo)
+                if flips:
+                    return wcs, *flips
     except (OSError, TypeError, KeyError, ValueError, IndexError, cv2.error):
         return None
+
+
+def match_fits_texture(raw, photo):
+    # Averages at the same resolution preserve faint stars that point samples miss.
+    h, w = photo.shape
+    scale = min(1, 640/max(h, w))
+    size = (round(w*scale), round(h*scale))
+    if min(size) < 90:
+        return None
+    source = cv2.resize(np.asarray(raw, dtype=np.float32), size, interpolation=cv2.INTER_AREA)
+    if not np.isfinite(source).all():
+        return None
+    floor, high = np.percentile(source, [1, 95])
+    if high <= floor:
+        return None
+    source = np.log1p(np.maximum(source-floor, 0)/(high-floor))
+    final = cv2.resize(photo.astype(np.float32), size, interpolation=cv2.INTER_AREA)
+
+    def tiles(image):
+        smooth = cv2.GaussianBlur(image, (0, 0), .7)
+        texture = (smooth-cv2.GaussianBlur(smooth, (0, 0), 3))[4:-4, 4:-4]
+        return [part.ravel() for row in np.array_split(texture, 3) for part in np.array_split(row, 3, axis=1)]
+
+    reference = tiles(final)
+    scores = []
+    for x, y in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+        correlations = []
+        for a, b in zip(reference, tiles(source[::y, ::x])):
+            a, b = a-a.mean(), b-b.mean()
+            energy = np.linalg.norm(a)*np.linalg.norm(b)
+            if energy > 1e-8:
+                correlations.append(float(np.dot(a, b)/energy))
+        scores.append((float(np.median(correlations)) if len(correlations) >= 6 else -1, x, y))
+    scores.sort(reverse=True)
+    score, x, y = scores[0]
+    return (x, y) if score >= .55 and score-scores[1][0] >= .2 else None
 
 
 def fits_footprint(path, poster, width, height):

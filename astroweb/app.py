@@ -648,7 +648,7 @@ def create_app(data_dir=None, testing=False):
         if new != current_catalog:
             # Merging into an existing group reuses its editorial metadata.
             known=next((r for r in store.all("objects") if group_id(r)==new),None)
-            metadata=known["metadata"] if known else renamed_metadata(new)
+            metadata=known["metadata"] if known else renamed_metadata(new, store=store)
             with queue.lock:
                 record=store.rename_object(identifier,new,metadata)
                 queue.executor.submit(queue.discover_skymap, record["id"])
@@ -681,7 +681,7 @@ def create_app(data_dir=None, testing=False):
         if record.get("capture_kind"):
             raise ValueError("capture_kind_mismatch")
         try:
-            value = refresh_metadata(record["metadata"], force=False)
+            value = refresh_metadata(record["metadata"], store=store)
         except requests.RequestException:
             return jsonify(error="metadata_unavailable"), 502
         store.update("objects", identifier, metadata=value)

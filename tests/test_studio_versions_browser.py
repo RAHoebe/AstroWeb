@@ -139,9 +139,9 @@ def test_finished_render_and_capture_labels(tmp_path, monkeypatch):
                 page.locator("#auto-zoom").click()
                 pw.expect(page.locator("#auto-alignment")).to_contain_text("FITS-hemelcoördinaten")
                 pw.expect(page.locator("#auto-list li").first).to_contain_text("NGC 6939")
-                pw.expect(page.locator("#auto-list")).to_contain_text("Fireworks Galaxy")
+                pw.expect(page.locator("#auto-list")).to_contain_text("Vuurwerkstelsel")
             page.locator("#auto-apply").click()
-            pw.expect(page.locator("#point-name")).to_have_value("NGC 6939")
+            pw.expect(page.locator("#point-name")).to_have_value("Sterrenhoop NGC 6939")
             page.locator("#render-button").click()
             pw.expect(page.locator("#version-list option")).to_have_count(1,timeout=60000)
             assert len(upload_posts)==1

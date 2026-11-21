@@ -330,7 +330,7 @@ class JobQueue:
                 # New, uncurated targets are enriched automatically; offline failures never block a movie.
                 from .metadata import refresh_metadata
                 try:
-                    metadata = refresh_metadata(record["metadata"])
+                    metadata = refresh_metadata(record["metadata"], store=self.store)
                     external = metadata.get("external", {})
                     for language, text in external.get("text", {}).items():
                         if text:

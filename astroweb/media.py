@@ -54,7 +54,10 @@ def fits_target(value):
     try:
         return canonical(normalize_id(value))
     except ValueError:
+        from .metadata import known_target
         from .galaxy import key, target_entry
+        if known := known_target(value):
+            return normalize_id(known["target"])
         entry = target_entry(key(value))
         if entry:
             try:
