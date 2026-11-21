@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from .catalogue import canonical,group_id,notation,belongs
+from .catalogue import IDENTIFIER,canonical,group_id,notation,belongs
 from .solar import ALIASES, BODIES
 from .metadata import initial_metadata
 from .render import Parameters, read_rgb, resize_long, save_jpg
@@ -30,7 +30,9 @@ def normalize_id(value):
     if value in ALIASES:
         return ALIASES[value]
     value=notation(value)
-    if not re.fullmatch(r"[A-Z][A-Z0-9]{0,14}_[0-9]{1,8}[A-Z]?", value):
+    if not IDENTIFIER.fullmatch(value):
+        value = canonical(value)
+    if not IDENTIFIER.fullmatch(value):
         raise ValueError("invalid_identifier")
     return value
 
@@ -49,7 +51,7 @@ def fits_target(value):
     if not isinstance(value, str) or not value.strip():
         return None
     try:
-        return normalize_id(value)
+        return canonical(normalize_id(value))
     except ValueError:
         from .galaxy import key, target_entry
         entry = target_entry(key(value))
@@ -61,11 +63,15 @@ def fits_target(value):
     return None
 
 
-def upload_identity(names, object_value, fallback=""):
+def upload_identity(names, object_value, fallback="", *, store=None):
     target = fits_target(object_value)
     prefix = next((prefix for name in names if (prefix := file_prefix(name))), None)
     if target:
         return target, "fits", prefix
+    if store is not None and isinstance(object_value,str) and object_value.strip():
+        from .wikimedia import lookup
+        if found := lookup(store,object_value):
+            return found["identifier"], "wiki", prefix
     if prefix:
         return prefix, "prefix", prefix
     return normalize_id(fallback) if fallback else None, "manual", None

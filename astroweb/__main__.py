@@ -56,7 +56,8 @@ def main():
             paths = sorted(p for p in folder.iterdir() if p.suffix.lower() in EXTENSIONS)
             fits = sorted(p for p in folder.iterdir() if p.suffix.lower() in {".fits", ".fit", ".fts"})
             observation = read_observation(fits[0],paths[0].name if len(paths)==1 else None) if fits else {}
-            identifier, source, prefix = upload_identity([p.name for p in paths], observation.get("header", {}).get("OBJECT"), folder.name)
+            object_name = observation.get("header",{}).get("OBJECT")
+            identifier, source, prefix = upload_identity([p.name for p in paths],object_name,folder.name,store=store)
             target = store.get("objects", store.current_id(canonical(identifier)))
             family = group_id(target) if target else canonical(identifier)
             siblings = [r for r in store.all("objects") if group_id(r) == family]
@@ -71,7 +72,10 @@ def main():
             if existing:
                 record = existing
             else:
-                record = import_object(store, identifier, paths, repeat=True, source_prefix=prefix, allow_export_prefix=source == "fits")
+                record = import_object(store, identifier, paths, repeat=True, source_prefix=prefix, allow_export_prefix=source in {"fits","wiki"})
+                if source=="wiki":
+                    from .wikimedia import add_metadata
+                    record = store.update("objects",record["id"],metadata=add_metadata(store,record["metadata"],object_name))
                 print(f"Import: {record['id']}", flush=True)
             previous_fits = bool(record.get("fits"))
             if fits and not previous_fits:

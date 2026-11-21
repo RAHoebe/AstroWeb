@@ -9,14 +9,34 @@ import xml.etree.ElementTree as ET
 
 import requests
 from . import external_http
+from .catalogue import canonical, catalogue_labels, name_key
 
 from .store import now
 from .solar import BODIES,body_metadata
 
 NASA_NGC = "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-20/"
 NASA_IC = "https://science.nasa.gov/photojournal/blowin-in-the-stellar-wind/"
+NASA_M45 = "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-45/"
 
 SEEDS = {
+    "M_45": {
+        "target": "M 45",
+        "name": {"nl":"Plejaden","en":"Pleiades"},
+        "aliases": ["M 45","Messier 45","Plejaden","Pleiades","Zevengesternte","Seven Sisters","Melotte 22","Cl Melotte 22","Collinder 42"],
+        "type": {"nl":"Open sterrenhoop","en":"Open star cluster"},
+        "constellation": {"nl":"Stier","en":"Taurus"},
+        "summary": {"nl":"De Plejaden, ook het Zevengesternte, zijn een open sterrenhoop in de Stier op ongeveer 445 lichtjaar.",
+                    "en":"Also called the Seven Sisters, the Pleiades are an open star cluster in Taurus about 445 light-years away."},
+        "description": {
+            "nl":"Een handvol heldere, blauwachtige sterren bepaalt het bekende patroon. De open sterrenhoop bevat veel meer, zwakkere leden. Op lang belichte foto’s zie je rond enkele heldere sterren stofwolken die hun licht weerkaatsen, zoals bij Merope.",
+            "en":"A handful of bright, blue-white stars make the familiar pattern. The cluster contains many fainter members. Long exposures reveal dust reflecting the light of some bright stars, including Merope.",
+        },
+        "sources": [
+            {"label":"NASA · Messier 45","url":NASA_M45},
+            {"label":"Wikipedia · Zevengesternte","url":"https://nl.wikipedia.org/wiki/Zevengesternte"},
+            {"label":"Wikipedia · Pleiades","url":"https://en.wikipedia.org/wiki/Pleiades"},
+        ],
+    },
     "M_31": {
         "target":"M31", "aliases":["M31","M 31","Messier 31","NGC 224","Andromeda Galaxy","Andromedastelsel"],
         "name":{"nl":"Andromedastelsel","en":"Andromeda Galaxy"},
@@ -82,6 +102,8 @@ SEEDS = {
 
 
 def known_target(name):
+    if seed := SEEDS.get(canonical(name)):
+        return seed
     normalize = lambda v: re.sub(r"[\s_-]+", "", v).casefold()
     return next((seed for seed in SEEDS.values() if any(normalize(name) == normalize(alias)
                 for alias in [seed["target"], *seed["aliases"]])), None)
@@ -90,7 +112,7 @@ def known_target(name):
 def initial_metadata(identifier):
     if identifier in BODIES:
         return {**body_metadata(identifier), "updated_at":now()}
-    seed = SEEDS.get(identifier) or known_target(identifier)
+    seed = known_target(identifier)
     if seed:
         result = copy.deepcopy(seed)
         result["translation"] = "curated"
@@ -103,7 +125,28 @@ def initial_metadata(identifier):
             "description": {"nl": "Er is nog geen gecontroleerde Nederlandse objectbeschrijving. De beheerder kan broninformatie ophalen en de tekst aanvullen.", "en": "A verified object description has not yet been added. The administrator can fetch source information and edit the text."},
             "sources": [], "aliases": [name], "translation": "pending",
         }
+        if entry := catalogue_labels().get(canonical(identifier)):
+            result["name"].update(nl=entry.get("nl",name),en=entry.get("en",name))
+            result["aliases"]=list(dict.fromkeys([name,*result["name"].values(),*entry.get("aliases",[])]))
+            if entry.get("source"):
+                result["sources"]=[{"label":entry["id"],"url":entry["source"]}]
     result["updated_at"] = now()
+    return result
+
+
+def use_catalogue_metadata(metadata):
+    """Upgrade generated labels without replacing operator-authored text."""
+    result = copy.deepcopy(metadata)
+    target = result["target"]
+    known = known_target(target)
+    generic = all(name_key(v)==name_key(target) for v in result["name"].values())
+    if result.get("translation") != "admin" and generic and (known or canonical(target) in catalogue_labels()):
+        current = initial_metadata(canonical(target))
+        result["name"] = current["name"]
+        if known:
+            for field in ("type","constellation","summary","description","translation"):
+                result[field] = current[field]
+        result["sources"]=list({s["url"]:s for s in result.get("sources",[])+current["sources"]}.values())
     return result
 
 
@@ -165,7 +208,7 @@ def clean_text(value):
 
 
 def refresh_metadata(metadata, force=False):
-    result = copy.deepcopy(metadata)
+    result = use_catalogue_metadata(metadata)
     external = result.get("external")
     target = result["target"]
     known = known_target(target)

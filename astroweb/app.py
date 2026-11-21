@@ -419,7 +419,7 @@ def create_app(data_dir=None, testing=False):
         names = body.get("names", [])
         if not isinstance(names, list) or len(names) > 4 or not all(isinstance(n,str) for n in names):
             raise ValueError("invalid_filename")
-        identifier, source, _ = upload_identity(names, body.get("object"))
+        identifier, source, _ = upload_identity(names, body.get("object"),store=store)
         return jsonify(identifier=identifier, source=source)
 
     @app.post("/api/admin/upload-autozoom")
@@ -506,7 +506,8 @@ def create_app(data_dir=None, testing=False):
                     params.orientation = "original"
             else:
                 header = (observation or {}).get("header", {})
-                identifier, source, prefix = upload_identity([p.name for p in paths], header.get("OBJECT"), supplied)
+                identifier, source, prefix = upload_identity([p.name for p in paths], header.get("OBJECT"), supplied,
+                                                             store=None if request.form.get("identifier_override")=="1" else store)
                 if request.form.get("identifier_override") == "1":
                     identifier = normalize_id(supplied)
                     source = "manual"
@@ -522,7 +523,10 @@ def create_app(data_dir=None, testing=False):
                     except ValueError:
                         raise ValueError("invalid_observation") from None
                 record = import_object(store, identifier, paths, request.form.get("session_name",""),
-                                       repeat=True,nightscape=kind,title=request.form.get("title",""),capture_date=manual or None, source_prefix=prefix, allow_export_prefix=source in {"fits", "manual"})
+                                       repeat=True,nightscape=kind,title=request.form.get("title",""),capture_date=manual or None, source_prefix=prefix, allow_export_prefix=source in {"fits", "wiki", "manual"})
+                if source=="wiki":
+                    from .wikimedia import add_metadata
+                    record = store.update("objects",record["id"],metadata=add_metadata(store,record["metadata"],header["OBJECT"]))
                 if fits_path:
                     from .observation import attach_fits
                     record = attach_fits(store, record, fits_path, observation)

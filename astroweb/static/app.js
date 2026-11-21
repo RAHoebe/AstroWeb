@@ -881,7 +881,7 @@ async function identifyDraft(files){
     if(files!==state.files||state.selected)return;
     if(result.identifier&&!input.dataset.override){
       input.value=result.identifier;
-      hint.textContent=result.source==='fits'?'FITS · OBJECT':t('filenamePrefix');
+      hint.textContent=result.source==='wiki'?'FITS · OBJECT → Wikipedia / Wikidata':result.source==='fits'?'FITS · OBJECT':t('filenamePrefix');
     }
   }catch(e){if(files===state.files&&!state.selected)message('studio-message',errorText(e),true);}
 }

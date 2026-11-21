@@ -62,6 +62,7 @@
     "nl": "Plejaden",
     "en": "Pleiades",
     "aliases": [],
+    "match_names": ["Zevengesternte", "Seven Sisters", "Messier 45", "Melotte 22", "Cl Melotte 22", "Collinder 42"],
     "ly": 445,
     "ra": 56.65833,
     "dec": 24.17806,

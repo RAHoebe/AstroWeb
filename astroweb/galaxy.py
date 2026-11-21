@@ -57,7 +57,7 @@ def landmarks():
 
 def target_entry(target):
     return next((r for r in landmarks() if target in
-                 {key(r["id"]), key(r["nl"]), key(r["en"]), *map(key,r["aliases"])}), None)
+                 {key(r["id"]), key(r["nl"]), key(r["en"]), *map(key,r["aliases"]), *map(key,r.get("match_names",[]))}), None)
 
 
 @lru_cache(maxsize=1)
