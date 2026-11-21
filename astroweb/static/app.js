@@ -307,7 +307,7 @@ originalStage.addEventListener('lostpointercapture',()=>{photoDrag=null;original
 originalImage.addEventListener('load',()=>zoomOriginal(1));
 new ResizeObserver(layoutOriginal).observe(originalStage);
 
-let discoveries=null, discoveryPending=null, discoveryId=null, guideZoom=false, surfaceEdit=null;
+let discoveries=null, discoveryPending=null, discoveryId=null, guideZoom=false, surfaceEdit=null, discoverySearching=false;
 async function loadDiscovery(){
   if(!$('discovery-card').hidden && !discoveries){
     $('discovery-status').textContent=t('discoverLoading');
@@ -317,6 +317,13 @@ async function loadDiscovery(){
     finally{discoveryPending=null;}
   }
   renderDiscovery();
+  if(!state.current?.body && discoveries && discoveries.kind!=='missing' && !discoveries.catalogue && !discoverySearching){
+    discoverySearching=true;
+    renderDiscovery();
+    try{discoveries=await api('/api/objects/'+encodeURIComponent(state.current.id)+'/discover?catalogue=1');}
+    catch{discoveries.catalogue='unavailable';}
+    finally{discoverySearching=false;renderDiscovery();}
+  }
 }
 
 function currentFeature(){
@@ -366,13 +373,15 @@ function renderDiscovery(){
   $('surface-remove').hidden=current?.placement!=='manual';
   $('discovery-selection').hidden=!current||!!surfaceEdit;
   const missing=kind==='surface'?'surfaceEmpty':kind==='missing'?'discoverMissing':'discoverEmpty';
-  $('discovery-status').textContent=current||surfaceEdit?'':t(missing);
+  $('discovery-status').textContent=discoverySearching?t('discoverySearching'):
+    discoveries.catalogue==='unavailable'?t('discoveryCatalogueUnavailable'):current||surfaceEdit?'':t(missing);
   if(surfaceEdit)renderSurfaceForm();
   for(const o of objects){
     const label=local(o.name)||o.id;
     if(!surfaceEdit){
       const button=node('button','discovery-pin');
       button.type='button';button.title=label;button.dataset.label=label;
+      if(o.label)button.classList.add('label-star');
       button.setAttribute('aria-label',label);
       button.setAttribute('aria-pressed',String(o.id===current?.id));
       positionPin(button,o.x,o.y);
@@ -400,7 +409,7 @@ function renderDiscovery(){
     $('discovery-journey').hidden=!current.journey;
     if(current.journey){
       const query=new URLSearchParams({destination:current.journey});
-      $('discovery-journey').href=location.pathname+'?'+query+'#solar-system';
+      $('discovery-journey').href=location.pathname+'?'+query+(state.current.body?'#solar-system':'#hubble');
     }
     $('discovery-studio').href='/admin?'+new URLSearchParams({capture:state.current.id,landmark:current.id});
   }
@@ -514,6 +523,7 @@ function hubbleCaption(){
   const status=state.current?.body?({hubbleLoading:'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
   if(active?.full_footprint)$('hubble-description').textContent+=' RA '+active.ra.toFixed(4)+'° · Dec '+active.dec.toFixed(4)+'°';
   if(active?.alignment==='lunar-map')$('hubble-description').textContent=t('lunarMissionNote');
+  if(active?.alignment==='merope-wfpc2')$('hubble-description').textContent=t('meropeHubbleNote');
   if(active?.alignment==='saturn-ring-axis')$('hubble-description').textContent=t('saturnMissionNote');
   if(active?.alignment==='separate-moon')$('hubble-description').textContent=t('separateMoonNote');
   $('hubble-status').textContent=status?t(status):'';
@@ -897,9 +907,9 @@ function assignFiles(files){
   pendingIdentity=identifyDraft(state.files);
   renderFileList();
 }
-function renderFileList(){const list=$('file-checklist');list.replaceChildren();for(const role of (singleImageMode()?['final','FITS']:['final','starless','stars','stars_laid','FITS'])){const matches=state.files.filter(file=>singleImageMode()&&role==='final'?/\.(png|jpe?g|tiff?)$/i.test(file.name):role==='FITS'?/\.(fits|fit|fts)$/i.test(file.name):new RegExp('_'+role+'\\.(png|jpe?g|tiff?)$','i').test(file.name));const chip=node('span','file-chip'+(matches.length===1?' ready':matches.length>1?' invalid':''),(matches.length===1?'✓ ':'')+role+(role==='FITS'?' · '+(language==='nl'?'optioneel':'optional'):''));chip.title=matches.map(file=>file.name).join('\n');list.append(chip);}}
+function renderFileList(){const list=$('file-checklist');list.replaceChildren();for(const role of (singleImageMode()?['final','FITS']:['final','starless','stars','stars_laid','FITS'])){const matches=state.files.filter(file=>singleImageMode()&&role==='final'?/\.(png|jpe?g|tiff?)$/i.test(file.name):role==='FITS'?/\.(fits|fit|fts)$/i.test(file.name):new RegExp('_'+role+'\\.(png|jpe?g|tiff?)$','i').test(file.name));const chip=node('span','file-chip'+(matches.length===1?' ready':matches.length>1?' invalid':''),(matches.length===1?'✓ ':'')+role+((role==='FITS'||role==='stars_laid')?' · '+(language==='nl'?'optioneel':'optional'):''));chip.title=matches.map(file=>file.name).join('\n');list.append(chip);}}
 $('image-files').addEventListener('change',event=>assignFiles(event.target.files));const drop=document.querySelector('.dropzone');drop.addEventListener('dragover',event=>{event.preventDefault();drop.classList.add('dragging');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragging'));drop.addEventListener('drop',event=>{event.preventDefault();drop.classList.remove('dragging');assignFiles(event.dataTransfer.files);});
-$('render-button').addEventListener('click',async()=>{if(state.busy||!$('parameters-form').reportValidity())return;setBusy(true);try{if(state.selected){await api(`/api/admin/objects/${state.selected.id}/render`,{method:'POST',body:params()});}else{await pendingIdentity;if(!$('upload-form').reportValidity())return;const images=state.files.filter(file=>/\.(png|jpe?g|tiff?)$/i.test(file.name)),fits=state.files.filter(file=>/\.(fits|fit|fts)$/i.test(file.name));if(images.length!==(singleImageMode()?1:4)||fits.length>1||images.length+fits.length!==state.files.length)throw Error(singleImageMode()?'single_image_required':'four_images_required');const form=new FormData();form.set('identifier',$('identifier').value);if(nightscapeKind()){form.set('capture_kind',nightscapeKind());form.set('title',$('landscape-title').value);}if($('identifier').dataset.override)form.set('identifier_override','1');form.set('session_name',$('session-name').value);form.set('capture_date',$('upload-capture-date').value);form.set('params',JSON.stringify(params()));images.forEach(file=>form.append('images',file));if(fits[0])form.set('fits',fits[0]);message('studio-message',t('uploading'));const result=await api('/api/admin/objects',{method:'POST',body:form});await refreshAdmin();selectObject(result.object.id);}message('studio-message',t('queuedMessage'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
+$('render-button').addEventListener('click',async()=>{if(state.busy||!$('parameters-form').reportValidity())return;setBusy(true);try{if(state.selected){await api(`/api/admin/objects/${state.selected.id}/render`,{method:'POST',body:params()});}else{await pendingIdentity;if(!$('upload-form').reportValidity())return;const images=state.files.filter(file=>/\.(png|jpe?g|tiff?)$/i.test(file.name)),fits=state.files.filter(file=>/\.(fits|fit|fts)$/i.test(file.name));if((singleImageMode()?images.length!==1:![3,4].includes(images.length))||fits.length>1||images.length+fits.length!==state.files.length)throw Error(singleImageMode()?'single_image_required':'four_images_required');const form=new FormData();form.set('identifier',$('identifier').value);if(nightscapeKind()){form.set('capture_kind',nightscapeKind());form.set('title',$('landscape-title').value);}if($('identifier').dataset.override)form.set('identifier_override','1');form.set('session_name',$('session-name').value);form.set('capture_date',$('upload-capture-date').value);form.set('params',JSON.stringify(params()));images.forEach(file=>form.append('images',file));if(fits[0])form.set('fits',fits[0]);message('studio-message',t('uploading'));const result=await api('/api/admin/objects',{method:'POST',body:form});await refreshAdmin();selectObject(result.object.id);}message('studio-message',t('queuedMessage'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
 $('preview-button').addEventListener('click',async()=>{if(!state.selected||state.busy||!$('parameters-form').reportValidity())return;setBusy(true);message('studio-message',t('working'));try{const response=await api(`/api/admin/objects/${state.selected.id}/preview?point=${pointIndex+1}`,{method:'POST',body:params(),raw:true});if(state.preview)URL.revokeObjectURL(state.preview);state.preview=URL.createObjectURL(await response.blob());$('preview-image').src=state.preview;$('preview-image').hidden=false;message('studio-message','');}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
 $('rename-form').addEventListener('submit',async event=>{
   event.preventDefault();

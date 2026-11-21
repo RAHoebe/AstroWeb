@@ -17,6 +17,7 @@ from . import cosmic, mosaic, planner, solar_compare, stellar_space
 from .collection import capture_date, date_order, identity
 from .environment import target_galaxy
 from .journey import geometry
+from .media import REQUIRED_LAYERS
 from .physical import field_scale
 
 MODES = ("mosaic","space","cosmic","planner","solar")
@@ -31,7 +32,7 @@ def availability(store, record, overlap_count=0):
     body,landscape = record.get("body"),record.get("capture_kind")
     field = geometry(store,record)
     aligned = field.get("kind") in {"gaia","wcs"} and not body and not landscape
-    return dict(mosaic=aligned and overlap_count>1,space=aligned and len(record["assets"])>=4,
+    return dict(mosaic=aligned and overlap_count>1,space=aligned and REQUIRED_LAYERS.issubset(record["assets"]),
                 cosmic=not body and not landscape and bool(record["metadata"].get("redshift") or field_scale(store,record)["distance_ly"] or target_galaxy(record)),
                 planner=not body and not landscape and field.get("kind")!="missing",
                 solar=body=="SUN")

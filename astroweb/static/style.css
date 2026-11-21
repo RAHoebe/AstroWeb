@@ -115,8 +115,10 @@ body.studio-route > :is(.site-header,main:not(#studio),.skip,.site-footer) { dis
 
 #discovery-pins { position:absolute; left:50%; top:50%; pointer-events:none; }
 .discovery-pin { position:absolute; pointer-events:auto; transform:translate(-50%,-50%); height:22px; width:22px; border-radius:50%; border:2px solid #f6b9ab; background:#3a252c55; box-shadow:0 0 0 1px #3a252c; }
-.discovery-pin[aria-pressed=true] { border-color:#ffd27e; background:#ffe2a544; z-index:1; }
-.discovery-pin[aria-pressed=true]::after { content:attr(data-label); position:absolute; left:24px; top:-2px; background:#22151be8; padding:1px 6px; color:#ffe2a5; white-space:nowrap; }
+.discovery-pin.label-star { z-index:1; }
+.discovery-pin[aria-pressed=true] { border-color:#ffd27e; background:#ffe2a544; z-index:2; }
+.discovery-pin:is([aria-pressed=true],.label-star)::after { content:attr(data-label); position:absolute; left:24px; top:-2px; background:#22151be8; padding:1px 6px; color:#ffe2a5; white-space:nowrap; pointer-events:none; }
+.discovery-pin.label-star:not([aria-pressed=true])::after { font-size:.78em; padding:0 3px; }
 .discovery-pin.label-left::after { left:auto; right:24px; }
 .discovery-pin.discovery-draft { border-color:#ffd27e; background:#ffe2a544; pointer-events:none; }
 #original-stage.placing-label { cursor:crosshair; }

@@ -84,3 +84,22 @@ def test_nasa_failure_uses_old_index_or_existing_destination(tmp_path,monkeypatc
     rows=[entry("M031","Andromeda Galaxy (M31)")]
     store.put("settings","hubble_skymap",{"rows":rows,"checked":0})
     assert skymap.catalogue(store)==rows
+
+
+def test_ic349_uses_its_calibrated_footprint_instead_of_m45_overview_position(tmp_path):
+    store=Store(tmp_path)
+    ident,digest=skymap.MEROPE_PLATE
+    rec={"id":"M_45","metadata":{"target":"M 45"},"width":1000,"height":1600,"sha256":{"final":"m45"},
+         "gaia":{"status":"solved","digest":"m45","corners":[[56.2,24.55],[57.5,24.55],[57.5,23.5],[56.2,23.5]]},
+         "skymap":{"target":"M_45","option":dict(id=ident,digest=digest,center=[57.7,24.3])}}
+    path=skymap.image_file(store,"m045",digest)
+    path.parent.mkdir(parents=True)
+    Image.new("RGB",(2116,2376),"navy").save(path)
+    option=skymap.cached_option(store,rec)
+    assert option["alignment"]=="merope-wfpc2"
+    assert skymap.merope_journey(store,rec)==ident
+    assert skymap.focus_point(store,rec,option) is not None
+    assert skymap.image_registration(store,rec,option).shape==(3,3)
+    rec["gaia"]["corners"]=[[56.2,24.55],[57.5,24.55],[57.5,24.05],[56.2,24.05]]
+    assert skymap.merope_journey(store,rec) is None
+    assert skymap.focus_point(store,rec,option) is None

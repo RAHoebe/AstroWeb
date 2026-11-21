@@ -18,7 +18,7 @@ De objectviewer toont alleen de relevante extra tabs. De opnamekalender staat ap
 
 Op TV staan **Sterren in 3D**, **Lichtreis**, **Mozaïek** en **Zonvergelijking** bij het object. In de galerij staat **Kalender** naast **Hemelatlas**. Links/rechts kiest een dag; omhoog/omlaag wisselt de maand. OK opent de dagweergave, waar links/rechts een opname kiest en OK de foto opent. Terug herstelt de kalender. De uitleg per modus staat in beeld.
 
-Zware voorbereiding loopt in de begrensde serverwachtrij. Resultaten staan buiten de broncode onder `data/observatory/`; opgehaalde Gaia-metingen blijven offline bruikbaar. Ontbrekende brongegevens worden gemeld en tijdelijke Gaia-uitval wordt opnieuw geprobeerd. Privé-opnamen blijven afgeschermd; openbare kijktijden gebruiken geen privé-locatie. Gebruik [web v1.5.7](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.7) en [TV 0.8.1](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.1).
+Zware voorbereiding loopt in de begrensde serverwachtrij. Resultaten staan buiten de broncode onder `data/observatory/`; opgehaalde Gaia-metingen blijven offline bruikbaar. Ontbrekende brongegevens worden gemeld en tijdelijke Gaia-uitval wordt opnieuw geprobeerd. Privé-opnamen blijven afgeschermd; openbare kijktijden gebruiken geen privé-locatie. Gebruik [web v1.5.8](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.8) en [TV 0.8.1](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.1).
 
 TV 0.8 houdt de viewerknoppen op één rij, met draaien en volledig scherm rechts als icoonknoppen. **Verken** biedt alleen de opnamenacht/vanavond en de benoemde onderdelen van de geopende opname. **Kijkmodi** op het hoofdscherm start direct een willekeurige avondvoorstelling van vijf minuten of een fotolijst van één uur. Galerij opent de hoofdgalerij met je object geselecteerd; Terug behoudt de herkomst, bijvoorbeeld de kalender.
 
@@ -45,13 +45,13 @@ Open de [lokale galerij](http://127.0.0.1:8090/). Kies [Studio](http://127.0.0.1
 ## Je eerste film
 
 1. Kies **Nieuwe film** en selecteer je bestanden. Controleer de voorgestelde object-ID uit FITS of de bestandsnaam.
-2. Voeg de vier uitgelijnde AstroWizard-exports toe. Een bijpassende final-FITS levert onder meer het richtpunt en de opnametijd.
+2. Voeg de uitgelijnde AstroWizard-exports toe: final, starless en stars. Stars_laid is optioneel. Een bijpassende final-FITS levert onder meer het richtpunt en de opnametijd.
 
    ```text
    NGC_7000_final.png
    NGC_7000_starless.png
    NGC_7000_stars.png
-   NGC_7000_stars_laid.png
+   NGC_7000_stars_laid.png (optioneel)
    NGC_7000_final.fits    (optioneel)
    ```
 
@@ -60,7 +60,7 @@ Open de [lokale galerij](http://127.0.0.1:8090/). Kies [Studio](http://127.0.0.1
 
 Studio herkent ook gangbare objectnamen, zoals **Plejaden**, **Zevengesternte** en **Melotte 22** voor M45. Het lokale catalogusbestand werkt offline. Bij een onbekende naam in het FITS-veld `OBJECT` kan Studio een Wikipedia-titel opzoeken via Wikidata. Een treffer moet een SIMBAD-verwijzing en een ondersteund catalogus-ID hebben. Als er geen eenduidige treffer is, gebruikt Studio de bestandsnaamprefix.
 
-PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De vier beelden moeten dezelfde afmetingen hebben. De limieten zijn 40 megapixels en 100 MiB per beeld, 512 MiB voor FITS en 600 MiB voor de hele upload. De vier originelen krijgen een SHA-256-controlesom. Voor lokale batchimport: stop de server en voer `python -m astroweb import --source AstroPhotos --render` uit, met één submap per object.
+PNG, JPEG en enkelbeeld-TIFF zijn geschikt. De beelden moeten dezelfde afmetingen hebben. De limieten zijn 40 megapixels en 100 MiB per beeld, 512 MiB voor FITS en 600 MiB voor de hele upload. De originelen krijgen een SHA-256-controlesom. Voor lokale batchimport: stop de server en voer `python -m astroweb import --source AstroPhotos --render` uit, met één submap per object.
 
 ## De viewer
 

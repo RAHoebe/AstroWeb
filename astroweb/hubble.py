@@ -108,6 +108,10 @@ def fields(store,record, local_only=False):
             if not preferred or skymap.focus_point(store, record, preferred) is None:
                 raise
     options.extend(missions)
+    if not record.get("body"):
+        from .archive_search import guide_options
+        existing = {o["id"] for o in options}
+        options.extend(o for o in guide_options(store,record) if o["id"] not in existing)
     if not options and search and search.get("unavailable") and not preferred:
         raise ValueError("hubble_unavailable")
     if preferred and skymap.focus_point(store, record, preferred) is not None:

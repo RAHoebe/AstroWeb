@@ -93,7 +93,7 @@ class JobQueue:
                     continue
                 previous = record.get("gaia") or {}
                 if (previous.get("status") != "unavailable" or previous.get("retry_after",0)>timestamp
-                        or not {"stars","stars_laid"} <= record.get("assets",{}).keys()):
+                        or not record.get("assets",{}).get("stars")):
                     continue
                 self.store.update("objects", record["id"], gaia={**previous,"status":"pending","request":uuid.uuid4().hex,"retry_only":True})
                 # Retry alignment alone: preserve the selected archive destinations.
@@ -200,11 +200,21 @@ class JobQueue:
         self.executor.submit(self.discover_missions, identifier)
 
     def discover_missions(self, identifier):
-        from . import mission_archive
+        from . import archive_search, guide_catalogue, mission_archive
         try:
             mission_archive.discover(self.store, identifier)
         except Exception:
             logging.exception("Could not select additional archive destinations for %s", identifier)
+        if os.environ.get("ASTROWEB_OFFLINE")=="1":
+            return
+        record = self.store.get("objects",identifier)
+        if not record or record.get("body") or record.get("capture_kind"):
+            return
+        try:
+            guide_catalogue.rows(self.store,record,search=True)
+            archive_search.supplement_guide(self.store,record)
+        except Exception:
+            logging.exception("Could not complete feature guide search for %s",identifier)
 
     def align(self, identifier):
         with self.store.lock:
@@ -238,6 +248,8 @@ class JobQueue:
             capture = self.store.get("objects", identifier)
             if not capture:
                 raise ValueError("object_not_found")
+            if params.star_source=="stars_laid" and "stars_laid" not in capture.get("assets",{}):
+                params.star_source="stars"
             if capture.get("body") or capture.get("capture_kind"):
                 params.method = "kenburns"
             jobs = self.store.all("jobs")

@@ -216,6 +216,27 @@ def sign_in(client):
     return {"X-CSRF-Token": response.json["csrf"]}
 
 
+def test_studio_can_render_and_rerender_with_only_one_star_layer(app,images,monkeypatch):
+    client=app.test_client()
+    headers=sign_in(client)
+    queue=app.extensions["jobs"]
+    store=app.extensions["store"]
+    monkeypatch.setattr(queue,"prepare_capture",lambda *_:None)
+    monkeypatch.setattr(queue,"prepare_journey",lambda *_:None)
+    files=[(io.BytesIO(images[role].read_bytes()),images[role].name) for role in ("final","starless","stars")]
+    params=dict(duration=4,resolution=720,star_source="stars_laid")
+    reply=client.post("/api/admin/objects",data=dict(identifier="NGC_7000",images=files,params=json.dumps(params)),headers=headers)
+    assert reply.status_code==202,reply.json
+    queue.futures[reply.json["job"]["id"]].result(timeout=30)
+    record=store.get("objects","NGC_7000")
+    assert set(record["assets"])=={"final","starless","stars"}
+    assert record["render"]["choice"]["source"]=="stars" and record["params"]["star_source"]=="stars"
+    assert all(store.path(path).read_bytes()==images[role].read_bytes() for role,path in record["assets"].items())
+    again=client.post("/api/admin/objects/NGC_7000/render",json=params,headers=headers)
+    assert again.status_code==202
+    queue.futures[again.json["job"]["id"]].result(timeout=30)
+    assert len(store.get("objects","NGC_7000")["versions"])==2
+
 def test_auth_csrf_host_and_upload_validation(app, images):
     client = app.test_client()
     assert client.get("/api/admin/objects").status_code == 401

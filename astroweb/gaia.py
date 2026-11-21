@@ -176,7 +176,7 @@ def solve(store, record):
     if result["digest"] in SOLUTIONS:
         return {**result, **SOLUTIONS[result["digest"]], "status":"solved"}
     points = image_stars(store.path(record["assets"]["stars"]))
-    if len(points) < 50:
+    if len(points) < 50 and record["assets"].get("stars_laid"):
         points = image_stars(store.path(record["assets"]["stars_laid"]))
     if len(points) < 50:
         return result

@@ -18,6 +18,7 @@ from .store import now
 
 NIGHTSCAPES = {"startrails": ("Sterrensporen", "Star trails"), "milkyway": ("Melkwegfoto", "Milky Way photograph")}
 ROLES = ("final", "starless", "stars", "stars_laid")
+REQUIRED_LAYERS = frozenset(("final","starless","stars"))
 EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 MAX_FILE = 100 * 1024 * 1024
 MAX_PIXELS = 40_000_000
@@ -90,7 +91,7 @@ def identify_files(identifier, paths):
             raise ValueError("invalid_files")
         export_stems.add(path.stem[:-len(role)-1].casefold())
         roles[role] = path
-    if set(roles) != set(ROLES):
+    if not REQUIRED_LAYERS.issubset(roles):
         raise ValueError("four_images_required")
     if not identifier and (len(export_stems) != 1 or "" in export_stems):
         raise ValueError("invalid_filename")

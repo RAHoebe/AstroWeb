@@ -299,7 +299,7 @@ def create_app(data_dir=None, testing=False):
     def discover_objects(identifier):
         from .discovery import discover
         record = get_object(identifier)
-        result = discover(store,record)
+        result = discover(store,record,search=request.args.get("catalogue")=="1")
         if record.get("body") and session.get("admin"):
             from .surface_labels import presets
             result["presets"] = presets(record["body"])
@@ -475,7 +475,7 @@ def create_app(data_dir=None, testing=False):
         solar = supplied.upper() in BODIES
         if (solar or kind) and len(files) != 1:
             raise ValueError("single_image_required")
-        if not (solar or kind) and len(files) != 4:
+        if not (solar or kind) and len(files) not in (3,4):
             raise ValueError("four_images_required")
         with tempfile.TemporaryDirectory(prefix="upload-", dir=store.root) as temp:
             paths = []

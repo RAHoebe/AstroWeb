@@ -56,6 +56,28 @@ def inside_capture(uv):
     return uv is not None and np.isfinite(uv).all() and np.all((uv >= 0) & (uv <= 1))
 
 
+def cutout_contains(store, entry, ra, dec):
+    """Check a feature against the already verified FITS, without a download."""
+    ident = entry.get("id","")
+    if not entry.get("full_footprint") or not FIELD_ID.fullmatch(ident):
+        return False
+    path = store.path(f"survey-cache/hst-archive/{ident}.fits")
+    if not path.is_file():
+        return False
+    try:
+        with fits.open(path,memmap=True) as hdus:
+            data = hdus[0].data
+            if data.shape!=(SIZE,SIZE):
+                return False
+            x,y = WCS(hdus[0].header).celestial.world_to_pixel(SkyCoord(ra,dec,unit="deg"))
+            if not (np.isfinite(x) and np.isfinite(y) and 1<=x<SIZE-2 and 1<=y<SIZE-2):
+                return False
+            val = data[round(float(y)),round(float(x))]
+            return bool(np.isfinite(val) and val!=0)
+    except (OSError,ValueError,TypeError):
+        return False
+
+
 def registered_cutout(store,record,entry):
     folder=store.path("survey-cache/hst-archive")
     folder.mkdir(parents=True,exist_ok=True)

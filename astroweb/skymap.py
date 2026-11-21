@@ -26,6 +26,7 @@ BASE = "https://science.nasa.gov/specials/apps/hubble-skymap/"
 ENTRY_ID = re.compile(r"[CMBE][0-9]{3,5}")
 DESIGNATION = re.compile(r"\b(?:NGC|IC|MESSIER|CALDWELL|M|C|ARP|UGC|PGC|SH2)[ -]?\d+[A-Z]?\b", re.I)
 DAY = 86400
+MEROPE_PLATE = ("skymap-m045", "7db9b390c966621094af")
 
 
 def target_key(record):
@@ -174,12 +175,21 @@ def cached_option(store, record):
     if option and state["target"] == target_key(record):
         ident = option["id"].removeprefix("skymap-")
         if image_file(store, ident, option["digest"]).is_file():
+            if (option["id"],option["digest"]) == MEROPE_PLATE:
+                return {**option, "name":{"nl":"IC 349 · Reflectienevel bij Merope","en":"IC 349 · Reflection nebula by Merope"},
+                        "alignment":"merope-wfpc2", "telescope":"HST/WFPC2",
+                        "source":"https://science.nasa.gov/asset/hubble/ghostly-reflections-in-the-pleiades/",
+                        "credit":"NASA and the Hubble Heritage Team (STScI/AURA); G. Herbig and T. Simon"}
             return option
     return None
 
 
 def focus_point(store, record, option):
     from .discovery import project
+    if option.get("alignment")=="merope-wfpc2":
+        uv = merope_projection(store,record)
+        if uv is not None:
+            return uv.mean(axis=0).tolist() if contained(uv) else None
     if "center" in option:
         ra, dec = option["center"]
         _, uv = project(store, record, SkyCoord([ra], [dec], unit="deg"))
@@ -223,6 +233,12 @@ def render_frames(photo, destination, focus, width, height):
 # Matched to calibrated ESA/Hubble AVM reference rasters, not to the Skymap pin.
 # M031: heic1502a, 765 inliers; C033: heic0712c, 1573 inliers.
 CALIBRATED_CORNERS = {
+    # NASA's colour raster registered to MAST proposal 7380, F555W PC drizzle
+    # product hst_7380_01_wfpc2_pc_f555w_u50s01_drz.fits. 85 held-out texture matches
+    # gave a median residual of 0.45 detector pixels.
+    MEROPE_PLATE: (
+        (56.588198900,23.944215990),(56.579620945,23.946015281),
+        (56.577409513,23.937207345),(56.585986914,23.935408177)),
     ("skymap-m031", "13d122946078e3c56936"): (
         (11.120894241,40.989126903),(12.087797649,42.240422007),
         (11.483697012,42.499583311),(10.524611888,41.243294242)),
@@ -230,6 +246,25 @@ CALIBRATED_CORNERS = {
         (314.102317885,30.367090182),(314.057985435,30.382795348),
         (314.048824857,30.363535340),(314.093150048,30.347833266)),
 }
+
+def contained(uv):
+    return uv is not None and np.isfinite(uv).all() and np.all((uv>=0)&(uv<=1))
+
+
+def merope_projection(store,record):
+    from .discovery import project
+    corners = np.array(CALIBRATED_CORNERS[MEROPE_PLATE])
+    return project(store,record,SkyCoord(*corners.T,unit="deg"))[1]
+
+
+def merope_journey(store, record):
+    if target_key(record)!="M_45":
+        return None
+    option = cached_option(store,record)
+    if option and option.get("alignment")=="merope-wfpc2" and contained(merope_projection(store,record)):
+        return option["id"]
+    return None
+
 
 def raster_corners(w,h):
     return np.float32([[0,0],[w-1,0],[w-1,h-1],[0,h-1]])
@@ -240,6 +275,8 @@ def image_registration(store,record,option):
     corners=CALIBRATED_CORNERS.get((option["id"],option["digest"]))
     if corners:
         _,uv=project(store, record, SkyCoord(*np.asarray(corners).T,unit="deg"))
+        if (option["id"],option["digest"])==MEROPE_PLATE and not contained(uv):
+            return None
         if uv is not None and np.isfinite(uv).all():
             with Image.open(path) as im:
                 source=raster_corners(*im.size)

@@ -5,11 +5,12 @@ import cv2
 import numpy as np
 
 from .gaia_depth import prepare, split_stars
+from .media import REQUIRED_LAYERS
 from .render import Parameters, compose, read_rgb, resize_long, select_layers
 
 
 def build(store, record, folder):
-    if not {"final","starless","stars","stars_laid"}.issubset(record["assets"]):
+    if not REQUIRED_LAYERS.issubset(record["assets"]):
         raise ValueError("observatory_space_layers")
     measured = prepare(store,record)
     params = Parameters(orientation="original")

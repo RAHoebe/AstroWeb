@@ -16,7 +16,7 @@ from . import external_http
 from astropy.coordinates import SkyCoord
 
 from . import hst_archive, skymap
-from .catalogue import canonical
+from .catalogue import canonical,name_key
 from .discovery import project
 from .galaxy import key, target_entry
 from .journey import geometry
@@ -254,6 +254,76 @@ def field_key(store, record):
     values = [field, target_names(record), record.get("sha256",{}).get("final"),
               (record.get("gaia") or {}).get("wcs_header"),record.get("fits")]
     return hashlib.sha256(json.dumps(values,sort_keys=True).encode()).hexdigest()
+
+
+def guide_state_key(store,record):
+    signature = field_key(store,record)
+    return "hst-guide-v1:"+signature if signature else None
+
+
+def guide_options(store,record):
+    if store is None:
+        return []
+    key = guide_state_key(store,record)
+    return store.get("settings",key,{}).get("options",[]) if key else []
+
+
+def supplement_guide(store,record):
+    """Append named, registered fields from a few catalogue features."""
+    from .discovery import discover as catalogue_points
+    cache = guide_state_key(store,record)
+    if not cache or record.get("body") or record.get("capture_kind"):
+        return []
+    previous = store.get("settings",cache,{})
+    accepted = list(previous.get("options",[]))
+    if len(accepted)>=3 or time.time()<previous.get("retry",0):
+        return accepted
+    known = saved_options(record.get("hst_search") or {})+accepted
+    existing = {o["id"] for o in known}
+    occupied = {name_key(canonical(o.get("target",""))) for o in known}
+    target = name_key(canonical(record["metadata"]["target"]))
+    candidates = {}
+    names = set()
+    for point in catalogue_points(store,record,links=False)["objects"]:
+        ident = point["id"]
+        if not re.fullmatch(r"(?:NGC|IC|M|LDN|BARNARD)[ _-]*\d+[A-Z]?",ident,re.I):
+            continue
+        identity = name_key(canonical(ident))
+        if identity==target or identity in occupied:
+            continue
+        candidates[identity]=point
+        names.update((ident.upper(),ident.replace(" ","").upper(),ident.replace(" ","-").upper()))
+        if len(candidates)>=8:
+            break
+    if not candidates:
+        return accepted
+    found = []
+    available = False
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        queries = [workers.submit(provider,sorted(names)) for provider in (nasa_rows,esa_rows)]
+        for request in queries:
+            try:
+                found.extend(request.result())
+                available = True
+            except (requests.RequestException,ValueError):
+                pass
+    for entry in ranked_entries(store,record,found,[])[:12]:
+        identity = name_key(canonical(entry["target"]))
+        point = candidates.get(identity)
+        if not point or identity in occupied or entry["id"] in existing:
+            continue
+        try:
+            hst_archive.registered_cutout(store,record,entry)
+        except (requests.RequestException,ValueError,OSError):
+            continue
+        if not hst_archive.cutout_contains(store,entry,point["ra"],point["dec"]):
+            continue
+        accepted.append({**{k:v for k,v in entry.items() if k!="footprint"},"relation":"region"})
+        occupied.add(identity)
+        if len(accepted)>=3:
+            break
+    store.put("settings",cache,dict(options=accepted,retry=time.time()+(7*skymap.DAY if available else 3600)))
+    return accepted
 
 
 def discover(store, identifier):
