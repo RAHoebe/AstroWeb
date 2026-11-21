@@ -246,7 +246,7 @@ def create_app(data_dir=None, testing=False):
     @admin_required
     def autozoom(identifier):
         from .autozoom import propose
-        return jsonify(points=propose(store,get_object(identifier),json_body().get("count",4)))
+        return jsonify(propose(store,get_object(identifier),json_body().get("count",4)))
 
     @app.get("/api/objects/<identifier>/solar-system")
     def solar_destinations(identifier):
@@ -410,7 +410,10 @@ def create_app(data_dir=None, testing=False):
     @app.get("/api/admin/objects")
     @admin_required
     def admin_objects():
-        return jsonify(objects=[present(record, True) for record in store.all("objects")], jobs=store.all("jobs", limit=50))
+        from .collection import capture_groups
+        groups = capture_groups(store.all("objects"))
+        return jsonify(objects=[present(record, True) for captures in groups.values() for record in captures],
+                       jobs=store.all("jobs", limit=50))
 
     @app.post("/api/admin/upload-identity")
     @admin_required
@@ -419,15 +422,26 @@ def create_app(data_dir=None, testing=False):
         names = body.get("names", [])
         if not isinstance(names, list) or len(names) > 4 or not all(isinstance(n,str) for n in names):
             raise ValueError("invalid_filename")
-        identifier, source, _ = upload_identity(names, body.get("object"),store=store)
-        return jsonify(identifier=identifier, source=source)
+        from .autozoom import target_identity
+        supplied = body.get("identifier")
+        if isinstance(supplied, str) and supplied.strip():
+            identifier, source = canonical(normalize_id(supplied)), "manual"
+        else:
+            identifier, source, _ = upload_identity(names, body.get("object"),store=store)
+        target = target_identity(identifier)
+        if source == "wiki":
+            from .wikimedia import lookup
+            match = lookup(store, body["object"])
+            if match:
+                target.update(known=True, name={**target["name"], **match["name"]})
+        return jsonify(identifier=identifier, source=source, target=target)
 
     @app.post("/api/admin/upload-autozoom")
     @admin_required
     def draft_autozoom():
         import numpy as np
         from PIL import Image
-        from .autozoom import propose_image
+        from .autozoom import draft
         upload = request.files.get("preview")
         if not upload:
             raise ValueError("invalid_image")
@@ -441,7 +455,8 @@ def create_app(data_dir=None, testing=False):
                 image = np.asarray(img.convert("L"))
         except (OSError, Image.DecompressionBombError):
             raise ValueError("invalid_image") from None
-        return jsonify(points=propose_image(image, request.form.get("count", type=int)))
+        return jsonify(draft(store, data, image, request.form.get("count", type=int),
+                             request.form.get("identifier"), request.files.get("fits"), request.files.get("stars")))
 
     @app.post("/api/admin/upload-poster")
     @admin_required

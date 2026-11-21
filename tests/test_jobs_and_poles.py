@@ -41,26 +41,77 @@ def test_cancel_running_and_queued_jobs(tmp_path,monkeypatch):
         store.put("objects",ident,{"id":ident,"metadata":{},"assets":{},"video":"old.mp4",
                                    "versions":[],"gaia":{"status":"solved"}})
     entered,finish=Event(),Event()
+    replacement_started,release_replacement=Event(),Event()
     def render(paths,target,params,progress):
+        target.parent.mkdir(parents=True,exist_ok=True)
+        if params.zoom==2:
+            replacement_started.set()
+            assert release_replacement.wait(5)
+            progress(20)
+            target.write_bytes(b"Replacement movie")
+            return {"frames":96}
+        target.with_suffix(".part.mp4").write_bytes(b"Unfinished movie")
         entered.set()
         assert finish.wait(5)
         progress(12)
         raise AssertionError("Cancelled render continued")
     monkeypatch.setattr("astroweb.jobs.render_video",render)
     q=JobQueue(store,resume=False)
+    monkeypatch.setattr(q,"prepare_capture",lambda *_: None)
+    monkeypatch.setattr(q,"prepare_journey",lambda *_: None)
+    monkeypatch.setattr(q,"ensure_preview",lambda *_: None)
     try:
         active=q.submit("M_31")
         assert entered.wait(5)
-        queued=q.submit("M_32")
+        queued=q.submit("M_31")
         assert q.cancel(queued["id"])["status"]=="cancelled"
         assert q.cancel(active["id"])["status"]=="cancelling"
+        replacement=q.submit("M_31",{"zoom":2})
+        assert store.get("jobs",replacement["id"])["status"]=="queued"
+        assert not replacement_started.is_set()
         finish.set()
         q.futures[active["id"]].result(timeout=5)
         assert store.get("jobs",active["id"])["status"]=="cancelled"
         assert q.cancel(active["id"])["status"]=="cancelled"
+        folder=store.path("objects/M_31/movies")
+        assert not (folder/(active["id"]+".part.mp4")).exists()
+        assert replacement_started.wait(5)
         for ident in ("M_31","M_32"):
             assert store.get("objects",ident)["video"]=="old.mp4"
             assert not store.get("objects",ident)["versions"]
+        release_replacement.set()
+        q.futures[replacement["id"]].result(timeout=5)
+        assert store.get("jobs",replacement["id"])["status"]=="completed"
+        record=store.get("objects","M_31")
+        assert record["versions"][0]["id"]==replacement["id"]
+        assert store.path(record["video"]).read_bytes()==b"Replacement movie"
     finally:
         finish.set()
+        release_replacement.set()
+        q.shutdown()
+
+
+def test_cancelling_during_alignment_skips_archive_search(tmp_path,monkeypatch):
+    from astroweb.store import Store
+    from astroweb.jobs import JobQueue
+    store=Store(tmp_path)
+    store.put("objects","M_31",{"id":"M_31","metadata":{},"assets":{},"video":None,"versions":[]})
+    entered,released=Event(),Event()
+    archives=[]
+    def align(identifier):
+        entered.set()
+        assert released.wait(5)
+    q=JobQueue(store,resume=False)
+    monkeypatch.setattr(q,"align",align)
+    monkeypatch.setattr(q,"discover_skymap",lambda *args: archives.append(args))
+    try:
+        active=q.submit("M_31")
+        assert entered.wait(5)
+        assert q.cancel(active["id"])["status"]=="cancelling"
+        released.set()
+        q.futures[active["id"]].result(timeout=5)
+        assert store.get("jobs",active["id"])["status"]=="cancelled"
+        assert not archives
+    finally:
+        released.set()
         q.shutdown()

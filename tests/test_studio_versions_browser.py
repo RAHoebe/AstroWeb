@@ -1,7 +1,10 @@
 """Studio must move to a finished render once, then respect the viewer's choice."""
 from threading import Thread
 
+import numpy as np
 import pytest
+from astropy.io import fits
+from astropy.wcs import WCS
 from PIL import Image
 from werkzeug.serving import make_server
 
@@ -27,7 +30,13 @@ def test_finished_render_and_capture_labels(tmp_path, monkeypatch):
                 path = tmp_path / f"{ident}_{role}.png"
                 Image.new("RGB", size, "navy").save(path)
                 paths.append(path)
-            import_object(store, ident, paths)
+            record=import_object(store, ident, paths)
+            store.update("objects",record["id"],capture_date="2026-11-04")
+            if ident=="IC_1396":
+                newer=import_object(store,ident,paths,repeat=True,session_name="Paneel 2",capture_date="2026-11-09")
+        night=import_object(store,"", [tmp_path/"NGC_7000_final.png"], nightscape="startrails",title="Sterrensporen boven het meer")
+        for i in range(6):
+            store.put("jobs",str(i),dict(id=str(i),object_id=night["id"],status="completed",progress=100))
         job = queue.submit("IC_1396", {"duration": 4, "resolution": 720})
         queue.futures[job["id"]].result(timeout=60)
         with app.test_client() as client:
@@ -40,21 +49,33 @@ def test_finished_render_and_capture_labels(tmp_path, monkeypatch):
             page = browser.new_page()
             page.context.add_cookies([{"name": "session", "value": cookie, "url": origin}])
             page.goto(origin + "/admin")
-            options = page.locator("#admin-object-list button")
-            options.filter(has_text="NGC 7000").click()
+            menu = page.locator("#admin-object-list")
+            options = menu.locator("option")
+            pw.expect(options).to_have_count(4)
+            pw.expect(options.filter(has_text="IC 1396")).to_have_count(1)
+            pw.expect(page.locator("#job-list .job-item")).to_have_count(5)
+            pw.expect(page.locator("#job-list strong").nth(1)).to_have_text("Sterrensporen boven het meer")
+            assert "~" not in page.locator("#job-list").inner_text()
+            menu.select_option("NGC_7000")
             pw.expect(page.locator("#focus-image")).to_be_visible()
             pw.expect(page.locator("#film-orientation")).to_be_hidden()
-            options.filter(has_text="IC 1396").click()
+            menu.select_option("IC_1396")
+            captures=page.locator("#studio-capture-picker")
+            pw.expect(captures).to_have_value(newer["id"])
+            pw.expect(captures.locator("option")).to_have_count(2)
+            pw.expect(captures.locator("option").first).to_contain_text("Paneel 2")
+            captures.select_option("IC_1396")
+            pw.expect(menu).to_have_value("IC_1396")
             pw.expect(page.locator("#film-orientation")).to_be_visible()
             page.locator("#studio [data-lang=en]").click()
             pw.expect(page.locator("#edit-object-title")).to_have_text("IC 1396 · The Elephant’s Trunk region")
             assert options.filter(has_text="IC 1396").inner_text().count("IC 1396") == 1
-            # Polling must keep an unchanged object button connected and focused.
-            button = options.filter(has_text="IC 1396")
-            button.focus()
+            # Polling must keep both the selected capture and menu focus.
+            menu.focus()
             with page.expect_response(lambda r: r.url.endswith("/api/admin/objects")):
                 pass
-            pw.expect(button).to_be_focused()
+            pw.expect(menu).to_be_focused()
+            pw.expect(captures).to_have_value("IC_1396")
             versions = page.locator("#version-list")
             pw.expect(versions).to_have_value(job["id"])
             page.locator("#render-button").click()
@@ -68,6 +89,34 @@ def test_finished_render_and_capture_labels(tmp_path, monkeypatch):
             with page.expect_response(lambda r: r.url.endswith("/api/admin/objects")):
                 pass
             pw.expect(versions).to_have_value(job["id"])
+
+            page.locator("#studio [data-lang=nl]").click()
+            page.locator("#new-object").click()
+            y,x=np.mgrid[:192,:256]
+            image=np.asarray(220*np.exp(-((x-55)**2+(y-27)**2)/500)+
+                             90*np.exp(-((x-190)**2+(y-130)**2)/400)+x/9+y/19,dtype=np.uint8)
+            photo=tmp_path/"C_27_final.png"
+            Image.fromarray(image).save(photo)
+            wcs=WCS(naxis=2)
+            wcs.wcs.ctype=["RA---TAN","DEC--TAN"]
+            wcs.wcs.crval=[303.027292,38.354944]
+            wcs.wcs.crpix=[91,121]
+            wcs.wcs.cd=[[-.001,.0002],[.0002,.001]]
+            fitted=tmp_path/"C_27_final.fits"
+            fits.PrimaryHDU(data=image[::-1].copy(),header=wcs.to_header()).writeto(fitted)
+            files=page.locator("#image-files")
+            files.set_input_files([photo,fitted])
+            pw.expect(page.locator("#identifier-source")).to_contain_text("NGC 6888 · Sikkelnevel")
+            page.locator("#auto-zoom").click()
+            pw.expect(page.locator("#auto-alignment")).to_contain_text("FITS-hemelcoördinaten")
+            pw.expect(page.locator("#auto-list li").first).to_contain_text("Sikkelnevel")
+            page.locator("#auto-apply").click()
+            pw.expect(page.locator("#point-name")).to_have_value("Sikkelnevel")
+
+            files.set_input_files(photo)
+            page.locator("#auto-zoom").click()
+            pw.expect(page.locator("#auto-alignment")).to_contain_text("positie op de foto kon niet worden bevestigd")
+            pw.expect(page.locator("#auto-list li").first).to_contain_text("Beelddetail")
             browser.close()
     finally:
         web.shutdown()

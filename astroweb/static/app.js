@@ -32,7 +32,7 @@ async function api(url,options={}){
 function message(id,text,error=false){const target=$(id);target.textContent=text;target.classList.toggle('error',error);}
 let toastTimer;function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function setBusy(value){state.busy=value;for(const id of ['render-button','preview-button','fetch-nasa'])$(id).disabled=value;}
-function applyLanguage(value){setLanguage(value);$('exploration-frame').contentWindow?.postMessage({type:'astroweb-language',language:value},location.origin);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();showAutoRoute();editorLanguage();updateGaiaDepth();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
+function applyLanguage(value){setLanguage(value);$('exploration-frame').contentWindow?.postMessage({type:'astroweb-language',language:value},location.origin);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();renderDraftIdentity();showAutoRoute();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();editorLanguage();updateGaiaDepth();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
 
 async function loadGallery(){try{state.objects=(await api('/api/objects')).objects;buildGallery();}catch(e){$('gallery-grid').replaceChildren(node('div','empty-state',errorText(e)));}}
@@ -97,22 +97,23 @@ function renderNeighbours(){
     a.replaceChildren(node('small','',t(caption)),node('strong','',captureLabel(obj)),node('span','',name));
   }
 }
+function captureOptionLabel(captures, capture, index){
+  const stamp=capture.capture_date??capture.date;
+  let text=t('unknownDate');
+  if(stamp){
+    const dayOnly=stamp.length===10, date=new Date(dayOnly?stamp+'T00:00:00Z':stamp);
+    const options=dayOnly?{dateStyle:'long'}:{dateStyle:'medium',timeStyle:'short'};
+    if(Number.isFinite(date.getTime()))text=formatDate(date,{...options,timeZone:'UTC'})+(dayOnly?'':' UTC');
+  }
+  const repeated=captures.filter(o=>(o.capture_date??o.date)===stamp&&o.session_name===capture.session_name).length>1;
+  return [text,capture.session_name,repeated?t('captureNumber')+' '+(index+1):'',
+    capture.published?'':t('unpublished')].filter(Boolean).join(' · ');
+}
 function renderCaptureDates(object){
   const select=$('capture-date-picker'),captures=object.captures||[];
   $('capture-total').textContent=' ('+captures.length+' '+t(captures.length===1?'oneCapture':'manyCaptures')+')';
   select.replaceChildren();
-  for(const [i,v] of captures.entries()){
-    let text=t('unknownDate');
-    if(v.date){
-      const dayOnly=v.date.length===10;
-      const opts=dayOnly?{dateStyle:'long'}:{dateStyle:'medium',timeStyle:'short'};
-      const date=new Date(dayOnly?v.date+'T00:00:00Z':v.date);
-      if(Number.isFinite(date.getTime()))text=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{...opts,timeZone:'UTC'}).format(date)+(dayOnly?'':' UTC');
-    }
-    const duplicate=captures.filter(o=>o.date===v.date&&o.session_name===v.session_name).length>1;
-    const session=[v.session_name,duplicate?t('captureNumber')+' '+(i+1):''].filter(Boolean).join(' · ');
-    select.add(new Option([text,session,v.published?'':t('unpublished')].filter(Boolean).join(' · '),v.id));
-  }
+  for(const [i,v] of captures.entries())select.add(new Option(captureOptionLabel(captures,v,i),v.id));
   select.value=object.id;select.disabled=captures.length<2;
 }
 $('capture-date-picker').addEventListener('change',e=>{
@@ -619,11 +620,15 @@ async function refreshAdmin(){
   const response=await api('/api/admin/objects');
   if(request<lastAdminResponse)return;
   lastAdminResponse=request;
-  state.adminObjects=response.objects;state.jobs=response.jobs;renderAdminList();renderJobs();
+  state.adminObjects=response.objects;state.jobs=response.jobs;
   if(state.selected){
     const updated=state.adminObjects.find(o=>o.id===state.selected.id);
     if(updated){state.selected=updated;showVersions();renderChoice();}
   }
+  renderAdminList();renderJobs();
+}
+function studioGroup(object){
+  return object.catalog_id||object.id;
 }
 function studioLabel(object){
   const seen=new Set();
@@ -634,25 +639,58 @@ function studioLabel(object){
       seen.add(key);return true;
     }).join(' · ');
   }
-  return [distinct(captureLabel(object)),distinct(local(object.metadata.name))].filter(Boolean);
+  const identifier=object.capture_kind?'':studioGroup(object).split('~')[0].replaceAll('_',' ');
+  return [distinct(identifier),distinct(local(object.metadata.name)||(object.capture_kind?t(object.capture_kind):''))].filter(Boolean);
 }
 function renderAdminList(){
-  const list=$('admin-object-list');
-  const signature=JSON.stringify([language,state.selected?.id,state.adminObjects.map(object=>[object.id,studioLabel(object),object.capture_date])]);
-  if(list.dataset.signature===signature)return;
-  list.dataset.signature=signature;list.replaceChildren();
+  const list=$('admin-object-list'),groups=new Map();
   for(const object of state.adminObjects){
-    const [label,name]=studioLabel(object);
-    const button=node('button','admin-object'+(state.selected?.id===object.id?' selected':''),label);
-    if(name)button.append(node('span','admin-name',name));
-    if(object.capture_date)button.append(node('small','admin-name',object.capture_date.slice(0,10)));
-    button.addEventListener('click',()=>selectObject(object.id));list.append(button);
+    const group=studioGroup(object);
+    if(!groups.has(group))groups.set(group,object);
   }
+  const options=[...groups].map(([id,object])=>[id,studioLabel(object).join(' · ')]);
+  const signature=JSON.stringify([language,options]);
+  if(list.dataset.signature!==signature){
+    list.dataset.signature=signature;
+    list.replaceChildren(new Option(t('chooseStudioObject'),''));
+    for(const [value,label] of options)list.add(new Option(label,value));
+  }
+  list.disabled=!options.length;
+  list.value=state.selected?studioGroup(state.selected):'';
+  renderStudioCaptures();
 }
+function renderStudioCaptures(){
+  if(!state.selected)return;
+  const list=$('studio-capture-picker'),group=studioGroup(state.selected);
+  const captures=state.adminObjects.filter(o=>studioGroup(o)===group);
+  const options=captures.map((object,i)=>[object.id,captureOptionLabel(captures,object,i)]);
+  const signature=JSON.stringify(options);
+  if(list.dataset.signature!==signature){
+    list.dataset.signature=signature;
+    list.replaceChildren(...options.map(([value,label])=>new Option(label,value)));
+  }
+  list.disabled=captures.length<2;
+  list.value=state.selected.id;
+  $('studio-capture-total').textContent='('+captures.length+' '+t(captures.length===1?'oneCapture':'manyCaptures')+')';
+}
+$('admin-object-list').addEventListener('change',event=>{
+  const object=state.adminObjects.find(o=>studioGroup(o)===event.target.value);
+  if(object)selectObject(object.id);
+  else newObject();
+});
+$('studio-capture-picker').addEventListener('change',event=>selectObject(event.target.value));
 function renderJobs(){
   const list=$('job-list'),active=job=>['running','queued','cancelling'].includes(job.status);
-  const jobs=[...state.jobs.filter(active),...state.jobs.filter(job=>!active(job)).slice(0,8)];
-  const signature=JSON.stringify([language,jobs.map(job=>[job.id,job.object_id,job.status,job.stage,Math.round(job.progress),job.error])]);
+  const jobs=[...state.jobs.filter(job=>active(job)&&job.status!=='queued'),
+    ...state.jobs.filter(job=>job.status==='queued'),...state.jobs.filter(job=>!active(job))].slice(0,5);
+  const objects=new Map(state.adminObjects.map(object=>[object.id,object]));
+  function jobTitle(job){
+    const object=objects.get(job.object_id);
+    if(object)return studioLabel(object).at(-1);
+    const id=job.object_id.split('~')[0];
+    return ['STARTRAILS','MILKYWAY'].includes(id)?t(id.toLowerCase()):id.replaceAll('_',' ');
+  }
+  const signature=JSON.stringify([language,jobs.map(job=>[job.id,jobTitle(job),job.status,job.stage,Math.round(job.progress),job.error])]);
   if(list.dataset.signature===signature)return;
   list.dataset.signature=signature;
   const focused=document.activeElement.closest?.('[data-job]')?.dataset.job;
@@ -661,14 +699,18 @@ function renderJobs(){
   for(const job of jobs){
     const row=node('div','job-item');row.dataset.job=job.id;
     const status=t(job.status==='running'&&job.stage==='journey'?'journeyPreparing':job.status);
-    row.append(node('strong','',job.object_id.replace('_',' ')),node('span','',status+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));
+    const title=node('strong','',jobTitle(job));title.title=title.textContent;
+    row.append(title,node('span','',status+(job.status==='running'?' · '+Math.round(job.progress)+'%':'')));
     if(['running','queued'].includes(job.status)){
       const progress=node('progress');progress.max=100;progress.value=job.progress;row.append(progress);
       const cancel=node('button','button secondary cancel-render',t('cancelRender'));
       cancel.addEventListener('click',async()=>{
         cancel.disabled=true;
-        try{await api('/api/admin/jobs/'+job.id+'/cancel',{method:'POST'});await refreshAdmin();}
-        catch(error){toast(errorText(error));cancel.disabled=false;}
+        try{
+          const reply=await api('/api/admin/jobs/'+job.id+'/cancel',{method:'POST'});
+          state.jobs=state.jobs.map(current=>current.id===job.id&&['queued','running'].includes(current.status)?reply.job:current);
+          renderJobs();await refreshAdmin();
+        }catch(error){toast(errorText(error));cancel.disabled=false;}
       });
       row.append(cancel);
     }
@@ -798,7 +840,8 @@ function selectObject(id){const object=state.adminObjects.find(item=>item.id===i
 let pendingLandmark=null;
 const draftKey=id=>'astroweb-discovery-draft-'+id;
 function clearImportControls(){
-  resetAutoRoute();$('auto-tools').hidden=true;delete $('identifier').dataset.override;$('identifier-source').textContent='';
+  resetAutoRoute();$('auto-tools').hidden=true;delete $('identifier').dataset.override;
+  identityRequest++;draftIdentity=null;draftZoomRequest=null;renderDraftIdentity();
   pendingLandmark=null;$('point-replace').hidden=true;$('find-more').hidden=true;
 }
 $('point-name').addEventListener('input',()=>{savePoint();drawPicker();});
@@ -859,46 +902,66 @@ function fillObservation(object){
     fact(details,'UTC',observation.time_scale_assumed?(language==='nl'?'Aangenomen volgens FITS-conventie':'Assumed by FITS convention'):observation.time_scale);
   }
 }
-let pendingIdentity = Promise.resolve();
-async function fitsObject(file){
-  if(!file)return '';
-  const block=28800;
-  for(let offset=0;offset<file.size;offset+=block){
+let pendingIdentity=Promise.resolve(),identityRequest=0,draftIdentity=null,draftZoomRequest=null;
+async function fitsIdentity(file){
+  const result={name:'',wcs:false};
+  if(!file)return result;
+  const block=28800, cards=new Map();
+  for(let offset=0;offset<Math.min(file.size,1024*1024);offset+=block){
     const text=await file.slice(offset,offset+block).text();
-    if(!offset&&!text.startsWith('SIMPLE  ='))return '';
+    if(!offset&&!text.startsWith('SIMPLE  ='))return result;
     for(let pos=0;pos+80<=text.length;pos+=80){
       const card=text.slice(pos,pos+80),key=card.slice(0,8).trim();
-      if(key==='END')return '';
-      if(key==='OBJECT'){
+      if(key==='END'){
+        result.name=cards.get('OBJECT')||'';
+        const celestial=[cards.get('CTYPE1'),cards.get('CTYPE2')].filter(Boolean);
+        result.wcs=celestial.some(value=>value.startsWith('RA'))&&celestial.some(value=>value.startsWith('DEC'))
+          &&['CD1_1','CD1_2','CDELT1'].some(name=>cards.has(name));
+        return result;
+      }
+      if(['OBJECT','CTYPE1','CTYPE2','CD1_1','CD1_2','CDELT1'].includes(key)){
         const value=card.slice(10).trimStart().match(/^'((?:[^']|'')*)'/);
-        return value?value[1].replaceAll("''","'").trim():'';
+        cards.set(key,value?value[1].replaceAll("''","'").trim():'');
       }
     }
   }
-  return '';
+  return result;
+}
+function renderDraftIdentity(){
+  const hint=$('identifier-source');
+  hint.textContent='';
+  const target=draftIdentity?.target;
+  if(!target)return;
+  const designation=target.id.replaceAll('_',' '),name=local(target.name);
+  const object=[designation,name&&name.replace(/[ _]+/g,'').toLowerCase()!==designation.replaceAll(' ','').toLowerCase()?name:'']
+    .filter(Boolean).join(' · ');
+  const source={wiki:'FITS · Wikipedia / Wikidata',fits:'FITS · OBJECT',prefix:t('filenamePrefix'),manual:t('studioManualID')}[draftIdentity.source];
+  hint.textContent=t(target.known?'studioRecognized':'studioUnrecognized')+' '+object+(source?' ('+source+')':'');
 }
 async function identifyDraft(files){
-  const input=$('identifier'), hint=$('identifier-source');
-  hint.textContent='';
-  delete input.dataset.override;
+  const request=++identityRequest;
+  const input=$('identifier');
+  draftIdentity=null;draftZoomRequest=null;renderDraftIdentity();
   if(singleImageMode()||!files.length)return;
+  const manual=input.dataset.override?input.value.trim():'';
   const photos=files.filter(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name));
   const fits=files.find(f=>/\.(fits|fit|fts)$/i.test(f.name));
   try{
-    const object=await fitsObject(fits);
-    if(files!==state.files||state.selected)return;
-    const result=await api('/api/admin/upload-identity',{method:'POST',body:{names:photos.slice(0,4).map(f=>f.name),object}});
-    if(files!==state.files||state.selected)return;
-    if(result.identifier&&!input.dataset.override){
-      input.value=result.identifier;
-      hint.textContent=result.source==='wiki'?'FITS · OBJECT → Wikipedia / Wikidata':result.source==='fits'?'FITS · OBJECT':t('filenamePrefix');
-    }
-  }catch(e){if(files===state.files&&!state.selected)message('studio-message',errorText(e),true);}
+    const info=await fitsIdentity(fits);
+    if(request!==identityRequest||state.selected)return;
+    const result=await api('/api/admin/upload-identity',{method:'POST',body:{
+      names:photos.slice(0,4).map(f=>f.name),object:info.name,identifier:manual}});
+    if(request!==identityRequest||state.selected)return;
+    if(result.identifier&&!input.dataset.override)input.value=result.identifier;
+    draftIdentity={...result,fits:info.wcs?fits:null};
+    renderDraftIdentity();
+  }catch(e){if(request===identityRequest&&!state.selected)message('studio-message',errorText(e),true);}
 }
 $('identifier').addEventListener('input',()=>{
   $('identifier').dataset.override=$('identifier').value?'1':'';
-  $('identifier-source').textContent='';
+  identityRequest++;draftIdentity=null;draftZoomRequest=null;renderDraftIdentity();resetAutoRoute();
 });
+$('identifier').addEventListener('change',()=>{pendingIdentity=identifyDraft(state.files);});
 function assignFiles(files){
   state.files=[...files];
   const final=singleImageMode()?state.files.find(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name)):state.files.find(file=>/_final\.(png|jpe?g|tiff?)$/i.test(file.name));
@@ -923,7 +986,17 @@ $('rename-form').addEventListener('submit',async event=>{
   }catch(e){toast(errorText(e));}finally{button.disabled=false;}
 });
 $('metadata-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body={target:form.get('target'),galactic_distance_ly:form.get('galactic_distance_ly')?Number(form.get('galactic_distance_ly')):null};for(const key of ['distance_ly','redshift']){body[key]=form.get(key)?Number(form.get(key)):null;body[key==='distance_ly'?'distance_source':'redshift_source']=form.get(key==='distance_ly'?'distance_source':'redshift_source')||'';}for(const key of ['name','type','constellation','summary','description'])body[key]={nl:form.get(key+'_nl'),en:form.get(key+'_en')};try{await api(`/api/admin/objects/${state.selected.id}/metadata`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
-$('fetch-nasa').addEventListener('click',async()=>{if(!state.selected||state.busy)return;setBusy(true);message('studio-message',t('working'));try{await api(`/api/admin/objects/${state.selected.id}/metadata/refresh`,{method:'POST',body:{}});message('studio-message',t('saved'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
+$('fetch-nasa').addEventListener('click',async()=>{
+  const id=state.selected?.id;
+  if(!id||state.busy)return;
+  setBusy(true);message('studio-message',t('working'));
+  try{
+    const reply=await api('/api/admin/objects/'+encodeURIComponent(id)+'/metadata/refresh',{method:'POST',body:{}});
+    if(state.selected?.id===id)fillMetadata({...state.selected,metadata:reply.metadata});
+    message('studio-message',t('saved'));await refreshAdmin();
+  }catch(e){message('studio-message',errorText(e),true);}
+  finally{setBusy(false);}
+});
 $('observation-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body=Object.fromEntries(form);body.publish_location=form.has('publish_location');for(const key of ['latitude','longitude','ra','dec'])if(key in body)body[key]=body[key]===''?null:+body[key];try{await api(`/api/admin/objects/${state.selected.id}/observation`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
 let focusGeneration=0;
 async function setFocusImage(source){
@@ -983,17 +1056,19 @@ $('edit-poster').addEventListener('error',()=>{$('film-orientation').hidden=true
 function clamp(value,low,high){return Math.max(low,Math.min(high,value));}
 
 // Background-plane geometry at peak zoom (Scene.camera/warp at phase 0.5).
-let suggestions=[],autoGeneration=0;
+let suggestions=[],autoGeneration=0,autoAlignment='';
 function resetAutoRoute(){
-  autoGeneration++;suggestions=[];$('auto-review').hidden=true;$('auto-frames').replaceChildren();$('auto-zoom').disabled=false;
+  autoGeneration++;suggestions=[];autoAlignment='';$('auto-review').hidden=true;
+  $('auto-frames').replaceChildren();$('auto-alignment').textContent='';$('auto-zoom').disabled=false;
 }
 function suggestedPoints(){
   const img=$('edit-poster');
   const rotate=$('parameters-form').elements.orientation.value==='portrait'&&img.naturalWidth>img.naturalHeight;
-  return suggestions.map((p,i)=>({name:p.name||t('autoStructure')+' '+(i+1),zoom:p.zoom,
+  return suggestions.map((p,i)=>({name:local(p.label)||p.name||t('autoStructure')+' '+(i+1),zoom:p.zoom,
     focus_x:rotate?1-p.y:p.x,focus_y:rotate?p.x:p.y}));
 }
 function showAutoRoute(){
+  $('auto-alignment').textContent=autoAlignment?t('routeAlignment_'+autoAlignment):'';
   if(!suggestions.length)return;
   const proposals=suggestedPoints(),frames=$('auto-frames');
   frames.replaceChildren();$('auto-list').replaceChildren();
@@ -1001,10 +1076,16 @@ function showAutoRoute(){
     const c=cropGeometry({...activeParams(),...pt},i,proposals.length);
     const box=node('span','auto-frame',String(i+1));
     Object.assign(box.style,{left:c.left*100+'%',top:c.top*100+'%',width:c.size*100+'%',height:c.size*100+'%'});
-    frames.append(box);$('auto-list').append(node('li','',pt.name+' · '+pt.zoom+'×'));
+    const item=node('li','',pt.name+' · '+pt.zoom+'×');
+    if(suggestions[i].kind==='catalog'&&autoAlignment!=='surface')item.append(node('small',' muted',' · '+t('routeCataloguePoint')));
+    frames.append(box);$('auto-list').append(item);
   });
 }
-async function draftRoute(count){
+async function loadDraftRoute(){
+  const files=state.files;
+  await pendingIdentity;
+  if(files!==state.files||state.selected)throw Error('invalid_image');
+  const identity=draftIdentity;
   const img=$('edit-poster'),canvas=document.createElement('canvas');
   const scale=Math.min(1,640/Math.max(img.naturalWidth,img.naturalHeight));
   canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
@@ -1012,8 +1093,31 @@ async function draftRoute(count){
   canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
   const preview=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.92));
   if(!preview)throw Error('invalid_image');
-  const body=new FormData();body.set('count',count);body.set('preview',preview,'preview.jpg');
-  return api('/api/admin/upload-autozoom',{method:'POST',body});
+  async function request(field,file){
+    if(files!==state.files||identity!==draftIdentity||state.selected)throw Error('invalid_image');
+    const body=new FormData();
+    body.set('count','8');body.set('preview',preview,'preview.jpg');
+    if(identity?.identifier)body.set('identifier',identity.identifier);
+    if(file)body.set(field,file);
+    return api('/api/admin/upload-autozoom',{method:'POST',body});
+  }
+  if(identity?.fits){
+    const reply=await request('fits',identity.fits);
+    if(reply.alignment==='wcs')return reply;
+  }
+  const stars=files.find(file=>/_stars\.(png|jpe?g|tiff?)$/i.test(file.name));
+  return request('stars',identity?.target?.known?stars:null);
+}
+async function draftRoute(count){
+  const request=draftZoomRequest??=loadDraftRoute();
+  try{
+    const reply=await request;
+    if(reply.alignment==='unavailable'&&draftZoomRequest===request)draftZoomRequest=null;
+    return {...reply,points:reply.points.slice(0,count)};
+  }catch(e){
+    if(draftZoomRequest===request)draftZoomRequest=null;
+    throw e;
+  }
 }
 $('auto-zoom').addEventListener('click',async()=>{
   resetAutoRoute();const generation=autoGeneration;
@@ -1022,7 +1126,9 @@ $('auto-zoom').addEventListener('click',async()=>{
     const count=Number($('auto-count').value);
     const reply=state.selected?await api('/api/admin/objects/'+state.selected.id+'/autozoom',{method:'POST',body:{count}}):await draftRoute(count);
     if(generation!==autoGeneration)return;
-    suggestions=reply.points;$('auto-note').textContent=t(suggestions.length?'autoReview':'autoEmpty');$('auto-apply').hidden=!suggestions.length;showAutoRoute();
+    suggestions=reply.points;
+    autoAlignment=singleImageMode()&&!state.selected?'':reply.alignment||'';
+    $('auto-note').textContent=t(suggestions.length?'autoReview':'autoEmpty');$('auto-apply').hidden=!suggestions.length;showAutoRoute();
   }catch(e){if(generation===autoGeneration)$('auto-note').textContent=errorText(e);}
   finally{if(generation===autoGeneration)$('auto-zoom').disabled=false;}
 });

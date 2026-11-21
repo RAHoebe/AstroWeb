@@ -181,20 +181,25 @@ class JobQueue:
             self.store.update("objects", identifier, gaia={"status":"pending", "request":uuid.uuid4().hex})
             self.executor.submit(self.prepare_capture, identifier)
 
-    def prepare_capture(self, identifier):
+    def prepare_capture(self, identifier, checkpoint=lambda: None):
         self.align(identifier)
-        self.discover_skymap(identifier)
+        checkpoint()
+        self.discover_skymap(identifier, checkpoint)
 
-    def discover_skymap(self, identifier):
+    def discover_skymap(self, identifier, checkpoint=lambda: None):
         from . import archive_search, skymap
         if (self.store.get("objects", identifier) or {}).get("capture_kind"):
             return
         try:
             skymap.discover(self.store, identifier)
+            checkpoint()
             archive_search.discover(self.store, identifier)
+        except RenderCancelled:
+            raise
         except Exception:
             # Optional external data must not prevent publishing the user's film.
             logging.exception("Could not select a Hubble destination for %s", identifier)
+        checkpoint()
         # Additional archives run after the current render, so large optional
         # products cannot delay publication of the user's own film.
         self.executor.submit(self.discover_missions, identifier)
@@ -244,7 +249,7 @@ class JobQueue:
 
     def submit(self, identifier, raw_params=None):
         params = Parameters.parse(raw_params)
-        with self.lock:
+        with self.lock, self.store.lock:
             capture = self.store.get("objects", identifier)
             if not capture:
                 raise ValueError("object_not_found")
@@ -253,8 +258,7 @@ class JobQueue:
             if capture.get("body") or capture.get("capture_kind"):
                 params.method = "kenburns"
             jobs = self.store.all("jobs")
-            if any(job["object_id"] == identifier and job["status"] in {"queued", "running", "cancelling"} for job in jobs):
-                raise ValueError("render_active")
+            # The single worker serializes jobs, including jobs for the same capture.
             if sum(job["status"] in {"queued", "running", "cancelling"} for job in jobs) >= 8:
                 raise ValueError("queue_full")
             job_id = uuid.uuid4().hex
@@ -336,7 +340,7 @@ class JobQueue:
                 except Exception:
                     logging.info("Object metadata unavailable for %s; keeping local descriptions", record["id"])
             self.checkpoint(job_id)
-            self.prepare_capture(record["id"])
+            self.prepare_capture(record["id"], lambda: self.checkpoint(job_id))
             self.checkpoint(job_id)
             relative = f"objects/{record.get('storage_id', record['id'])}/movies/{job_id}.mp4"
             params = Parameters.parse(job["params"])

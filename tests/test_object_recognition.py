@@ -2,9 +2,9 @@ import pytest
 import requests
 
 from astroweb import wikimedia
-from astroweb.catalogue import belongs,canonical
+from astroweb.catalogue import belongs,canonical,catalogue_labels
 from astroweb.media import upload_identity
-from astroweb.metadata import initial_metadata,use_catalogue_metadata
+from astroweb.metadata import initial_metadata,refresh_metadata,use_catalogue_metadata
 from astroweb.store import Store
 
 
@@ -20,6 +20,18 @@ def test_pleiades_catalogue_id_and_names_work_offline(name,monkeypatch,tmp_path)
     meta=initial_metadata(name)
     assert meta["name"]=={"nl":"Plejaden","en":"Pleiades"}
     assert meta["constellation"]=={"nl":"Stier","en":"Taurus"}
+
+
+@pytest.mark.parametrize("name",["IC 1848","IC1848","Zielnevel","Soul Nebula","Embryonevel"])
+def test_soul_nebula_has_an_offline_identity_and_description(name,tmp_path,monkeypatch):
+    monkeypatch.setenv("ASTROWEB_OFFLINE","1")
+    assert canonical(name)=="IC_1848"
+    assert upload_identity(["preview_final.png"],name,store=Store(tmp_path))[:2]==("IC_1848","fits")
+    assert catalogue_labels()["IC_1848"]["type"]=="Cl+N"
+    metadata=refresh_metadata(initial_metadata(name))
+    assert metadata["name"]=={"nl":"Zielnevel","en":"Soul Nebula"}
+    assert "open sterrenhoop IC 1848" in metadata["summary"]["nl"]
+    assert metadata["external"]["url"]=="https://www.jpl.nasa.gov/images/pia13014-soul-nebula/"
 
 
 def test_generated_pleiades_title_can_be_upgraded_without_changing_archive_names():

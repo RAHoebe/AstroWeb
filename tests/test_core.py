@@ -237,6 +237,58 @@ def test_studio_can_render_and_rerender_with_only_one_star_layer(app,images,monk
     queue.futures[again.json["job"]["id"]].result(timeout=30)
     assert len(store.get("objects","NGC_7000")["versions"])==2
 
+def test_studio_recognises_crescent_and_uses_verified_fits_for_draft_zoom(app, monkeypatch):
+    from astropy.wcs import WCS
+    from astroweb.metadata import initial_metadata
+
+    monkeypatch.setenv("ASTROWEB_OFFLINE","1")
+    client=app.test_client()
+    headers=sign_in(client)
+    picked=client.post("/api/admin/upload-identity",json={"names":["C_27_final.png"],"object":""},headers=headers).json
+    assert picked["identifier"]=="C_27"
+    assert picked["target"]=={"id":"NGC_6888","known":True,"name":{"nl":"Sikkelnevel","en":"Crescent Nebula"}}
+
+    store=app.extensions["store"]
+    legacy=initial_metadata("NGC_6888")
+    legacy.update(translation="curated",summary={"nl":"Catalogusidentificatie: HD 192163.","en":"Catalogue identification: HD 192163."},
+                  external={"provider":"CDS/SIMBAD","title":"HD 192163"},sources=[])
+    store.put("objects","NGC_6888",dict(id="NGC_6888",published=False,metadata=legacy))
+    info=client.post("/api/admin/objects/NGC_6888/metadata/refresh",json={},headers=headers)
+    assert info.status_code==200
+    saved=store.get("objects","NGC_6888")["metadata"]
+    assert "WR 136" in saved["summary"]["nl"] and saved["external"]["provider"]=="NASA Science"
+    assert any(source["url"]=="https://nl.wikipedia.org/wiki/NGC_6888" for source in saved["sources"])
+
+    y,x=np.mgrid[:192,:256]
+    image=np.asarray(220*np.exp(-((x-55)**2+(y-27)**2)/500)+
+                     90*np.exp(-((x-190)**2+(y-130)**2)/400)+x/9+y/19,dtype=np.uint8)
+    preview=io.BytesIO()
+    Image.fromarray(image).save(preview,"JPEG",quality=95)
+    wcs=WCS(naxis=2)
+    wcs.wcs.ctype=["RA---TAN","DEC--TAN"]
+    wcs.wcs.crval=[303.027292,38.354944]
+    wcs.wcs.crpix=[91,121]
+    wcs.wcs.cd=[[-.001,.0002],[.0002,.001]]
+    fits_data=io.BytesIO()
+    fits.PrimaryHDU(data=image[::-1].copy(),header=wcs.to_header()).writeto(fits_data)
+
+    def upload(**parts):
+        return client.post("/api/admin/upload-autozoom",data={
+            "count":"4","identifier":"NGC_6888","preview":(io.BytesIO(preview.getvalue()),"preview.jpg"),**parts
+        },headers=headers)
+
+    route=upload(fits=(io.BytesIO(fits_data.getvalue()),"C_27_final.fits"))
+    assert route.status_code==200,route.json
+    assert route.json["alignment"]=="wcs"
+    point=route.json["points"][0]
+    assert point["kind"]=="catalog" and point["label"]["nl"]=="Sikkelnevel"
+    assert point["x"]==pytest.approx(90.5/256,abs=1e-5)
+    assert point["y"]==pytest.approx(71.5/192,abs=1e-5)
+    fallback=upload().json
+    assert fallback["alignment"]=="missing"
+    assert fallback["points"] and all(p["kind"]=="structure" for p in fallback["points"])
+
+
 def test_auth_csrf_host_and_upload_validation(app, images):
     client = app.test_client()
     assert client.get("/api/admin/objects").status_code == 401

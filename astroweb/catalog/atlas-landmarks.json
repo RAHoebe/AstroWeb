@@ -1,6 +1,7 @@
 {
 "sources":{"H": "https://physics.mcmaster.ca/~harris/mwgc.dat", "S": "https://github.com/astronexus/HYG-Database/tree/main/hyg/CURRENT", "O": "https://github.com/mattiaverga/OpenNGC", "C": "https://cds.unistra.fr/cgi-bin/Sesame"},
 "objects":[
+{"id":"IC 1848","nl":"Zielnevel","en":"Soul Nebula","ra":42.794125,"dec":60.402472,"src":"O","type":"Cl+N","aliases":["Embryonevel","Embryo Nebula"]},
 {"id":"IC 1396A","nl":"Slurfnevel","en":"Elephant’s Trunk","ra":324.0,"dec":57.4,"src":"C"},
 {"id":"Trumpler 37","nl":"Trumpler 37","en":"Trumpler 37","ra":324.71417,"dec":57.53111,"src":"C"},
 {"id":"HD 206267","nl":"HD 206267","en":"HD 206267","ra":324.7400815716799,"dec":57.4890427823,"src":"C"},
@@ -2432,7 +2433,6 @@
 ["IC 1843",41.352583,2.880528,"G"],
 ["IC 1844",41.455833,3.230306,"G"],
 ["IC 1847",41.973625,14.505111,"G"],
-["IC 1848",42.794125,60.402472,"Cl+N"],
 ["IC 1849",41.935958,9.356806,"G"],
 ["IC 1853",42.017792,-13.993111,"G"],
 ["IC 1854",42.336333,19.303917,"G"],

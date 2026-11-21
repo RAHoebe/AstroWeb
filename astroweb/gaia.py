@@ -129,7 +129,7 @@ def fit_field(pixels, catalog, center, width, height, scales):
             "median_arcsec":round(float(np.median(residuals)), 2)}
 
 
-def catalog_stars(store, ra, dec, radius):
+def catalog_stars(store, ra, dec, radius, *, timeout=(5,35)):
     key = f"gaia-dr3:{ra:.6f}:{dec:.6f}:{radius:.4f}"
     cached = store.get("settings", key)
     if cached is not None:
@@ -141,7 +141,7 @@ def catalog_stars(store, ra, dec, radius):
     for endpoint in ("https://gaia.aip.de/tap/sync", "https://gea.esac.esa.int/tap-server/tap/sync"):
         try:
             response = external_http.get(endpoint, params={"REQUEST":"doQuery","LANG":"ADQL",
-                                        "QUERY":query, "FORMAT":"votable"}, timeout=(5,35))
+                                        "QUERY":query, "FORMAT":"votable"}, timeout=timeout)
             response.raise_for_status()
             table = Table.read(io.BytesIO(response.content), format="votable", use_names_over_ids=True)
             values = np.asarray(np.column_stack([np.ma.filled(table[k], np.nan)
@@ -161,6 +161,10 @@ def pointing(record):
     if obs.get("ra") is not None and obs.get("dec") is not None:
         return float(obs["ra"]), float(obs["dec"])
     name = record["metadata"].get("target") or record["id"].replace("_", " ")
+    from .catalogue import canonical, catalogue_labels
+    entry = catalogue_labels().get(canonical(name), {})
+    if "ra" in entry and "dec" in entry:
+        return float(entry["ra"]), float(entry["dec"])
     response = external_http.get("https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/SNV?"+quote(name,safe=""), timeout=(4,12))
     response.raise_for_status()
     for resolver in ET.fromstring(response.content).iter("Resolver"):
@@ -170,7 +174,7 @@ def pointing(record):
     return None
 
 
-def solve(store, record):
+def solve(store, record, *, timeout=(5,35)):
     result = {"status":"no_match", "digest":record["sha256"]["final"], "checked_at":now()}
     from .journey import SOLUTIONS
     if result["digest"] in SOLUTIONS:
@@ -190,7 +194,7 @@ def solve(store, record):
         diagonal = math.hypot(record["width"],record["height"])
         radius = np.clip(diagonal*scale/7200*1.25,.15,8) if scale else 1.5
         bounds = (scale/3, scale*3) if scale else (.08, 35)
-        catalog = catalog_stars(store, *center, radius)
+        catalog = catalog_stars(store, *center, radius, timeout=timeout)
     except (requests.RequestException, ValueError, KeyError, ET.ParseError, OSError):
         logging.warning("Gaia catalog or name lookup unavailable for %s", record["id"], exc_info=True)
         return {**result, "status":"unavailable"}

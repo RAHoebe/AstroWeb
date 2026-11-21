@@ -53,11 +53,11 @@ def test_autozoom_distinct_structures_and_featureless_image(tmp_path):
     image=np.full((200,400),30,np.uint8)
     path=str(store.path("poster.jpg"))
     cv2.imwrite(path,image)
-    assert propose(store,record,4)==[]
+    assert propose(store,record,4)=={"points":[],"alignment":"missing"}
     for x,y in [(30,50),(220,150),(330,60)]:
         cv2.circle(image,(x,y),16,200,-1)
     cv2.imwrite(path,image)
-    points=propose(store,record,3)
+    points=propose(store,record,3)["points"]
     assert len(points)==3 and all(p["kind"]=="structure" for p in points)
     assert all(0<=p["x"]<=1 and 0<=p["y"]<=1 and 1<=p["zoom"]<=8 for p in points)
     with pytest.raises(ValueError,match="invalid_parameters"):

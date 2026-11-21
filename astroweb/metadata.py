@@ -60,6 +60,40 @@ SEEDS = {
         "sources": [{"label": "NASA · Caldwell 20", "url": NASA_NGC}],
         "aliases": ["NGC 7000", "North America Nebula", "Caldwell 20"],
     },
+    "IC_1848": {
+        "target": "IC 1848",
+        "name": {"nl": "Zielnevel", "en": "Soul Nebula"},
+        "type": {"nl": "Emissienevel en sterrenhoop", "en": "Emission nebula and star cluster"},
+        "constellation": {"nl": "Cassiopeia", "en": "Cassiopeia"},
+        "aliases": ["IC 1848", "Zielnevel", "Soul Nebula", "Embryonevel", "Embryo Nebula", "W5", "Westerhout 5"],
+        "summary": {"nl": "De Zielnevel (W5) is een stervormingsgebied in Cassiopeia. Binnen het nevelgebied ligt de jonge open sterrenhoop IC 1848.",
+                    "en": "The Soul Nebula (W5) is a star-forming region in Cassiopeia. The young open cluster IC 1848 lies within it."},
+        "description": {
+            "nl": "Sterrenwind en ultraviolette straling van jonge, hete sterren hebben holtes uitgesleten in het omringende gas en stof. Dichtere delen blijven langer staan en vormen zuilen. De naam IC 1848 wordt ook vaak gebruikt voor foto's van het bredere nevelgebied.",
+            "en": "Stellar winds and ultraviolet radiation from young, hot stars have carved cavities into the surrounding gas and dust. Denser regions erode more slowly, forming pillars. The name IC 1848 is also often used for photographs of the larger nebula.",
+        },
+        "sources": [
+            {"label": "NASA/JPL · Soul Nebula", "url": "https://www.jpl.nasa.gov/images/pia13014-soul-nebula/"},
+            {"label": "CDS/SIMBAD · IC 1848", "url": "https://simbad.harvard.edu/simbad/sim-id?Ident=IC+1848"},
+        ],
+    },
+    "NGC_6888": {
+        "target": "NGC 6888",
+        "name": {"nl": "Sikkelnevel", "en": "Crescent Nebula"},
+        "type": {"nl": "Emissienevel", "en": "Emission nebula"},
+        "constellation": {"nl": "Zwaan", "en": "Cygnus"},
+        "aliases": ["NGC 6888", "Caldwell 27", "C 27", "Sikkelnevel", "Crescent Nebula"],
+        "summary": {"nl": "De Sikkelnevel is een gloeiende gasschil rond de Wolf-Rayetster WR 136 in het sterrenbeeld Zwaan.",
+                    "en": "The Crescent Nebula is a glowing shell of gas around the Wolf–Rayet star WR 136 in Cygnus."},
+        "description": {
+            "nl": "De snelle sterrenwind van WR 136 botst op materiaal dat de ster eerder uitstootte. Deze botsing vormt een uitdijende schil. Op diepe opnamen zijn fijne gasfilamenten langs de rand en een zwakkere schil rond de heldere sikkel te zien.",
+            "en": "The fast stellar wind from WR 136 collides with material the star shed earlier, driving an expanding shell. Deep exposures reveal fine gas filaments along the edge and a fainter shell around the bright crescent.",
+        },
+        "sources": [
+            {"label": "NASA · Caldwell 27", "url": "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-caldwell-catalog/caldwell-27/"},
+            {"label": "Wikipedia · NGC 6888", "url": "https://nl.wikipedia.org/wiki/NGC_6888"},
+        ],
+    },
     "NGC_6992": {
         "target": "NGC 6992",
         "type": {"nl": "Supernovarest", "en": "Supernova remnant"},
@@ -140,7 +174,11 @@ def use_catalogue_metadata(metadata):
     target = result["target"]
     known = known_target(target)
     generic = all(name_key(v)==name_key(target) for v in result["name"].values())
-    if result.get("translation") != "admin" and generic and (known or canonical(target) in catalogue_labels()):
+    translation = result.get("translation")
+    lookup_only = (result.get("external") or {}).get("provider") == "CDS/SIMBAD"
+    needs_description = known and (translation == "pending" or lookup_only)
+    if translation != "admin" and (needs_description or (generic and (known or canonical(target) in catalogue_labels()))):
+        # Older records can have a catalogue name with only a coordinate lookup.
         current = initial_metadata(canonical(target))
         result["name"] = current["name"]
         if known:
