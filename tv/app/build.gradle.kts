@@ -10,8 +10,9 @@ android {
         applicationId = "nl.ronamersfoort.astroweb.tv"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.8.1"
+        versionCode = 15
+        versionName = "0.8.2"
+        manifestPlaceholders["tvAppName"] = "AstroWeb TV"
     }
     buildFeatures { compose = true; buildConfig = true }
     defaultConfig { buildConfigField("boolean", "LAN_ONLY", "false") }
@@ -19,6 +20,7 @@ android {
         create("lan") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".lan"
+            manifestPlaceholders["tvAppName"] = "AstroWeb TV LAN"
             matchingFallbacks += "debug"
             buildConfigField("boolean", "LAN_ONLY", "true")
         }

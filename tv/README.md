@@ -4,7 +4,9 @@
 
 ## Nederlands
 
-**Viewerfuncties:** bij een object staan alleen relevante opties: Sterren in 3D, Lichtreis, Mozaïek (vanaf twee overlappende opnamen) en Zonvergelijking (alleen Zon). Kalender staat in de galerij naast Hemelatlas. In het maandoverzicht kiest ←/→ een dag, ↑/↓ een maand en OK de dagweergave. Daar kiest ←/→ een opname en OK opent de foto. Terug herstelt eerst de kalender. De 3D-afstandskaart ontvouwt zich vanuit de foto; de lichtreis volgt een lichtpuls naar de Aarde. De toetsen staan per scherm in beeld. Gebruik [web v1.5.8](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.8) en [TV 0.8.1](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.1).
+**App-updates vanaf 0.8.2.** Bij het starten zoekt AstroWeb TV op GitHub naar een nieuwere stabiele TV-release voor de geïnstalleerde editie (HTTPS of LAN). Kies met de afstandsbediening **Bijwerken** of **Later**. Geef AstroWeb TV zo nodig eenmalig toestemming om apps te installeren en bevestig de installatie in Google TV. Je serveradres en taalkeuze blijven bewaard. De galerij blijft lokaal werken zonder internet. Installeer 0.8.2 eerst handmatig als je nog een oudere versie gebruikt.
+
+**Viewerfuncties:** bij een object staan alleen relevante opties: Sterren in 3D, Lichtreis, Mozaïek (vanaf twee overlappende opnamen) en Zonvergelijking (alleen Zon). Kalender staat in de galerij naast Hemelatlas. In het maandoverzicht kiest ←/→ een dag, ↑/↓ een maand en OK de dagweergave. Daar kiest ←/→ een opname en OK opent de foto. Terug herstelt eerst de kalender. De 3D-afstandskaart ontvouwt zich vanuit de foto; de lichtreis volgt een lichtpuls naar de Aarde. De toetsen staan per scherm in beeld. Gebruik [web v1.5.8](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.8) en [TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2).
 
 
 
@@ -39,7 +41,9 @@ De tv draait staande foto’s en films bij weergave 90° linksom. De galerij beh
 
 ## English
 
-**Viewer features:** each object exposes relevant actions only: Stars in 3D, Light journey, Mosaic (two or more overlapping captures) and Solar comparison (Sun only). Calendar sits beside Sky atlas in the gallery. In month view, left/right selects a day, up/down changes month and OK opens the day. In day view, left/right selects a capture and OK opens its photo. Back restores the calendar. The 3D distance map unfolds from the photograph; the light journey follows a pulse towards Earth. Each screen shows its controls. Use [web v1.5.8](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.8) and [TV 0.8.1](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.1).
+**App updates from 0.8.2.** On startup, AstroWeb TV checks GitHub for a newer stable TV release for the installed edition (HTTPS or LAN). Choose **Update** or **Later** using the remote. If needed, allow AstroWeb TV to install apps once, then confirm the installation in Google TV. Your server address and language are kept. Your local gallery still works without internet. Install 0.8.2 manually if you are using an older version.
+
+**Viewer features:** each object exposes relevant actions only: Stars in 3D, Light journey, Mosaic (two or more overlapping captures) and Solar comparison (Sun only). Calendar sits beside Sky atlas in the gallery. In month view, left/right selects a day, up/down changes month and OK opens the day. In day view, left/right selects a capture and OK opens its photo. Back restores the calendar. The 3D distance map unfolds from the photograph; the light journey follows a pulse towards Earth. Each screen shows its controls. Use [web v1.5.8](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.8) and [TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2).
 
 
 
@@ -84,3 +88,9 @@ Gebruik de Assistent-knop voor **Open AstroWeb TV**. Zodra een film speelt onder
 | Open de Hubble-bestemmingen van M31 | Open Hubble destinations for M31 |
 | Open de hemelatlas | Open the sky atlas |
 | Toon het nachtpanorama | Show the night panorama |
+
+### TV-release / TV release
+
+Publiceer beide APK’s onder een stabiele release `tv-vX.Y.Z` met de namen `AstroWeb-TV-X.Y.Z.apk` en `AstroWeb-TV-LAN-X.Y.Z.apk`. Verhoog `versionCode` en onderteken elke editie met dezelfde sleutel als de vorige gepubliceerde APK.
+
+Publish both APKs in a stable `tv-vX.Y.Z` release as `AstroWeb-TV-X.Y.Z.apk` and `AstroWeb-TV-LAN-X.Y.Z.apk`. Increase `versionCode` and sign each edition with the same key used for its previous published APK.

@@ -71,12 +71,19 @@ class MainActivity : ComponentActivity() {
         server=settings.getString("server","").orEmpty()
         setContent { MaterialTheme {
             var setup by rememberSaveable { mutableStateOf(server.isEmpty()) }
+            var en by remember { mutableStateOf(settings.getBoolean("english", false)) }
             if(setup){
                 BackHandler(enabled=server.isNotEmpty()) { setup=false }
                 ServerSetup(server,settings.getBoolean("english",resources.configuration.locales[0].language!="nl")) { origin ->
                     server=origin;settings.edit().putString("server",origin).apply();setup=false
                 }
-            } else key(server) { App(foreground.value,spoken,{ spoken=null },::listen) {setup=true} }
+            } else key(server) {
+                App(foreground.value,spoken,{ spoken=null },::listen,{ setup=true },en) {
+                    en = !en
+                    settings.edit().putBoolean("english", en).apply()
+                }
+            }
+            UpdatePrompt(foreground.value,en)
         } }
     }
 }
@@ -99,9 +106,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun App(foreground:Boolean,spoken:Spoken?,handled:()->Unit,listen:(Boolean)->Unit,configure:()->Unit) {
-    val prefs = LocalContext.current.getSharedPreferences("viewing", 0)
-    var en by remember { mutableStateOf(prefs.getBoolean("english", false)) }
+@Composable private fun App(foreground:Boolean,spoken:Spoken?,handled:()->Unit,listen:(Boolean)->Unit,
+                            configure:()->Unit,en:Boolean,toggleLanguage:()->Unit) {
     var selected by rememberSaveable { mutableStateOf("") }
     var opened by rememberSaveable { mutableStateOf<String?>(null) }
     var survey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -162,9 +168,8 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) { focus.requestFocus() }
             }
             list == null -> Text(if (en) "Loading gallery…" else "Galerij laden…", Modifier.align(Alignment.Center), color = light)
-            else -> Gallery(list, selected, en, lastSurvey, configure, { listen(en) }, { selected = it }, { lastSurvey=null;entry="film"; opened = it }, { survey=it }) {
-                en = !en; prefs.edit().putBoolean("english", en).apply()
-            }
+            else -> Gallery(list, selected, en, lastSurvey, configure, { listen(en) }, { selected = it },
+                { lastSurvey=null;entry="film"; opened = it }, { survey=it }, toggleLanguage)
         }
     }
 }
