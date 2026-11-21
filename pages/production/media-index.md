@@ -1,6 +1,6 @@
 # AstroWeb media index
 
-The English overview was recorded with AstroWeb v1.4.1 and Google TV 0.6.0 and has narration and captions. The viewer screenshots show the v1.5.2 interface and TV 0.8.0. Installation downloads link to [web v1.5.6](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.6) and [TV 0.8.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.0). The screening-room clips are silent.
+The English overview was recorded with AstroWeb v1.4.1 and Google TV 0.6.0 and has narration and captions. The viewer screenshots show the v1.5.2 interface and TV 0.8.0. Installation downloads link to [web v1.5.6](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.6) and [TV 0.8.1](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.1). The screening-room clips are silent.
 
 ## From Saturn to its rings
 

@@ -4,7 +4,7 @@
 
 ## Nederlands
 
-**Viewerfuncties:** bij een object staan alleen relevante opties: Sterren in 3D, Lichtreis, Mozaïek (vanaf twee overlappende opnamen) en Zonvergelijking (alleen Zon). Kalender staat in de galerij naast Hemelatlas. In het maandoverzicht kiest ←/→ een dag, ↑/↓ een maand en OK de dagweergave. Daar kiest ←/→ een opname en OK opent de foto. Terug herstelt eerst de kalender. De 3D-afstandskaart ontvouwt zich vanuit de foto; de lichtreis volgt een lichtpuls naar de Aarde. De toetsen staan per scherm in beeld. Gebruik [web v1.5.6](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.6) en [TV 0.8.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.0).
+**Viewerfuncties:** bij een object staan alleen relevante opties: Sterren in 3D, Lichtreis, Mozaïek (vanaf twee overlappende opnamen) en Zonvergelijking (alleen Zon). Kalender staat in de galerij naast Hemelatlas. In het maandoverzicht kiest ←/→ een dag, ↑/↓ een maand en OK de dagweergave. Daar kiest ←/→ een opname en OK opent de foto. Terug herstelt eerst de kalender. De 3D-afstandskaart ontvouwt zich vanuit de foto; de lichtreis volgt een lichtpuls naar de Aarde. De toetsen staan per scherm in beeld. Gebruik [web v1.5.6](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.6) en [TV 0.8.1](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.1).
 
 
 
@@ -25,7 +25,7 @@ Lokale, alleen-lezen proef voor Google TV. De galerij toont alle gepubliceerde o
 | Avondvoorstelling | Start direct een voorstelling van 5 minuten bij een willekeurige opname. ←/→ wisselt hoofdstuk en OK pauzeert. Hemel- en archiefreizen spelen mee zodra hun film lokaal klaarstaat. Terug opent Kijkmodi. |
 | Fotolijst | Toon alle opnamen gedurende één uur, met een willekeurige startfoto. OK opent de huidige foto om te zoomen; Terug herstelt dezelfde dia. Terug vanuit de fotolijst opent Kijkmodi. |
 | Opnamenacht en vanavond | Gebruikt altijd het geopende object. ↑/↓ wisselt datum, ←/→ gaat tien minuten terug of vooruit en OK speelt de tijd af. Terug opent Verken. |
-| Wat zie ik? | Gebruikt altijd de geopende foto. ←/→ kiest een onderdeel en loopt rond binnen dezelfde opname. ↑ zoomt naar het onderdeel, ↓ toont het overzicht en OK wisselt daartussen. Houd OK vast voor een bijbehorende archiefreis wanneer beschikbaar. Terug opent Verken. |
+| Wat zie ik? | Gebruikt altijd de geopende foto. ←/→ kiest een onderdeel. ↑ zoomt naar het onderdeel, ↓ toont het overzicht en OK wisselt daartussen. Houd OK vast voor de gekoppelde archief- of detailreis, zoals **Saturnus en zijn ringen** bij **Ringen**. Terug vanuit de film brengt je naar hetzelfde onderdeel. |
 
 **Nieuwe ontwikkelomgeving:** installeer JDK 17 en Android Studio met Android SDK Platform 36, Build Tools 36.0.0, Platform-Tools en Android Emulator. Maak via Device Manager een *Android TV (1080p)* met een **Google TV**-systeemimage. De Windows-starter verwacht de AVD-naam `AstroWeb_Google_TV`. Open de map `tv` als Android-project en kies Run, of voer in deze map `gradlew.bat assembleDebug` en daarna de starter uit. Na codewijzigingen installeert Android Studio de nieuwe build met Run.
 
@@ -39,7 +39,7 @@ De tv draait staande foto’s en films bij weergave 90° linksom. De galerij beh
 
 ## English
 
-**Viewer features:** each object exposes relevant actions only: Stars in 3D, Light journey, Mosaic (two or more overlapping captures) and Solar comparison (Sun only). Calendar sits beside Sky atlas in the gallery. In month view, left/right selects a day, up/down changes month and OK opens the day. In day view, left/right selects a capture and OK opens its photo. Back restores the calendar. The 3D distance map unfolds from the photograph; the light journey follows a pulse towards Earth. Each screen shows its controls. Use [web v1.5.6](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.6) and [TV 0.8.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.0).
+**Viewer features:** each object exposes relevant actions only: Stars in 3D, Light journey, Mosaic (two or more overlapping captures) and Solar comparison (Sun only). Calendar sits beside Sky atlas in the gallery. In month view, left/right selects a day, up/down changes month and OK opens the day. In day view, left/right selects a capture and OK opens its photo. Back restores the calendar. The 3D distance map unfolds from the photograph; the light journey follows a pulse towards Earth. Each screen shows its controls. Use [web v1.5.6](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.6) and [TV 0.8.1](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.1).
 
 
 
@@ -54,7 +54,7 @@ A read-only local Google TV prototype for the NAS gallery. Browse every publishe
 | Evening programme | A five-minute programme starts at a random capture. Left/right skips chapters and OK pauses. Ready local sky and archive journeys are included. Back returns to Viewing modes. |
 | Photo frame | Show all captures for one hour, starting at a random photograph. OK opens the current original for zooming; Back restores the same slide. Back from the slideshow returns to Viewing modes. |
 | Capture night and tonight | Always uses the open object. Up/down changes date, left/right changes time by ten minutes, and OK animates the track. Back returns to Explore. |
-| What am I seeing? | Always uses the open photograph. Left/right cycles its features; up zooms in, down restores the overview and OK toggles between them. Hold OK for a related archive journey when available. Back returns to Explore. |
+| What am I seeing? | Always uses the open photograph. Left/right cycles its features. Up zooms in, down restores the overview and OK toggles between them. Hold OK for the linked archive or detail journey, such as **Saturn and its rings** from **Rings**. Back from the film returns to the selected feature. |
 
 Open this directory in Android Studio with JDK 17, SDK 36, Build Tools 36.0.0 and a 1080p Google TV AVD. Use Run to install and launch. On the configured Windows PC, **Start-AstroWeb-TV.cmd** opens the app in the **AstroWeb_Google_TV** emulator. Arrow keys, Enter and Esc simulate the remote. The APK requires network access to the AstroWeb NAS.
 

@@ -313,10 +313,11 @@ function frame(motion){
   }
   slide();
 }
-function destinationFor(obj,options){
+function destinationFor(obj,options,capture,solar){
+  if(solar)return options.find(option=>option.id===obj.journey);
   const norm=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   const ids=[obj.id,...(obj.aliases||[])].map(norm).filter(Boolean);
-  const isMain=ids.includes(norm(current.catalog_id));
+  const isMain=ids.includes(norm(capture.catalog_id));
   return options.find(o=>isMain&&o.id.startsWith('skymap-'))||
     options.find(o=>ids.includes(norm(o.id))||ids.includes(norm(o.target))||(o.id==='nucleus'&&ids.includes('M31')));
 }
@@ -328,6 +329,7 @@ function discover(){
     Promise.all([cached(catalogs,p.id,()=>api(endpoint(p.id,'/discover')).catch(error=>{if(['400','404'].includes(error.message))return {objects:[]};throw error;})),image(poster(p))]).then(([data,img])=>{
       if(g!==generation)return;
       const objects=data.objects;
+      const solar=data.kind==='surface'||!!p.body;
       let index=0,zoomed=false;
       function guide(){
         const session=clear(main,true),layer=elm('div','scene');
@@ -349,19 +351,29 @@ function discover(){
           ring.style.transform='translate('+(left+x*dw*z)+'px,'+(top+y*dh*z)+'px) translate(-50%,-50%)';
           const controls=tr('↑  Inzoomen    ↓  Overzicht','↑  Zoom in    ↓  Overview');
           if(!point){status(title(p),tr('Geen benoemde onderdelen in deze opname.','No named features in this capture.')+'    '+tr('Terug  Verken','Back  Explore'));return;}
-          const trip=destinationFor(point,options);
+          const trip=destinationFor(point,options,p,solar);
           const heading=(text(point.name)||point.id)+' · '+text(point.type)+' · '+(index+1)+'/'+objects.length;
-          status(heading,[title(p),text(point.summary)||[...(point.aliases||[]),'RA '+point.ra.toFixed(3)+'°','Dec '+point.dec.toFixed(3)+'°'].join(' · '),
+          const coordinates=Number.isFinite(point.ra)&&Number.isFinite(point.dec)
+            ? ['RA '+point.ra.toFixed(3)+'°','Dec '+point.dec.toFixed(3)+'°'] : [];
+          const journeyHint=solar?tr('Houd OK vast  Detailreis','Hold OK  Detail journey')
+            :tr('Houd OK vast  Archiefreis','Hold OK  Archive journey');
+          status(heading,[title(p),text(point.summary)||[...(point.aliases||[]),...coordinates].join(' · '),
             (objects.length>1?tr('← →  Onderdeel','← →  Feature')+'     ':'')+controls+
-            '     OK  '+(zoomed?tr('Overzicht','Overview'):tr('Inzoomen','Zoom in'))+(trip?tr('     Houd OK vast  Archiefreis','     Hold OK  Archive journey'):'')].join('\n'));
+            '     OK  '+(zoomed?tr('Overzicht','Overview'):tr('Inzoomen','Zoom in'))+(trip?'     '+journeyHint:'')].filter(Boolean).join('\n'));
         }
         paint();reveal(layer);
         if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
           field.style.transition=ring.style.transition='transform .4s ease-in-out';
         }
-        if(objects.length)cached(archive,p.id,()=>api(endpoint(p.id,'/hubble?view=tv'))).then(r=>{
-          if(session===generation){options=r.observations||[];paint();}
-        }).catch(()=>{});
+        if(solar?objects.some(point=>point.journey):objects.length){
+          const route=solar?'/solar-system':'/hubble?view=tv';
+          cached(archive,p.id,()=>api(endpoint(p.id,route))).then(result=>{
+            if(session!==generation)return;
+            const observations=result.observations||[];
+            options=solar?observations:observations.filter(option=>option.tv_video?.startsWith('/media/'));
+            paint();
+          }).catch(()=>{});
+        }
         key=k=>{
           if((k==='out'||k==='in')&&objects.length){zoomed=k==='in';paint();return;}
           if(k==='next'||k==='previous'){
@@ -370,10 +382,12 @@ function discover(){
           }
           if(k==='reset'&&objects.length){zoomed=!zoomed;paint();}
           if(k==='rotate'&&objects.length){
-            const trip=destinationFor(objects[index],options);
+            const trip=destinationFor(objects[index],options,p,solar);
             if(!trip)return;
+            const url=solar?'/media/'+enc(p.id)+'/solar-system/'+enc(trip.id):trip.tv_video;
             const token=clear(guide,true),layer=elm('div','scene');
-            const v=movie(layer,trip.tv_video,()=>{if(token===generation)reveal(layer,trip.tv_credit);},()=>{if(token===generation)guide();},
+            // Solar System films carry the mission credit in the picture.
+            const v=movie(layer,url,()=>{if(token===generation)reveal(layer,solar?'':trip.tv_credit);},()=>{if(token===generation)guide();},
               ()=>{if(token===generation)problem(tr('Film niet beschikbaar','Film unavailable'),guide,guide);});
             key=k=>{if(['reset','toggle','play','pause'].includes(k)){
               if(k==='pause'||(k!=='play'&&!v.paused))v.pause();else v.play().catch(()=>{});

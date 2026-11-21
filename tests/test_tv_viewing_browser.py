@@ -2,10 +2,12 @@
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
+import subprocess
 from urllib.parse import urlsplit
 
 from PIL import Image
 import pytest
+from astroweb.render import ffmpeg_executable
 
 pw = pytest.importorskip("playwright.sync_api")
 ASSETS = Path(__file__).resolve().parents[1] / "tv/app/src/main/assets"
@@ -19,6 +21,8 @@ def viewing_fixture(page, mode="modes", lang="en", primary="A"):
     rows = [{"id": ident, "catalog_id": ident, "name": {"en": ident, "nl": ident}, "date": "2026-11-15",
              "field": {"kind": "gaia"}, "final": f"/media/{ident}/final"} for ident in "AB"]
     rows[0]["video"] = "/media/A/movie"
+    if primary=="SATURN":
+        rows.append({"id":"SATURN","catalog_id":"SATURN","body":"SATURN","name":{"en":"Saturn","nl":"Saturnus"}})
     photo = BytesIO()
     Image.new("RGB", (200, 360), "navy").save(photo, "JPEG")
     requests = []
@@ -35,8 +39,16 @@ def viewing_fixture(page, mode="modes", lang="en", primary="A"):
             route.fulfill(json={"objects": rows})
         elif path == "/api/atlas":
             route.fulfill(json={"captures": rows})
-        elif path in ("/api/objects/A", "/api/objects/B"):
+        elif path in ("/api/objects/A", "/api/objects/B", "/api/objects/SATURN"):
             route.fulfill(json=next(row for row in rows if row["id"] == path.split("/")[-1]))
+        elif path=="/api/objects/SATURN/discover":
+            route.fulfill(json={"kind":"surface","objects":[
+                {"id":"titan","name":"Titan","type":"Moon","x":.3,"y":.46},
+                {"id":"rings","name":{"en":"Rings","nl":"Ringen"},"type":"Feature","x":.75,"y":.48,
+                 "journey":"PIA11141"},
+            ]})
+        elif path=="/api/objects/SATURN/solar-system":
+            route.fulfill(json={"observations":[{"id":"PIA11657"},{"id":"PIA11141"}]})
         elif path.endswith("/discover"):
             target = path.split("/")[-2]
             route.fulfill(json={"objects": [{"id": target + str(i), "name": target + " feature " + str(i),
@@ -79,6 +91,39 @@ def test_explore_only_uses_selected_capture_and_has_two_actions(lang):
         assert "/api/objects/B/night-tracks" in requests
         page.evaluate("mapKey('out')")
         pw.expect(page.locator("#hud strong")).to_have_text("Vanavond" if lang == "nl" else "Tonight")
+        browser.close()
+
+
+@pytest.mark.parametrize("lang", ["nl","en"])
+def test_hold_ok_opens_the_selected_saturn_detail_and_back_keeps_the_ring(tmp_path,lang):
+    clip=tmp_path/"rings.mp4"
+    subprocess.run([ffmpeg_executable(),"-hide_banner","-loglevel","error","-y","-f","lavfi",
+                    "-i","color=c=navy:s=320x180:r=24:d=5","-c:v","libx264","-pix_fmt","yuv420p",
+                    "-movflags","+faststart",str(clip)],check=True)
+    with pw.sync_playwright() as runtime:
+        browser=runtime.chromium.launch(channel="chrome",args=["--autoplay-policy=no-user-gesture-required"])
+        page=browser.new_page(viewport={"width":960,"height":540},reduced_motion="reduce")
+        requests=viewing_fixture(page,mode="explore",lang=lang,primary="SATURN")
+        path="/media/SATURN/solar-system/PIA11141"
+        page.route("**"+path,lambda route:route.fulfill(path=clip,content_type="video/mp4"))
+        page.goto("http://tv.test/")
+        page.get_by_role("button",name="Wat zie ik?" if lang=="nl" else "What am I seeing?",exact=True).click()
+        hint="Houd OK vast  Detailreis" if lang=="nl" else "Hold OK  Detail journey"
+        name="Ringen" if lang=="nl" else "Rings"
+        pw.expect(page.locator("#hud strong")).to_contain_text("Titan")
+        page.wait_for_function("()=>document.querySelector('.guide-camera img')?.complete")
+        page.evaluate("()=>mapKey('rotate')")
+        pw.expect(page.locator("video")).to_have_count(0)
+        page.evaluate("()=>mapKey('next')")
+        pw.expect(page.locator("#hud strong")).to_contain_text(name)
+        pw.expect(page.locator("#hint")).to_contain_text(hint)
+        page.evaluate("()=>mapKey('rotate')")
+        pw.expect(page.locator(".scene.visible video")).to_have_attribute("src",path)
+        assert "/api/objects/SATURN/solar-system" in requests
+        assert "/api/objects/SATURN/hubble" not in requests
+        assert page.evaluate("()=>collectionBack()")
+        pw.expect(page.locator("#hud strong")).to_contain_text(name)
+        pw.expect(page.locator("#hint")).to_contain_text(hint)
         browser.close()
 
 
