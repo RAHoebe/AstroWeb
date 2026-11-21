@@ -131,7 +131,15 @@ def discover(store, record):
         except (OSError, requests.RequestException, ValueError, cv2.error, np.linalg.LinAlgError):
             pass  # The user can place markers when the reference cannot be registered.
     known = {p["id"]:p for p in presets(body)}
-    for point in manual(record):
+    saved = manual(record)
+    if body == "SATURN" and record.get("poster") and not any(p["id"]=="rings" for p in saved):
+        from .solar_detail import saturn_ring_point
+        photo = cv2.imread(str(store.path(record["poster"])))
+        measured = saturn_ring_point(photo) if photo is not None else None
+        if measured is not None:
+            x,y = map(float,measured)
+            points["rings"] = labelled(dict(x=x,y=y),known["rings"],"ring-axis")
+    for point in saved:
         info = known.get(point["preset"]) if point.get("preset") else None
         if info is None:
             info = dict(id=point["id"],name=dict(nl=point["name"],en=point["name"]),source=None,journey=None)

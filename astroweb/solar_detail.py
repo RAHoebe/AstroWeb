@@ -16,6 +16,10 @@ CASSINI = "NASA/JPL/Space Science Institute"
 SATURN_OVERVIEW = "PIA11141"
 SATURN_RINGS = "PIA11657"
 ENCELADUS = "PIA11688"
+# Relative coordinates measured on the PIA11141 Cassini mosaic.
+SATURN_DISK_CENTER = (.504,.507)
+SATURN_RING_SPAN = .848
+SATURN_RING_FOCUS = (.84,.494)
 SATURN_SOURCES = {
     SATURN_OVERVIEW: "https://science.nasa.gov/resource/saturn-four-years-on/",
     SATURN_RINGS: "https://science.nasa.gov/photojournal/mimas-and-the-great-division/",
@@ -31,7 +35,7 @@ FEATURES = {
     "MARS":[("PIA01167","large.jpg","Gesteentelagen in Valles Marineris","Rock layers in Valles Marineris","NASA/JPL/Malin Space Science Systems",.83,.52)],
     "JUPITER":[("PIA21395","medium.jpg","De Grote Rode Vlek","The Great Red Spot","NASA/JPL-Caltech/SwRI/MSSS · Kevin M. Gill (CC BY)",.62,.5),
                ("PIA00294","orig.jpg","Het gebarsten ijs van Europa","The fractured ice of Europa","Galileo · NASA/JPL",.52,.51)],
-    "SATURN":[(SATURN_OVERVIEW,"orig.jpg","Saturnus en zijn ringen","Saturn and its rings",CASSINI,.84,.494),
+    "SATURN":[(SATURN_OVERVIEW,"orig.jpg","Saturnus en zijn ringen","Saturn and its rings",CASSINI,*SATURN_RING_FOCUS),
               (SATURN_RINGS,"orig.jpg","De Cassinischeiding en de schaduw van Mimas","Cassini Division and the shadow of Mimas",CASSINI,.64,.49),
               ("PIA11688","orig.jpg","IJsfonteinen op Enceladus","Ice plumes on Enceladus",CASSINI,.53,.65)],
     "URANUS":[("PIA18185","orig.jpg","Het ijslandschap van Miranda","The icy terrain of Miranda","Voyager 2 · NASA/JPL-Caltech",.54,.62)],
@@ -106,8 +110,8 @@ def frames(photo, image, focus, keep_edges=False):
             yield cv2.addWeighted(source,1-fade,destination,fade,0)
 
 
-def saturn_registration(photo, overview):
-    """Fit the measured silhouette against the Cassini mosaic's ring axis."""
+def saturn_ring_geometry(photo):
+    """Measure the centre, major axis and span of Saturn's visible silhouette."""
     gray = cv2.cvtColor(photo,cv2.COLOR_BGR2GRAY)
     peak = int(gray.max())
     if peak < 30:
@@ -129,12 +133,45 @@ def saturn_registration(photo, overview):
     span = np.ptp(points@axis)
     weights = np.maximum(0,gray[labels==component].astype(float)-.55*peak)
     center = np.average(points,axis=0,weights=weights) if weights.sum() else points.mean(axis=0)
+    return center,axis,span,points
+
+
+def saturn_ring_point(photo):
+    """Find a visible ring wing using the same axis as the detail journey."""
+    geometry = saturn_ring_geometry(photo)
+    if geometry is None:
+        return None
+    center,axis,span,points = geometry
+    distances = points-center
+    across = np.array([-axis[1],axis[0]])
+    along = distances@axis
+    heights = distances@across
+    wing_fraction = (SATURN_RING_FOCUS[0]-SATURN_DISK_CENTER[0])/SATURN_RING_SPAN
+    # A broad disk flanked by two thinner wings is required. This avoids
+    # marking a plain elongated disk or a line from a blurred exposure.
+    sections = [heights[np.abs(along-span*f)<.045*span] for f in (0,-wing_fraction,wing_fraction)]
+    if any(len(section)<5 for section in sections):
+        return None
+    widths = [np.ptp(np.quantile(section,[.1,.9])) for section in sections]
+    if widths[0] < .27*span or max(widths[1:]) > .58*widths[0]:
+        return None
+    point = center+wing_fraction*span*axis+np.median(sections[2])*across
+    # Choose an actual illuminated pixel on that ring wing.
+    closest = points[np.argmin(np.sum((points-point)**2,axis=1))]
+    return (closest+.5)/np.array(photo.shape[1::-1])
+
+
+def saturn_registration(photo, overview):
+    """Fit the measured silhouette against the Cassini mosaic's ring axis."""
+    geometry = saturn_ring_geometry(photo)
+    if geometry is None:
+        return None
+    center,axis,span,_ = geometry
     height,width = overview.shape[:2]
-    # Measured on PIA11141: full ring span and centre of the globe.
-    scale = span/(.848*width)
+    scale = span/(SATURN_RING_SPAN*width)
     transform = np.eye(3)
     transform[:2,:2] = scale*np.column_stack((axis,[-axis[1],axis[0]]))
-    transform[:2,2] = center-transform[:2,:2]@np.array([.504*width,.507*height])
+    transform[:2,2] = center-transform[:2,:2]@(np.array(SATURN_DISK_CENTER)*[width,height])
     return transform
 
 
@@ -154,10 +191,11 @@ def moon_cut_frames(photo, image, focus):
 def saturn_frames(photo, overview, detail=None, focus=None):
     registration = saturn_registration(photo,overview)
     if registration is None:
-        yield from frames(photo,detail if detail is not None else overview,focus or (.84,.494))
+        yield from frames(photo,detail if detail is not None else overview,focus or SATURN_RING_FOCUS)
         return
     start = min(WIDTH/photo.shape[1],HEIGHT/photo.shape[0])
-    wing = registration@np.array([.84*overview.shape[1],.494*overview.shape[0],1.])
+    target = np.array(SATURN_RING_FOCUS)*[overview.shape[1],overview.shape[0]]
+    wing = registration@np.r_[target,1.]
     camera = FocusZoom(np.array(photo.shape[1::-1])/2,wing[:2],start,start*(8 if detail is not None else 5),WIDTH,HEIGHT)
     if detail is not None:
         height,width = detail.shape[:2]

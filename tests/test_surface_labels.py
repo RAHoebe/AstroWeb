@@ -1,6 +1,7 @@
 from threading import Thread
 
 import numpy as np
+import cv2
 import pytest
 from PIL import Image
 from werkzeug.serving import make_server
@@ -72,6 +73,27 @@ def test_lunar_labels_use_inverse_registration_and_skip_shadow(tmp_path, monkeyp
     assert point["x"] < .5 and point["y"] > .5
     assert point["journey"] == "moon-aristarchus"
     assert point["placement"] == "registered"
+
+
+def test_saturn_guide_places_ring_wing_and_respects_owner_override(app):
+    store = app.extensions["store"]
+    saturn = store.get("objects","SATURN")
+    photo = np.zeros((240,300,3),dtype=np.uint8)
+    center = np.array([142,118])
+    cv2.ellipse(photo,tuple(center),(72,8),-32,0,360,(160,160,160),-1)
+    cv2.circle(photo,tuple(center),29,(235,235,235),-1)
+    assert cv2.imwrite(str(store.path(saturn["poster"])),photo)
+    client = app.test_client()
+    ring, = client.get("/api/objects/SATURN/discover").json["objects"]
+    assert ring["id"]=="rings" and ring["placement"]=="ring-axis" and ring["journey"]=="PIA11141"
+    xy = np.array([ring["x"]*300-.5,ring["y"]*240-.5])
+    assert np.linalg.norm(xy-center)>29 and np.all(xy*np.array([1,-1]) > center*np.array([1,-1]))
+    assert photo[round(xy[1]),round(xy[0])].max()>50
+    headers = {"X-CSRF-Token":sign_in(client)}
+    override = dict(preset="rings",x=.25,y=.72)
+    assert client.put("/api/admin/objects/SATURN/surface-label",json=override,headers=headers).status_code==200
+    ring, = client.get("/api/objects/SATURN/discover").json["objects"]
+    assert (ring["x"],ring["y"],ring["placement"])==(.25,.72,"manual")
 
 
 def test_viewer_guide_mark_cycle_zoom_and_original_tab(app):

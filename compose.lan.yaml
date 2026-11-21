@@ -1,7 +1,7 @@
 services:
   astroweb:
     build: .
-    image: astroweb:1.5.5
+    image: astroweb:1.5.6
     restart: unless-stopped
     ports:
       - "${ASTROWEB_LAN_IP:?Supply the private IP of this server}:8090:8090"

@@ -180,6 +180,7 @@ export const words = {
   surfaceCustom:["Eigen naam","Custom name"],
   surfaceManual:["Handmatig geplaatst","Manually placed"],
   surfaceRegistered:["Ingemeten maanoppervlak","Registered lunar surface"],
+  surfaceRingAxis:["Gemeten ringrichting","Measured ring axis"],
   invalid_surface_label:["Geef een geldige naam en plek op de foto op.","Choose a valid name and position on the photo."],
   surface_label_limit:["Deze opname heeft het maximum van 40 handmatige markeringen.","This capture already has the limit of 40 manual markers."],
   pointName:["Naam van dit zoompunt","Zoom target name"],replacePrompt:["Acht punten in gebruik. Kies welk punt je wilt vervangen.","All eight targets are in use. Choose one to replace."],

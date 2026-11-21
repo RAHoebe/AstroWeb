@@ -391,7 +391,8 @@ function renderDiscovery(){
     if(Number.isFinite(current.ra)&&Number.isFinite(current.dec)){
       details.push('RA '+current.ra.toFixed(4)+'°','Dec '+current.dec.toFixed(4)+'°',...(current.aliases||[]));
     }
-    if(current.placement)details.push(t(current.placement==='manual'?'surfaceManual':'surfaceRegistered'));
+    const placementLabel={manual:'surfaceManual',registered:'surfaceRegistered','ring-axis':'surfaceRingAxis'}[current.placement];
+    if(placementLabel)details.push(t(placementLabel));
     if(current.ly)details.push('≈ '+current.ly.toLocaleString(language)+' '+t('lightYears'));
     $('discovery-data').textContent=details.join(' · ');
     $('discovery-source').hidden=!current.source;
