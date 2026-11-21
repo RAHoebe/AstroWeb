@@ -23,7 +23,7 @@ from werkzeug.utils import secure_filename
 from . import __version__
 from .jobs import JobQueue
 from .media import MAX_FILE, NIGHTSCAPES, import_object, normalize_id, upload_identity, fits_target, file_prefix, validate_image, enlarge_small_solar, render_paths
-from .metadata import refresh_metadata, renamed_metadata, validate_metadata
+from .metadata import clear_source_information, refresh_metadata, renamed_metadata, retain_metadata_edits, use_catalogue_metadata, validate_metadata
 from .render import Parameters, Scene, ffmpeg_executable, gallery_preview_path, read_rgb, resize_long, save_jpg
 from .catalogue import canonical,group_id,belongs
 from .solar import BODIES
@@ -132,6 +132,8 @@ def create_app(data_dir=None, testing=False):
             from .solar import displayed_metadata, observing_time
             value["metadata"] = displayed_metadata(record["body"], record["metadata"])
             value["sky_available"] = bool(observing_time(record)[0])
+        elif not record.get("capture_kind"):
+            value["metadata"] = use_catalogue_metadata(record["metadata"])
         if record.get("render_input") or Path(record["assets"]["final"]).suffix.lower() in {".tif", ".tiff"}:
             value["original_view"] = f"/media/{record['id']}/original-view"
         if record["video"]:
@@ -664,6 +666,7 @@ def create_app(data_dir=None, testing=False):
             value["galactic_distance_ly"] = record["metadata"]["galactic_distance_ly"]
         previous = record["metadata"]
         same_target = value["target"].casefold() == previous["target"].casefold()
+        retain_metadata_edits(value, previous, same_target)
         value["sources"] = previous.get("sources", []) if same_target else []
         if same_target:
             value["aliases"] = previous.get("aliases", value["aliases"])
@@ -680,11 +683,25 @@ def create_app(data_dir=None, testing=False):
         record = get_object(identifier)
         if record.get("capture_kind"):
             raise ValueError("capture_kind_mismatch")
+        previous = record["metadata"]
+        failure = None
         try:
-            value = refresh_metadata(record["metadata"], store=store)
+            value = refresh_metadata(previous, force=True, store=store)
         except requests.RequestException:
-            return jsonify(error="metadata_unavailable"), 502
-        store.update("objects", identifier, metadata=value)
+            value = clear_source_information(previous)
+            failure = ("metadata_unavailable", 502)
+        except ValueError as exc:
+            if str(exc) != "metadata_not_found":
+                raise
+            value = clear_source_information(previous)
+            failure = ("metadata_not_found", 400)
+        with store.lock:
+            latest = store.get("objects", identifier)
+            if not latest or latest["metadata"] != previous:
+                return jsonify(error="metadata_changed"), 409
+            store.update("objects", identifier, metadata=value)
+        if failure:
+            return jsonify(error=failure[0]), failure[1]
         return jsonify(metadata=value)
 
     @app.put("/api/admin/objects/<identifier>/observation")

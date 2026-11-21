@@ -641,3 +641,70 @@ def test_changing_catalogue_target_clears_old_source_links(app, images):
     assert client.put(url,json=updated,headers=headers).status_code==200
     saved=store.get("objects",record["id"])["metadata"]
     assert not saved["sources"] and "external" not in saved
+
+
+def test_studio_repairs_legacy_catalogue_text_and_only_protects_actual_edits(app,images,monkeypatch):
+    from astroweb.metadata import initial_metadata
+
+    monkeypatch.setenv("ASTROWEB_OFFLINE","1")
+    store=app.extensions["store"]
+    record=import_object(store,"IC_1848",list(images.values()),allow_export_prefix=True)
+    old=initial_metadata("IC_1848")
+    old.update(
+        name={"nl":"IC 1848","en":"IC 1848"},translation="admin",aliases=["IC 1848"],
+        summary={"nl":"Catalogusidentificatie: IC 1848 (ICRS 42.83083°, +60.42556°).",
+                 "en":"Catalogue identification: IC 1848 (ICRS 42.83083°, +60.42556°)."},
+        type={"nl":"Deep-skyobject","en":"Deep-sky object"},constellation={"nl":"","en":""},
+        sources=[{"label":"Oude bron","url":"https://example.org/old"}],
+        external={"provider":"test","url":"https://example.org/old","fetched_at":old["updated_at"],
+                  "text":{"en":"Old source text.","nl":""}},
+    )
+    old["description"]=old["summary"].copy()
+    store.update("objects",record["id"],published=True,metadata=old)
+    client=app.test_client()
+    details=client.get("/api/objects/IC_1848").json
+    assert details["metadata"]["name"]["nl"]=="Zielnevel"
+    assert details["captures"][0]["name"]["nl"]=="Zielnevel"
+    assert client.get("/api/objects").json["objects"][0]["metadata"]["name"]["nl"]=="Zielnevel"
+
+    headers=sign_in(client)
+    url="/api/admin/objects/IC_1848/metadata"
+    edited=details["metadata"]
+    edited["description"]["nl"]="Mijn eigen tekst bij deze opname."
+    edit=client.put(url,json=edited,headers=headers)
+    assert edit.status_code==200
+    saved=store.get("objects","IC_1848")["metadata"]
+    assert saved["edited_fields"]==["description.nl"]
+
+    refreshed=client.post(url+"/refresh",json={},headers=headers)
+    assert refreshed.status_code==200,refreshed.json
+    value=refreshed.json["metadata"]
+    assert value["external"]["provider"]=="NASA Science"
+    assert all(source["url"]!="https://example.org/old" for source in value["sources"])
+    assert value["description"]["nl"]=="Mijn eigen tekst bij deze opname."
+    assert value["name"]["nl"]=="Zielnevel"
+    assert value["aliases"]==old["aliases"]
+
+
+def test_studio_source_failure_discards_old_external_text(app,images,monkeypatch):
+    import requests
+
+    store=app.extensions["store"]
+    record=import_object(store,"NGC_7000",list(images.values()))
+    metadata=record["metadata"]
+    metadata["external"]={"provider":"test","url":"https://example.org/old",
+                          "text":{"nl":"Oude beschrijving","en":"Old description"}}
+    metadata["sources"]=[{"label":"Oude bron","url":"https://example.org/old"}]
+    store.update("objects",record["id"],metadata=metadata)
+    def unavailable(*args,**kwargs):
+        assert kwargs["force"] is True
+        raise requests.ConnectionError
+    monkeypatch.setattr("astroweb.app.refresh_metadata",unavailable)
+    client=app.test_client()
+    headers=sign_in(client)
+    reply=client.post("/api/admin/objects/NGC_7000/metadata/refresh",json={},headers=headers)
+    assert reply.status_code==502
+    saved=store.get("objects","NGC_7000")["metadata"]
+    assert "external" not in saved
+    assert saved["name"]==metadata["name"] and saved["description"]==metadata["description"]
+    assert all(source["url"]!="https://example.org/old" for source in saved["sources"])

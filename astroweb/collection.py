@@ -8,8 +8,12 @@ from .sky import CATALOG, star_catalog
 
 
 def identity(record):
+    metadata = record["metadata"]
+    if not (record.get("body") or record.get("capture_kind")):
+        from .metadata import use_catalogue_metadata
+        metadata = use_catalogue_metadata(metadata)
     return {"id":record["id"], "catalog_id":group_id(record), "capture_kind":record.get("capture_kind"),
-            "session_name":record.get("session_name",""), "name":record["metadata"]["name"]}
+            "session_name":record.get("session_name",""), "name":metadata["name"]}
 
 
 def capture_date(record):

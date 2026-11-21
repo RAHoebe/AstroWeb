@@ -18,7 +18,32 @@ NASA_NGC = "https://science.nasa.gov/mission/hubble/science/explore-the-night-sk
 NASA_IC = "https://science.nasa.gov/photojournal/blowin-in-the-stellar-wind/"
 NASA_M45 = "https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-45/"
 
+TEXT_FIELDS = ("name", "type", "constellation", "summary", "description")
+DEFAULT_TYPE = {"nl": "Deep-skyobject", "en": "Deep-sky object"}
+DEFAULT_SUMMARY = {"nl": "Een eigen blik op het diepe heelal.", "en": "A personal view of the deep sky."}
+DEFAULT_DESCRIPTION = {
+    "nl": "Er is nog geen gecontroleerde Nederlandse objectbeschrijving. De beheerder kan broninformatie ophalen en de tekst aanvullen.",
+    "en": "A verified object description has not yet been added. The administrator can fetch source information and edit the text.",
+}
+
 SEEDS = {
+    "M_57": {
+        "target": "M 57",
+        "name": {"nl": "Ringnevel", "en": "Ring Nebula"},
+        "type": {"nl": "Planetaire nevel", "en": "Planetary nebula"},
+        "constellation": {"nl": "Lier", "en": "Lyra"},
+        "aliases": ["M 57", "Messier 57", "NGC 6720", "Ringnevel", "Ring Nebula"],
+        "summary": {"nl": "De Ringnevel in de Lier bestaat uit oplichtend gas dat een ster aan het eind van haar leven uitstootte.",
+                    "en": "The Ring Nebula in Lyra is glowing gas shed by a star near the end of its life."},
+        "description": {
+            "nl": "De overgebleven hete kern van de ster laat het uitgestoten gas oplichten. Vanaf de aarde zien we een heldere ring met een zwakkere buitenhalo. Webb ziet in het infrarood fijne structuren in het gas rond de ring.",
+            "en": "The star’s remaining hot core illuminates the expelled gas. From Earth we see a bright ring and a fainter outer halo. In the infrared, Webb resolves fine structures in the gas around the ring.",
+        },
+        "sources": [
+            {"label":"NASA · Messier 57","url":"https://science.nasa.gov/mission/hubble/science/explore-the-night-sky/hubble-messier-catalog/messier-57/"},
+            {"label":"NASA/ESA/CSA · Ring Nebula (Webb)","url":"https://science.nasa.gov/asset/webb/ring-nebula-nircam-image/"},
+        ],
+    },
     "M_45": {
         "target": "M 45",
         "name": {"nl":"Plejaden","en":"Pleiades"},
@@ -194,10 +219,10 @@ def initial_metadata(identifier):
     else:
         name = identifier.replace("_", " ")
         result = {
-            "target": name, "name": {"nl": name, "en": name}, "type": {"nl": "Deep-skyobject", "en": "Deep-sky object"},
+            "target": name, "name": {"nl": name, "en": name}, "type": DEFAULT_TYPE.copy(),
             "constellation": {"nl": "", "en": ""},
-            "summary": {"nl": "Een eigen blik op het diepe heelal.", "en": "A personal view of the deep sky."},
-            "description": {"nl": "Er is nog geen gecontroleerde Nederlandse objectbeschrijving. De beheerder kan broninformatie ophalen en de tekst aanvullen.", "en": "A verified object description has not yet been added. The administrator can fetch source information and edit the text."},
+            "summary": DEFAULT_SUMMARY.copy(),
+            "description": DEFAULT_DESCRIPTION.copy(),
             "sources": [], "aliases": [name], "translation": "pending",
         }
         if entry := catalogue_labels().get(canonical(identifier)):
@@ -209,23 +234,76 @@ def initial_metadata(identifier):
     return result
 
 
+def generated_placeholder(field, language, value, target):
+    if not value:
+        return True
+    if field == "name":
+        return name_key(value) == name_key(target)
+    defaults = {"type":DEFAULT_TYPE, "summary":DEFAULT_SUMMARY, "description":DEFAULT_DESCRIPTION}
+    if value == defaults.get(field, {}).get(language):
+        return True
+    return field in ("summary", "description") and bool(re.fullmatch(
+        r"(?:Catalogusidentificatie|Catalogue identification): [^.!?]+(?: \(ICRS [0-9.+° ,\-]+\))?\.",
+        value, re.I))
+
+
+def text_overrides(metadata):
+    if "edited_fields" in metadata:
+        return set(metadata["edited_fields"])
+    if metadata.get("translation") != "admin":
+        return set()
+    target = metadata.get("target", "")
+    generic_name = all(generated_placeholder("name", lang, value, target)
+                       for lang, value in metadata.get("name", {}).items())
+    # Older Studio versions marked the whole form as manual. Recover only
+    # recognisable placeholders when the stored name is still the catalogue ID.
+    return {f"{field}.{lang}" for field in TEXT_FIELDS for lang in ("nl", "en")
+            if not generic_name or not generated_placeholder(field, lang, metadata.get(field, {}).get(lang), target)}
+
+
 def use_catalogue_metadata(metadata):
     """Upgrade generated labels without replacing operator-authored text."""
     result = copy.deepcopy(metadata)
-    target = result["target"]
+    target = result.get("target")
+    if not target:
+        return result
     known = known_target(target)
-    generic = all(name_key(v)==name_key(target) for v in result["name"].values())
-    translation = result.get("translation")
+    label = catalogue_labels().get(canonical(target))
+    if not known and not label:
+        return result
+    overrides = text_overrides(result)
     lookup_only = (result.get("external") or {}).get("provider") == "CDS/SIMBAD"
-    needs_description = known and (translation != "curated" or lookup_only)
-    if translation != "admin" and (needs_description or (generic and (known or canonical(target) in catalogue_labels()))):
-        # Older records can have a catalogue name with only a coordinate lookup.
-        current = initial_metadata(canonical(target))
-        result["name"] = current["name"]
-        if known:
-            for field in ("type","constellation","summary","description","translation"):
-                result[field] = current[field]
-        result["sources"]=list({s["url"]:s for s in result.get("sources",[])+current["sources"]}.values())
+    refresh_generated = known and (result.get("translation") != "curated" or lookup_only)
+    current = initial_metadata(canonical(target))
+    changed = False
+    for field in TEXT_FIELDS if known else ("name",):
+        for lang, text in current[field].items():
+            value = result.get(field, {}).get(lang)
+            if (f"{field}.{lang}" not in overrides and text != value and
+                    (refresh_generated or generated_placeholder(field, lang, value, target))):
+                result.setdefault(field, {})[lang] = text
+                changed = True
+    if changed:
+        result["sources"] = list({s["url"]:s for s in result.get("sources", [])+current["sources"]}.values())
+        if known and not overrides:
+            result["translation"] = "curated"
+    return result
+
+
+def retain_metadata_edits(value, previous, same_target):
+    baseline = use_catalogue_metadata(previous)
+    overrides = text_overrides(previous) if same_target else set()
+    overrides.update(f"{field}.{lang}" for field in TEXT_FIELDS for lang in ("nl", "en")
+                     if value[field][lang] != baseline.get(field, {}).get(lang, ""))
+    value["edited_fields"] = sorted(overrides)
+    value["translation"] = "admin" if overrides else baseline.get("translation", "pending") if same_target else "pending"
+
+
+def clear_source_information(metadata):
+    """Remove the cached external entry and restore catalogue attribution."""
+    result = use_catalogue_metadata(metadata)
+    result.pop("external", None)
+    result["sources"] = initial_metadata(canonical(result["target"]))["sources"]
     return result
 
 
@@ -277,7 +355,6 @@ def validate_metadata(raw):
                 raise ValueError("invalid_metadata")
             result[field],result[source] = value,reference
     result["aliases"] = [result["target"]]
-    result["translation"] = "admin"
     result["updated_at"] = now()
     return result
 
@@ -287,16 +364,10 @@ def clean_text(value):
 
 
 def refresh_metadata(metadata, force=False, *, store=None):
-    result = use_catalogue_metadata(metadata)
+    result = clear_source_information(metadata) if force else use_catalogue_metadata(metadata)
     external = result.get("external")
     target = result["target"]
     known = known_target(target)
-    if known is SEEDS["M_31"] and result.get("translation") != "admin":
-        # Upgrade generated SIMBAD-only or default records while preserving
-        # operator-authored texts and their chosen target.
-        for key in ("name","type","constellation","summary","description"):
-            result[key] = copy.deepcopy(known[key])
-        result.update(aliases=known["aliases"].copy(), translation="curated")
     if known:
         result["sources"] = list({s["url"]:s for s in result.get("sources", []) + known["sources"]}.values())
     current_dutch = (external or {}).get("text", {}).get("nl")
