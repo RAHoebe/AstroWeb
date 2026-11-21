@@ -55,7 +55,7 @@ def main():
                 continue
             paths = sorted(p for p in folder.iterdir() if p.suffix.lower() in EXTENSIONS)
             fits = sorted(p for p in folder.iterdir() if p.suffix.lower() in {".fits", ".fit", ".fts"})
-            observation = read_observation(fits[0]) if fits else {}
+            observation = read_observation(fits[0],paths[0].name if len(paths)==1 else None) if fits else {}
             identifier, source, prefix = upload_identity([p.name for p in paths], observation.get("header", {}).get("OBJECT"), folder.name)
             target = store.get("objects", store.current_id(canonical(identifier)))
             family = group_id(target) if target else canonical(identifier)

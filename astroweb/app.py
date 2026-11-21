@@ -21,7 +21,7 @@ from werkzeug.utils import secure_filename
 
 from . import __version__
 from .jobs import JobQueue
-from .media import MAX_FILE, NIGHTSCAPES, import_object, normalize_id, upload_identity, fits_target, file_prefix, validate_image
+from .media import MAX_FILE, NIGHTSCAPES, import_object, normalize_id, upload_identity, fits_target, file_prefix, validate_image, enlarge_small_solar, render_paths
 from .metadata import refresh_metadata, renamed_metadata, validate_metadata
 from .render import Parameters, Scene, ffmpeg_executable, gallery_preview_path, read_rgb, resize_long, save_jpg
 from .catalogue import canonical,group_id,belongs
@@ -131,7 +131,7 @@ def create_app(data_dir=None, testing=False):
             from .solar import displayed_metadata, observing_time
             value["metadata"] = displayed_metadata(record["body"], record["metadata"])
             value["sky_available"] = bool(observing_time(record)[0])
-        if Path(record["assets"]["final"]).suffix.lower() in {".tif", ".tiff"}:
+        if record.get("render_input") or Path(record["assets"]["final"]).suffix.lower() in {".tif", ".tiff"}:
             value["original_view"] = f"/media/{record['id']}/original-view"
         if record["video"]:
             film_id = Path(record["video"]).stem
@@ -452,9 +452,11 @@ def create_app(data_dir=None, testing=False):
         with tempfile.TemporaryDirectory(prefix="poster-", dir=store.root) as temp:
             path = Path(temp) / "original"
             image.save(path)
-            validate_image(path)
+            small_solar = request.form.get("identifier","").upper() in BODIES
+            validate_image(path,small_solar=small_solar)
             poster = Path(temp) / "poster.jpg"
-            save_jpg(poster, resize_long(read_rgb(path), 1200))
+            image = read_rgb(path)
+            save_jpg(poster, resize_long(enlarge_small_solar(image) if small_solar else image, 1200))
             return send_file(io.BytesIO(poster.read_bytes()), mimetype="image/jpeg")
 
     @app.post("/api/admin/objects")
@@ -495,7 +497,7 @@ def create_app(data_dir=None, testing=False):
                 if fits_path.suffix.lower() not in {".fit", ".fits", ".fts"}:
                     raise ValueError("invalid_fits")
                 fits.save(fits_path)
-                observation = read_observation(fits_path)
+                observation = read_observation(fits_path,paths[0].name if solar else None)
             source = prefix = None
             if solar or kind:
                 identifier = supplied if kind else normalize_id(supplied)
@@ -587,7 +589,7 @@ def create_app(data_dir=None, testing=False):
         params.resolution = 720
         from .gaia_depth import prepare
         depth_data = prepare(store, record) if params.method == "gaia" else None
-        scene = Scene.from_paths({role: store.path(path) for role, path in record["assets"].items()}, params, stellar_depth=depth_data)
+        scene = Scene.from_paths(render_paths(store,record), params, stellar_depth=depth_data)
         # Show the chosen focal point at maximum zoom.
         import cv2
         import numpy as np
@@ -677,7 +679,8 @@ def create_app(data_dir=None, testing=False):
         with tempfile.TemporaryDirectory(prefix="fits-", dir=store.root) as temp:
             path = Path(temp) / secure_filename(file.filename)
             file.save(path)
-            observation = read_observation(path)
+            image_name = (record.get("source_original") or {}).get("file") or record["assets"]["final"]
+            observation = read_observation(path,image_name if record.get("body") else None)
             if not (record.get("body") or record.get("capture_kind")):
                 header_id = fits_target(observation["header"].get("OBJECT"))
                 if not belongs(path.name, group_id(record)) and not (
@@ -729,6 +732,8 @@ def create_app(data_dir=None, testing=False):
             preview = gallery_preview_path(store.path(record["video"]))
             relative = preview if preview.is_file() else record["video"]
         elif kind == "original-view":
+            if record.get("render_input"):
+                return send_file(store.path(record["render_input"]),mimetype="image/png",conditional=True,max_age=3600)
             # Browsers do not generally decode TIFF. Display the full-size raster
             # as JPEG while the download route retains the original bytes.
             image = read_rgb(store.path(record["assets"]["final"]))
@@ -739,6 +744,8 @@ def create_app(data_dir=None, testing=False):
             return send_file(stream,mimetype="image/jpeg",max_age=3600)
         elif kind == "final":
             relative = record["assets"]["final"]
+            if request.args.get("download") == "1":
+                relative = (record.get("source_original") or {}).get("file") or relative
         else:
             abort(404)
         if not relative:

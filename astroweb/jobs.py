@@ -333,7 +333,8 @@ class JobQueue:
                 from .gaia_depth import prepare
                 extra["stellar_depth"] = prepare(self.store, self.store.get("objects", record["id"]))
                 self.checkpoint(job_id)
-            stats = render_video({key: self.store.path(value) for key, value in record["assets"].items()}, self.store.path(relative), params, progress=lambda p: self.checkpoint(job_id,p), **extra)
+            from .media import render_paths
+            stats = render_video(render_paths(self.store,record), self.store.path(relative), params, progress=lambda p: self.checkpoint(job_id,p), **extra)
             self.checkpoint(job_id)
             self.ensure_preview(relative)
             self.checkpoint(job_id)

@@ -5,12 +5,13 @@ function selectButtons(host,options,choose,initial=0){
     button.onclick=()=>{buttons.forEach((b,i)=>b.setAttribute('aria-pressed',String(index===i)));choose(index);};
     host.append(button);return button;
   });buttons[initial].click();
+  return buttons;
 }
 const groups=['Capture films','Journeys','Maps','Google TV'];
-selectButtons($('groups'),groups,index=>{
+const filmGroups=selectButtons($('groups'),groups,index=>{
   const list=films.filter(f=>f[1]===groups[index]);$('playlist').replaceChildren();
   const buttons=list.map((f,i)=>{
-    const b=document.createElement('button');b.type='button';
+    const b=document.createElement('button');b.type='button';b.id='clip-'+f[0];
     const im=new Image();im.src='media/'+f[0]+'-poster.webp';im.alt='';im.loading='lazy';
     const txt=document.createElement('span'),title=document.createElement('strong'),meta=document.createElement('small');
     title.textContent=f[2];meta.textContent=f[3];txt.append(title,meta);const arrow=document.createElement('span');arrow.className='arrow';arrow.textContent='›';
@@ -22,6 +23,17 @@ selectButtons($('groups'),groups,index=>{
     };return b;
   });buttons[0].click();
 });
+
+function openLinkedFilm(){
+  const id=location.hash.slice(1);
+  const film=films.find(entry=>entry[0]===id);
+  if(!film)return;
+  filmGroups[groups.indexOf(film[1])].click();
+  $('clip-'+id).click();
+  $('cinema').scrollIntoView();
+}
+window.addEventListener('hashchange',openLinkedFilm);
+openLinkedFilm();
 const screens=[
  ['TV viewer','tv-viewer','All available actions fit one row; rotate and fullscreen are the two icons at the far right.'],
  ['TV Explore','tv-explore','Explore stays with the open capture: its capture night and tonight, or the named features within that photograph.'],

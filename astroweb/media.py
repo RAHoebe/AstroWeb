@@ -6,6 +6,8 @@ import uuid
 import warnings
 from pathlib import Path
 
+import cv2
+import numpy as np
 from PIL import Image
 
 from .catalogue import canonical,group_id,notation,belongs
@@ -19,6 +21,7 @@ ROLES = ("final", "starless", "stars", "stars_laid")
 EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 MAX_FILE = 100 * 1024 * 1024
 MAX_PIXELS = 40_000_000
+SMALL_SOLAR_EDGE = 256
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
 
@@ -88,7 +91,7 @@ def identify_files(identifier, paths):
     return roles
 
 
-def validate_image(path):
+def validate_image(path, *, small_solar=False):
     if path.stat().st_size > MAX_FILE:
         raise ValueError("image_too_large")
     try:
@@ -98,7 +101,8 @@ def validate_image(path):
                 width, height = image.size
                 if image.format not in {"PNG", "JPEG", "TIFF"} or getattr(image, "n_frames", 1) != 1:
                     raise ValueError("invalid_image")
-                if width * height > MAX_PIXELS or min(width, height) < 128:
+                small = min(width,height) < 128 and not (small_solar and max(width,height) <= SMALL_SOLAR_EDGE)
+                if width * height > MAX_PIXELS or small:
                     raise ValueError("image_dimensions")
                 size = image.size
                 image.verify()
@@ -110,16 +114,32 @@ def validate_image(path):
     return size
 
 
-def validate_images(paths):
+def validate_images(paths, *, small_solar=False):
     sizes = set()
     for path in paths.values():
-        sizes.add(validate_image(path))
+        sizes.add(validate_image(path,small_solar=small_solar))
     if len(sizes) != 1:
         raise ValueError("dimension_mismatch")
     # Force full decoding before any record can enter the queue.
     for path in paths.values():
         read_rgb(path)
     return next(iter(sizes))
+
+
+def enlarge_small_solar(image):
+    height,width = image.shape[:2]
+    if min(width,height) >= 128 or max(width,height) >= SMALL_SOLAR_EDGE:
+        return image
+    factor = SMALL_SOLAR_EDGE/max(width,height)
+    size = (max(2,round(width*factor)),max(2,round(height*factor)))
+    return np.clip(cv2.resize(image,size,interpolation=cv2.INTER_LANCZOS4),0,1)
+
+
+def render_paths(store, record):
+    paths = {role:store.path(path) for role,path in record["assets"].items()}
+    if record.get("render_input"):
+        paths["final"] = store.path(record["render_input"])
+    return paths
 
 
 def import_object(store, identifier, paths, session_name="", *, repeat=False, capture_date=None, source_prefix=None, allow_export_prefix=False, nightscape=None, title=""):
@@ -154,7 +174,7 @@ def import_object(store, identifier, paths, session_name="", *, repeat=False, ca
         roles={"final":Path(paths[0])}
     else:
         roles=identify_files(source_prefix if allow_export_prefix else identifier, paths)
-    width, height = validate_images(roles)
+    width, height = validate_images(roles,small_solar=solar)
     identifier=catalog_id
     if separate:
         identifier = catalog_id+"~"+uuid.uuid4().hex[:12]
@@ -170,7 +190,7 @@ def import_object(store, identifier, paths, session_name="", *, repeat=False, ca
             assets[role] = dest.relative_to(store.root).as_posix()
             hashes[role] = hashlib.sha256(dest.read_bytes()).hexdigest()
         poster = folder.parent / "poster.jpg"
-        save_jpg(poster, resize_long(read_rgb(roles["final"]), 1600))
+        image = read_rgb(roles["final"])
         record = {"id": identifier, "assets": assets, "sha256": hashes, "poster": poster.relative_to(store.root).as_posix(), "width": width, "height": height, "metadata": initial_metadata(catalog_id), "params": Parameters().__dict__, "video": None, "render": None, "published": False, "created_at": now()}
         if nightscape:
             nl,en=NIGHTSCAPES[nightscape]
@@ -180,6 +200,22 @@ def import_object(store, identifier, paths, session_name="", *, repeat=False, ca
             record.update(capture_kind=nightscape,session_name=session_name)
         if solar:
             record["body"]=catalog_id
+            from .observation import asi_filename_observation
+            observation = asi_filename_observation(roles["final"].name)
+            if observation:
+                record["observation"] = observation
+            prepared = enlarge_small_solar(image)
+            if prepared is not image:
+                derived = folder / ("render-input-"+uuid.uuid4().hex+".png")
+                # Retain interpolated values at 16 bits independently of source format.
+                pixels = cv2.cvtColor(np.rint(prepared*65535).astype(np.uint16),cv2.COLOR_RGB2BGR)
+                ok, png = cv2.imencode(".png",pixels)
+                if not ok:
+                    raise ValueError("invalid_image")
+                derived.write_bytes(png.tobytes())
+                image = prepared
+                record.update(render_input=derived.relative_to(store.root).as_posix(),
+                              width=prepared.shape[1],height=prepared.shape[0])
         if solar or nightscape:
             record.update(gaia={"status":"not_applicable"},params=Parameters(method="kenburns",orientation="original").__dict__)
         if capture_date:
@@ -189,6 +225,7 @@ def import_object(store, identifier, paths, session_name="", *, repeat=False, ca
             if siblings:
                 import copy
                 record["metadata"] = copy.deepcopy((existing or siblings[0])["metadata"])
+        save_jpg(poster, resize_long(image, 1600))
         return store.put("objects", identifier, record)
     except BaseException:
         # Remove only this new, checked directory inside the data root.

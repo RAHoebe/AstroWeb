@@ -1,6 +1,7 @@
 """Read relevant primary-HDU FITS metadata without loading or changing image data."""
 import copy
 import math
+import re
 import shutil
 import uuid
 from datetime import datetime
@@ -12,7 +13,9 @@ from astropy.time import Time
 
 from .store import now
 
-FIELDS = ["DATE-OBS", "DATE-END", "TIMESYS", "OBJECT", "TELESCOP", "INSTRUME", "FILTER", "RA", "DEC", "CRVAL1", "CRVAL2", "CTYPE1", "CTYPE2", "OBJCTRA", "OBJCTDEC", "SITELAT", "SITELONG", "SITEELEV", "OBSGEO-B", "OBSGEO-L", "OBSGEO-H", "EXPTIME", "EXPOSURE", "LIVETIME", "NCOMBINE", "WZNSUBS", "WZNOTE", "WZCENTRE", "FOCALLEN", "XPIXSZ", "YPIXSZ", "GAIN", "CCD-TEMP", "NAXIS1", "NAXIS2"]
+FIELDS = ["DATE-OBS", "DATE-END", "TIMESYS", "SWCREATE", "OBJECT", "TELESCOP", "INSTRUME", "FILTER", "RA", "DEC", "CRVAL1", "CRVAL2", "CTYPE1", "CTYPE2", "OBJCTRA", "OBJCTDEC", "SITELAT", "SITELONG", "SITEELEV", "OBSGEO-B", "OBSGEO-L", "OBSGEO-H", "EXPTIME", "EXPOSURE", "LIVETIME", "NCOMBINE", "WZNSUBS", "WZNOTE", "WZCENTRE", "FOCALLEN", "XPIXSZ", "YPIXSZ", "GAIN", "CCD-TEMP", "NAXIS1", "NAXIS2"]
+ASI_TIMESTAMP = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6})(?=[._-]|$)")
+ASI_PLANET_TAG = re.compile(r"-RAW_Planet_[0-9]+(?:[._-]|$)", re.IGNORECASE)
 
 
 def finite(value, low=-1e12, high=1e12):
@@ -23,7 +26,31 @@ def finite(value, low=-1e12, high=1e12):
         return None
 
 
-def read_observation(path):
+def asi_filename_time(*names):
+    """ASI capture names contain a wall-clock time without a UTC offset."""
+    zone = ZoneInfo("Europe/Amsterdam")
+    for name in names:
+        prefix = ASI_TIMESTAMP.match(Path(name).stem) if name else None
+        if prefix:
+            try:
+                local = datetime.strptime(prefix[1],"%Y-%m-%d-%H%M%S").replace(tzinfo=zone)
+            except ValueError:
+                continue
+            # A clock change can make the filename's wall time ambiguous or nonexistent.
+            if local.utcoffset() == local.replace(fold=1).utcoffset():
+                return local.isoformat()
+    return None
+
+
+def asi_filename_observation(name):
+    if not ASI_PLANET_TAG.search(Path(name).stem):
+        return {}
+    return {"source":"filename","filename":Path(name).name,"date_obs":asi_filename_time(name),
+            "date_only":False,"timezone":"Europe/Amsterdam","time_source":"filename",
+            "time_scale_assumed":True,"header":{}}
+
+
+def read_observation(path, image_name=None):
     path = Path(path)
     if path.suffix.lower() not in {".fits", ".fit", ".fts"} or path.stat().st_size > 512 * 1024 * 1024:
         raise ValueError("invalid_fits")
@@ -37,9 +64,11 @@ def read_observation(path):
             date_comment = header.comments["DATE-OBS"] if "DATE-OBS" in header else ""
     except (OSError, IndexError, KeyError, TypeError):
         raise ValueError("invalid_fits") from None
-    date_obs = None
+    asi_stack = (str(raw.get("SWCREATE", "")).strip().casefold() == "asivideostack"
+                 or any(name and ASI_PLANET_TAG.search(Path(name).stem) for name in (path.name,image_name)))
+    date_obs = asi_filename_time(path.name,image_name) if asi_stack else None
     scale = str(raw.get("TIMESYS", "UTC")).strip().lower()
-    if raw.get("DATE-OBS") and scale in {"utc", "tai", "tt"}:
+    if not asi_stack and raw.get("DATE-OBS") and scale in {"utc", "tai", "tt"}:
         try:
             date_obs = Time(str(raw["DATE-OBS"]), scale=scale).utc.to_datetime().isoformat() + "+00:00"
         except (ValueError, TypeError):
@@ -66,11 +95,11 @@ def read_observation(path):
     if integration is None and exposure is not None and frames is not None:
         integration = exposure * frames
         integration_source = "EXPTIME × NCOMBINE"
-    return {"source": "FITS", "filename": path.name, "date_obs": date_obs, "date_only": bool(date_obs and len(str(raw["DATE-OBS"]).strip())==10), "time_source": "DATE-OBS", "time_comment": date_comment, "time_scale": scale.upper(), "time_scale_assumed": "TIMESYS" not in raw, "ra": ra, "dec": dec, "coordinate_source": coord_source, "latitude": finite(raw.get("SITELAT", raw.get("OBSGEO-B")), -90, 90), "longitude": finite(raw.get("SITELONG", raw.get("OBSGEO-L")), -180, 180), "elevation": finite(raw.get("SITEELEV", raw.get("OBSGEO-H", 0)), -500, 9000), "timezone": "Europe/Amsterdam", "exposure": exposure, "frames": int(frames) if frames else None, "integration": integration, "integration_source": integration_source, "telescope": str(raw.get("TELESCOP", "")).split("_")[0], "filter": str(raw.get("FILTER", "")).strip(), "mosaic": str(raw.get("WZNOTE", "")), "publish_location": False, "header": raw, "read_at": now()}
+    return {"source": "FITS", "filename": path.name, "date_obs": date_obs, "date_only": bool(not asi_stack and date_obs and len(str(raw["DATE-OBS"]).strip())==10), "time_source": "filename" if asi_stack else "DATE-OBS", "time_comment": "" if asi_stack else date_comment, "time_scale": None if asi_stack else scale.upper(), "time_scale_assumed": asi_stack or "TIMESYS" not in raw, "ra": ra, "dec": dec, "coordinate_source": coord_source, "latitude": finite(raw.get("SITELAT", raw.get("OBSGEO-B")), -90, 90), "longitude": finite(raw.get("SITELONG", raw.get("OBSGEO-L")), -180, 180), "elevation": finite(raw.get("SITEELEV", raw.get("OBSGEO-H", 0)), -500, 9000), "timezone": "Europe/Amsterdam", "exposure": exposure, "frames": int(frames) if frames else None, "integration": integration, "integration_source": integration_source, "telescope": str(raw.get("TELESCOP", "")).split("_")[0], "filter": str(raw.get("FILTER", "")).strip(), "mosaic": str(raw.get("WZNOTE", "")), "publish_location": False, "header": raw, "read_at": now()}
 
 
 def attach_fits(store, record, source, observation=None):
-    observation = observation or read_observation(source)
+    observation = observation or read_observation(source,record["assets"]["final"])
     dest = store.path(f"objects/{record.get('storage_id', record['id'])}/fits-{uuid.uuid4().hex[:10]}/{Path(source).name}")
     dest.parent.mkdir(parents=True)
     shutil.copyfile(source, dest)
@@ -106,6 +135,8 @@ def observation_overrides(original, raw):
             stamp = datetime.fromisoformat(raw["date_obs"].replace("Z", "+00:00"))
             if stamp.tzinfo is None:
                 raise ValueError()
+            if result.get("time_source") == "filename" and result.get("date_obs") != stamp.isoformat():
+                result.update(time_source="user",time_scale_assumed=False)
             result["date_obs"] = stamp.isoformat()
             result["date_only"] = False
         except (ValueError, TypeError, AttributeError):

@@ -39,7 +39,7 @@ PRESETS = {
           (("Io","Io"),("Europa","Europa"),("Ganymedes","Ganymede"),("Callisto","Callisto"))],
     ],
     "SATURN": [
-        feature("rings", "Ringen", "Rings", "saturn/facts/"),
+        feature("rings", "Ringen", "Rings", "saturn/facts/", "PIA11141"),
         feature("cassini-division", "Cassinischeiding", "Cassini Division", "resource/saturns-rings-2/", "PIA11657"),
         feature("titan", "Titan", "Titan", "saturn/moons/titan/facts/"),
         feature("enceladus", "Enceladus", "Enceladus", "saturn/facts/", "PIA11688"),

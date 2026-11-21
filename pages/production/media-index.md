@@ -1,6 +1,14 @@
 # AstroWeb media index
 
-The English overview was recorded with AstroWeb v1.4.1 and Google TV 0.6.0 and has narration and captions. The viewer screenshots show the v1.5.2 interface and TV 0.8.0. Installation downloads link to [web v1.5.4](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.4) and [TV 0.8.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.0). The screening-room clips are silent.
+The English overview was recorded with AstroWeb v1.4.1 and Google TV 0.6.0 and has narration and captions. The viewer screenshots show the v1.5.2 interface and TV 0.8.0. Installation downloads link to [web v1.5.5](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.5.5) and [TV 0.8.0](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.0). The screening-room clips are silent.
+
+## From Saturn to its rings
+
+Journeys · Saturn · Cassini detail journey
+
+A small telescope capture dissolves into a Cassini overview with the same ring orientation. The camera approaches the Cassini Division and the shadow of Mimas in a separate close-up.
+
+[Download clip](../media/saturn-rings.mp4) · Capture: Ron Hoebe. Cassini imagery: NASA/JPL/Space Science Institute.
 
 ## Through the North America Nebula
 

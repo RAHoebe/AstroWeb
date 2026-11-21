@@ -122,7 +122,7 @@ function renderViewerText(){
   renderNeighbours();renderCaptureDates(state.current);
   const object=state.current,m=object.metadata,obs=object.observation||{};document.title=local(m.name)+' · AstroWeb';$('viewer-id').textContent=captureLabel(object)+' · '+local(m.type);$('viewer-title').textContent=local(m.name);$('viewer-description').textContent=local(m.description);$('viewer-original').alt=local(m.name);$('viewer-facts').replaceChildren();
   fact($('viewer-facts'),t('constellation'),local(m.constellation));fact($('viewer-facts'),t('catalogTarget'),m.target);fact($('viewer-facts'),t('integration'),duration(obs.integration));fact($('viewer-facts'),t('telescope'),obs.telescope);fact($('viewer-facts'),t('frames'),obs.frames);fact($('viewer-facts'),t('singleExposure'),obs.exposure?obs.exposure+' s':'');fact($('viewer-facts'),t('filter'),obs.filter);
-  if(obs.date_obs){const stamp=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{dateStyle:'medium',timeStyle:'short',timeZone:obs.timezone||'UTC'}).format(new Date(obs.date_obs));fact($('viewer-facts'),t('observedAt'),stamp+' · '+(obs.timezone||'UTC'));}
+  if(obs.date_obs){const stamp=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{dateStyle:'medium',timeStyle:'short',timeZone:obs.timezone||'UTC'}).format(new Date(obs.date_obs));fact($('viewer-facts'),t(obs.time_source==='filename'?'observedAtFilename':'observedAt'),stamp+' · '+(obs.timezone||'UTC'));}
   $('viewer-sources').replaceChildren();const links=[...(m.sources||[])];if(m.external&&!links.some(link=>link.url===m.external.url))links.push({label:m.external.provider,url:m.external.url});for(const link of links){if(!/^https:\/\//.test(link.url))continue;const a=node('a','',link.label+' ↗');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';$('viewer-sources').append(a);}
   $('external-description').replaceChildren();if(m.external){const ext=m.external;const details=node('details','external-block');details.append(node('summary','',t('nasaMore')));const text=local(ext.text);details.append(node('p','',text||t('untranslated')));if(language==='nl'&&ext.translation==='machine')details.append(node('p','small',t('machineTranslation')));details.append(node('p','small',ext.credit+' · '+t('fetchedAt')+' '+formatDate(ext.fetched_at)));$('external-description').append(details);}
 }
@@ -513,6 +513,8 @@ function hubbleCaption(){
   const status=state.current?.body?({hubbleLoading:'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
   if(active?.full_footprint)$('hubble-description').textContent+=' RA '+active.ra.toFixed(4)+'° · Dec '+active.dec.toFixed(4)+'°';
   if(active?.alignment==='lunar-map')$('hubble-description').textContent=t('lunarMissionNote');
+  if(active?.alignment==='saturn-ring-axis')$('hubble-description').textContent=t('saturnMissionNote');
+  if(active?.alignment==='separate-moon')$('hubble-description').textContent=t('separateMoonNote');
   $('hubble-status').textContent=status?t(status):'';
   $('hubble-retry').hidden=hubbleState!=='hubble_unavailable';
 }
@@ -828,7 +830,24 @@ function fillObservation(object){
   const fields=$('observation-form').elements;
   for(const k of ['latitude','longitude','ra','dec'])fields[k].required=!object.body;
   for(const k of ['ra','dec']){fields[k].disabled=!!object.body;fields[k].closest('label').hidden=!!object.body;}
-  const observation=object.observation||{};for(const key of ['date_obs','latitude','longitude','ra','dec','timezone'])$('observation-form').elements.namedItem(key).value=observation[key]??(key==='timezone'?'Europe/Amsterdam':'');$('observation-form').elements.namedItem('publish_location').checked=!!observation.publish_location;const details=$('fits-details');details.replaceChildren();fact(details,t('integration'),duration(observation.integration));fact(details,t('frames'),observation.frames);fact(details,t('telescope'),observation.telescope);fact(details,'FITS',observation.filename);fact(details,'DATE-OBS',observation.time_comment);fact(details,'UTC',observation.time_scale_assumed?(language==='nl'?'Aangenomen volgens FITS-conventie':'Assumed by FITS convention'):observation.time_scale);}
+  const observation=object.observation||{};
+  for(const key of ['date_obs','latitude','longitude','ra','dec','timezone']){
+    fields.namedItem(key).value=observation[key]??(key==='timezone'?'Europe/Amsterdam':'');
+  }
+  fields.namedItem('publish_location').checked=!!observation.publish_location;
+  const details=$('fits-details');
+  details.replaceChildren();
+  fact(details,t('integration'),duration(observation.integration));
+  fact(details,t('frames'),observation.frames);
+  fact(details,t('telescope'),observation.telescope);
+  if(object.has_fits)fact(details,'FITS',observation.filename);
+  if(observation.time_source==='filename'){
+    fact(details,t('observedAtFilename'),observation.date_obs||t('asiTimeMissing'));
+  }else{
+    fact(details,'DATE-OBS',observation.time_comment);
+    fact(details,'UTC',observation.time_scale_assumed?(language==='nl'?'Aangenomen volgens FITS-conventie':'Assumed by FITS convention'):observation.time_scale);
+  }
+}
 let pendingIdentity = Promise.resolve();
 async function fitsObject(file){
   if(!file)return '';
@@ -906,7 +925,7 @@ async function setFocusImage(source){
   img.removeAttribute('src');
   if(source instanceof File){
     if(/\.tiff?$/i.test(source.name)){
-      const body=new FormData();body.append('image',source);
+      const body=new FormData();body.append('image',source);body.set('identifier',$('identifier').value);
       try{
         const response=await api('/api/admin/upload-poster',{method:'POST',body,raw:true});
         source=await response.blob();

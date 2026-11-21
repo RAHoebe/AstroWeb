@@ -13,6 +13,14 @@ from .camera import FocusZoom
 
 LOCK = threading.Lock()
 CASSINI = "NASA/JPL/Space Science Institute"
+SATURN_OVERVIEW = "PIA11141"
+SATURN_RINGS = "PIA11657"
+ENCELADUS = "PIA11688"
+SATURN_SOURCES = {
+    SATURN_OVERVIEW: "https://science.nasa.gov/resource/saturn-four-years-on/",
+    SATURN_RINGS: "https://science.nasa.gov/photojournal/mimas-and-the-great-division/",
+    ENCELADUS: "https://science.nasa.gov/resource/bursting-at-the-seams/",
+}
 
 # The focus is measured on the published mission image, never on the upload.
 FEATURES = {
@@ -23,7 +31,8 @@ FEATURES = {
     "MARS":[("PIA01167","large.jpg","Gesteentelagen in Valles Marineris","Rock layers in Valles Marineris","NASA/JPL/Malin Space Science Systems",.83,.52)],
     "JUPITER":[("PIA21395","medium.jpg","De Grote Rode Vlek","The Great Red Spot","NASA/JPL-Caltech/SwRI/MSSS · Kevin M. Gill (CC BY)",.62,.5),
                ("PIA00294","orig.jpg","Het gebarsten ijs van Europa","The fractured ice of Europa","Galileo · NASA/JPL",.52,.51)],
-    "SATURN":[("PIA11657","orig.jpg","De Cassinischeiding en de schaduw van Mimas","Cassini Division and the shadow of Mimas",CASSINI,.51,.50),
+    "SATURN":[(SATURN_OVERVIEW,"orig.jpg","Saturnus en zijn ringen","Saturn and its rings",CASSINI,.84,.494),
+              (SATURN_RINGS,"orig.jpg","De Cassinischeiding en de schaduw van Mimas","Cassini Division and the shadow of Mimas",CASSINI,.64,.49),
               ("PIA11688","orig.jpg","IJsfonteinen op Enceladus","Ice plumes on Enceladus",CASSINI,.53,.65)],
     "URANUS":[("PIA18185","orig.jpg","Het ijslandschap van Miranda","The icy terrain of Miranda","Voyager 2 · NASA/JPL-Caltech",.54,.62)],
     "NEPTUNE":[("PIA00052","orig.jpg","De Grote Donkere Vlek in 1989","The Great Dark Spot in 1989","Voyager 2 · NASA/JPL",.50,.49)],
@@ -34,9 +43,16 @@ def options(body):
     if body == "MOON":
         from .lunar_detail import options as lunar_options
         return lunar_options()
-    return [{"id":ident,"name":{"nl":nl,"en":en},"credit":credit,
-             "source":"https://images.nasa.gov/details/"+ident}
-            for ident, _, nl, en, credit, _, _ in FEATURES.get(body, [])]
+    results = []
+    for ident, _, nl, en, credit, _, _ in FEATURES.get(body, []):
+        result = {"id":ident,"name":{"nl":nl,"en":en},"credit":credit,
+                  "source":SATURN_SOURCES.get(ident,"https://images.nasa.gov/details/"+ident)}
+        if ident in (SATURN_OVERVIEW,SATURN_RINGS):
+            result["alignment"] = "saturn-ring-axis"
+        elif ident==ENCELADUS:
+            result["alignment"] = "separate-moon"
+        results.append(result)
+    return results
 
 
 def mission_image(store, ident, file):
@@ -88,6 +104,84 @@ def frames(photo, image, focus, keep_edges=False):
             yield destination
         else:
             yield cv2.addWeighted(source,1-fade,destination,fade,0)
+
+
+def saturn_registration(photo, overview):
+    """Fit the measured silhouette against the Cassini mosaic's ring axis."""
+    gray = cv2.cvtColor(photo,cv2.COLOR_BGR2GRAY)
+    peak = int(gray.max())
+    if peak < 30:
+        return None
+    count,labels,stats,_ = cv2.connectedComponentsWithStats(np.uint8(gray > .18*peak))
+    if count < 2:
+        return None
+    component = 1+int(stats[1:,cv2.CC_STAT_AREA].argmax())
+    x,y,w,h,area = stats[component]
+    if area < 25 or min(x,y) < 2 or x+w > gray.shape[1]-2 or y+h > gray.shape[0]-2:
+        return None
+    points = np.column_stack(np.where(labels==component))[:,::-1]
+    values,vectors = np.linalg.eigh(np.cov(points.T))
+    if values[0] <= 0 or values[1] < 1.65*values[0]:
+        return None
+    axis = vectors[:,1]
+    if axis[0] < 0:
+        axis = -axis
+    span = np.ptp(points@axis)
+    weights = np.maximum(0,gray[labels==component].astype(float)-.55*peak)
+    center = np.average(points,axis=0,weights=weights) if weights.sum() else points.mean(axis=0)
+    height,width = overview.shape[:2]
+    # Measured on PIA11141: full ring span and centre of the globe.
+    scale = span/(.848*width)
+    transform = np.eye(3)
+    transform[:2,:2] = scale*np.column_stack((axis,[-axis[1],axis[0]]))
+    transform[:2,2] = center-transform[:2,:2]@np.array([.504*width,.507*height])
+    return transform
+
+
+def moon_cut_frames(photo, image, focus):
+    """Dissolve through space into a different body which is unresolved in the capture."""
+    for i in range(288):
+        phase = i/287
+        if phase < .38:
+            scene = view(photo,(.5,.5),.3*smooth(phase/.38))
+            gain = 1-smooth((phase-.21)/.17)
+        else:
+            scene = view(image,focus,.6*smooth((phase-.38)/.54))
+            gain = smooth((phase-.38)/.21)
+        yield cv2.convertScaleAbs(scene,alpha=gain)
+
+
+def saturn_frames(photo, overview, detail=None, focus=None):
+    registration = saturn_registration(photo,overview)
+    if registration is None:
+        yield from frames(photo,detail if detail is not None else overview,focus or (.84,.494))
+        return
+    start = min(WIDTH/photo.shape[1],HEIGHT/photo.shape[0])
+    wing = registration@np.array([.84*overview.shape[1],.494*overview.shape[0],1.])
+    camera = FocusZoom(np.array(photo.shape[1::-1])/2,wing[:2],start,start*(8 if detail is not None else 5),WIDTH,HEIGHT)
+    if detail is not None:
+        height,width = detail.shape[:2]
+        target = np.array(focus)*[width,height]
+        margin = np.minimum(target,[width,height]-target)
+        cover = max(WIDTH/(2*margin[0]),HEIGHT/(2*margin[1]))
+        closeup = FocusZoom(target,target,cover,cover*1.24,WIDTH,HEIGHT)
+    for i in range(336):
+        phase = i/335
+        _,cam = camera.at(smooth((phase-.05)/(.69 if detail is not None else .85)))
+        fade = smooth((phase-.22)/.24)
+        archive_fade = smooth((phase-.64)/.17) if detail is not None else 0.
+        if archive_fade<1:
+            if fade<1:
+                original = cv2.warpPerspective(photo,cam,(WIDTH,HEIGHT))
+            if fade>0:
+                wide = cv2.warpPerspective(overview,cam@registration,(WIDTH,HEIGHT))
+            scene = (original if fade<=0 else wide if fade>=1 else
+                     cv2.addWeighted(original,1-fade,wide,fade,0))
+        if archive_fade>0:
+            _,cam_close = closeup.at(smooth((phase-.63)/.31))
+            archive = cv2.warpPerspective(detail,cam_close,(WIDTH,HEIGHT))
+            scene = archive if archive_fade>=1 else cv2.addWeighted(scene,1-archive_fade,archive,archive_fade,0)
+        yield scene
 
 
 def limb_circle(image):
@@ -172,6 +266,7 @@ def aligned_limb_frames(photo,image,focus):
 
 def movie(store,record,ident):
     lunar = record.get("body") == "MOON"
+    saturn = record.get("body") == "SATURN" and ident in (SATURN_OVERVIEW,SATURN_RINGS)
     if lunar:
         from . import lunar_detail
         from .collection import capture_date
@@ -185,7 +280,9 @@ def movie(store,record,ident):
         if not item:
             raise ValueError("solarDetailMissing")
         _,file,_,_,credit,x,y=item
-        signature = ("limb-registered-v6" if ident=="NHQ202404080107" else "solar-tour-v1",item,record["sha256"]["final"])
+        version = ("saturn-rings-v1" if saturn else "limb-registered-v6" if ident=="NHQ202404080107"
+                   else "separate-moon-v1" if ident==ENCELADUS else "solar-tour-v1")
+        signature = (version,item,record["sha256"]["final"])
     limb=ident=="NHQ202404080107"
     key=hashlib.sha256(str(signature).encode()).hexdigest()[:20]
     folder=store.path(f"objects/{record.get('storage_id',record['id'])}/solar-system")
@@ -200,7 +297,11 @@ def movie(store,record,ident):
             folder.mkdir(parents=True,exist_ok=True)
             tmp=folder/(uuid.uuid4().hex+".part.mp4")
             try:
+                if saturn:
+                    overview = image if ident==SATURN_OVERVIEW else mission_image(store,SATURN_OVERVIEW,"orig.jpg")
                 sequence=(lunar_detail.sequence(store,record,ident,photo,WIDTH,HEIGHT) if lunar else
+                          saturn_frames(photo,overview,image if ident==SATURN_RINGS else None,(x,y)) if saturn else
+                          moon_cut_frames(photo,image,(x,y)) if ident==ENCELADUS else
                           aligned_limb_frames(photo,image,(x,y)) if limb and disk_in_photo(photo)[1] is not None else frames(photo,image,(x,y),keep_edges=limb))
                 encode(sequence,credit.replace(" · "," / "),tmp)
                 tmp.replace(output)
