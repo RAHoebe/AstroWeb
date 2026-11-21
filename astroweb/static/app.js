@@ -6,7 +6,7 @@ import {t,local,language,setLanguage,formatDate,duration} from './i18n.js';
 import {editPanorama,editorLanguage} from './panorama-editor.js';
 import {SkyPlayer} from './sky.js';
 const $=id=>document.getElementById(id);
-const state={objects:[],adminObjects:[],jobs:[],session:null,selected:null,current:null,files:[],busy:false,preview:null};
+const state={objects:[],adminObjects:[],jobs:[],session:null,selected:null,current:null,files:[],busy:false,uploading:false,preview:null};
 const studioRoute = location.pathname === '/admin';
 document.body.classList.toggle('studio-route', studioRoute);
 $('studio').hidden = !studioRoute;
@@ -15,7 +15,6 @@ document.body.classList.toggle('viewer-route',viewerRoute);
 $('viewer').hidden=!viewerRoute;
 let journeyInfo=null;
 let featuredId = null;
-let uploadPosterUrl = null;
 let gaiaDepthRequest=0;
 const sky=new SkyPlayer();
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
@@ -32,7 +31,7 @@ async function api(url,options={}){
 function message(id,text,error=false){const target=$(id);target.textContent=text;target.classList.toggle('error',error);}
 let toastTimer;function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function setBusy(value){state.busy=value;for(const id of ['render-button','preview-button','fetch-nasa'])$(id).disabled=value;}
-function applyLanguage(value){setLanguage(value);$('exploration-frame').contentWindow?.postMessage({type:'astroweb-language',language:value},location.origin);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();renderDraftIdentity();showAutoRoute();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();editorLanguage();updateGaiaDepth();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
+function applyLanguage(value){setLanguage(value);$('exploration-frame').contentWindow?.postMessage({type:'astroweb-language',language:value},location.origin);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();renderDraftIdentity();renderUploadProgress();showAutoRoute();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();editorLanguage();updateGaiaDepth();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
 
 async function loadGallery(){try{state.objects=(await api('/api/objects')).objects;buildGallery();}catch(e){$('gallery-grid').replaceChildren(node('div','empty-state',errorText(e)));}}
@@ -623,7 +622,10 @@ async function refreshAdmin(){
   state.adminObjects=response.objects;state.jobs=response.jobs;
   if(state.selected){
     const updated=state.adminObjects.find(o=>o.id===state.selected.id);
-    if(updated){state.selected=updated;showVersions();renderChoice();}
+    if(updated){
+      state.selected=updated;showVersions();renderChoice();
+      if(autoAlignment==='pending'&&['solved','no_match','no_pointing','unavailable'].includes(updated.gaia?.status))findZoomRoute();
+    }
   }
   renderAdminList();renderJobs();
 }
@@ -655,7 +657,7 @@ function renderAdminList(){
     list.replaceChildren(new Option(t('chooseStudioObject'),''));
     for(const [value,label] of options)list.add(new Option(label,value));
   }
-  list.disabled=!options.length;
+  list.disabled=state.uploading||!options.length;
   list.value=state.selected?studioGroup(state.selected):'';
   renderStudioCaptures();
 }
@@ -824,10 +826,20 @@ $('capture-kind').addEventListener('change',()=>{
   updateCaptureKind();assignFiles(state.files);
 });
 $('solar-body').addEventListener('change',updateCaptureKind);
-function newObject(){clearImportControls();state.selected=null;setFocusImage(null);showVersions();state.files=[];$('upload-form').reset();$('upload-section').hidden=false;$('edit-section').hidden=true;$('metadata-section').hidden=true;$('preview-button').hidden=true;$('preview-image').hidden=true;$('render-button').querySelector('[data-i18n]').dataset.i18n='createFilm';$('render-button').querySelector('[data-i18n]').textContent=t('createFilm');fillParams();updateCaptureKind();renderFileList();renderAdminList();message('studio-message','');}
+function newObject(){
+  if(state.uploading)return;
+  clearImportControls();state.selected=null;setFocusImage(null);showVersions();state.files=[];
+  $('upload-form').reset();$('upload-section').hidden=false;$('edit-section').hidden=true;
+  $('studio-editor').hidden=true;$('metadata-section').hidden=true;$('preview-image').hidden=true;
+  fillParams();updateCaptureKind();renderFileList();renderAdminList();message('studio-message','');
+}
 $('new-object').addEventListener('click',newObject);
 function renderChoice(){
   $('edit-object-title').textContent=studioLabel(state.selected).join(' · ');
+  const firstFilm=!state.selected.video;
+  $('draft-uploaded').hidden=!firstFilm;
+  const text=$('render-button').querySelector('[data-i18n]');
+  text.dataset.i18n=firstFilm?'createFilm':'rerender';text.textContent=t(text.dataset.i18n);
   const g=state.selected?.gaia||{};
   $('gaia-status').textContent=g.status&&!state.selected?.capture_kind?t('gaia_'+g.status)+(g.matches?' · '+g.matches+' '+t('gaiaStars')+' · '+g.median_arcsec+'″':''):'';
   $('gaia-retry').hidden=['pending','running','solved','not_applicable'].includes(g.status);
@@ -836,12 +848,22 @@ $('gaia-retry').addEventListener('click',async()=>{
   try{await api('/api/admin/objects/'+state.selected.id+'/align',{method:'POST'});await refreshAdmin();}
   catch(e){toast(errorText(e));}
 });
-function selectObject(id){const object=state.adminObjects.find(item=>item.id===id);if(!object)return;clearImportControls();state.selected=object;editPanorama(object,state.adminObjects,api);$('auto-tools').hidden=false;$('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'#discover';$('upload-section').hidden=true;$('edit-section').hidden=false;$('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);updateCaptureKind();const text=$('render-button').querySelector('[data-i18n]');text.dataset.i18n='rerender';text.textContent=t('rerender');renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');}
+function selectObject(id){
+  const object=state.adminObjects.find(item=>item.id===id);
+  if(!object||state.uploading)return;
+  clearImportControls();state.selected=object;state.files=[];
+  editPanorama(object,state.adminObjects,api);
+  $('find-more').hidden=false;$('find-more').href='/viewer/'+encodeURIComponent(id)+'#discover';
+  $('upload-section').hidden=true;$('edit-section').hidden=false;$('studio-editor').hidden=false;
+  $('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;
+  setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);
+  updateCaptureKind();renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');
+}
 let pendingLandmark=null;
 const draftKey=id=>'astroweb-discovery-draft-'+id;
 function clearImportControls(){
   resetAutoRoute();$('auto-tools').hidden=true;delete $('identifier').dataset.override;
-  identityRequest++;draftIdentity=null;draftZoomRequest=null;renderDraftIdentity();
+  identityRequest++;draftIdentity=null;uploadToken=null;transfer=null;renderDraftIdentity();renderUploadProgress();message('upload-error','');
   pendingLandmark=null;$('point-replace').hidden=true;$('find-more').hidden=true;
 }
 $('point-name').addEventListener('input',()=>{savePoint();drawPicker();});
@@ -902,30 +924,23 @@ function fillObservation(object){
     fact(details,'UTC',observation.time_scale_assumed?(language==='nl'?'Aangenomen volgens FITS-conventie':'Assumed by FITS convention'):observation.time_scale);
   }
 }
-let pendingIdentity=Promise.resolve(),identityRequest=0,draftIdentity=null,draftZoomRequest=null;
-async function fitsIdentity(file){
-  const result={name:'',wcs:false};
-  if(!file)return result;
-  const block=28800, cards=new Map();
+let pendingIdentity=Promise.resolve(),identityRequest=0,draftIdentity=null,uploadToken=null,transfer=null;
+async function fitsObject(file){
+  if(!file)return '';
+  const block=28800;
   for(let offset=0;offset<Math.min(file.size,1024*1024);offset+=block){
     const text=await file.slice(offset,offset+block).text();
-    if(!offset&&!text.startsWith('SIMPLE  ='))return result;
+    if(!offset&&!text.startsWith('SIMPLE  ='))return '';
     for(let pos=0;pos+80<=text.length;pos+=80){
       const card=text.slice(pos,pos+80),key=card.slice(0,8).trim();
-      if(key==='END'){
-        result.name=cards.get('OBJECT')||'';
-        const celestial=[cards.get('CTYPE1'),cards.get('CTYPE2')].filter(Boolean);
-        result.wcs=celestial.some(value=>value.startsWith('RA'))&&celestial.some(value=>value.startsWith('DEC'))
-          &&['CD1_1','CD1_2','CDELT1'].some(name=>cards.has(name));
-        return result;
-      }
-      if(['OBJECT','CTYPE1','CTYPE2','CD1_1','CD1_2','CDELT1'].includes(key)){
+      if(key==='END')return '';
+      if(key==='OBJECT'){
         const value=card.slice(10).trimStart().match(/^'((?:[^']|'')*)'/);
-        cards.set(key,value?value[1].replaceAll("''","'").trim():'');
+        return value?value[1].replaceAll("''","'").trim():'';
       }
     }
   }
-  return result;
+  return '';
 }
 function renderDraftIdentity(){
   const hint=$('identifier-source');
@@ -941,38 +956,115 @@ function renderDraftIdentity(){
 async function identifyDraft(files){
   const request=++identityRequest;
   const input=$('identifier');
-  draftIdentity=null;draftZoomRequest=null;renderDraftIdentity();
+  draftIdentity=null;renderDraftIdentity();
   if(singleImageMode()||!files.length)return;
   const manual=input.dataset.override?input.value.trim():'';
   const photos=files.filter(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name));
   const fits=files.find(f=>/\.(fits|fit|fts)$/i.test(f.name));
   try{
-    const info=await fitsIdentity(fits);
+    const object=await fitsObject(fits);
     if(request!==identityRequest||state.selected)return;
     const result=await api('/api/admin/upload-identity',{method:'POST',body:{
-      names:photos.slice(0,4).map(f=>f.name),object:info.name,identifier:manual}});
+      names:photos.slice(0,4).map(f=>f.name),object,identifier:manual}});
     if(request!==identityRequest||state.selected)return;
     if(result.identifier&&!input.dataset.override)input.value=result.identifier;
-    draftIdentity={...result,fits:info.wcs?fits:null};
+    draftIdentity=result;
     renderDraftIdentity();
-  }catch(e){if(request===identityRequest&&!state.selected)message('studio-message',errorText(e),true);}
+  }catch(e){if(request===identityRequest&&!state.selected)message('upload-error',errorText(e),true);}
 }
 $('identifier').addEventListener('input',()=>{
   $('identifier').dataset.override=$('identifier').value?'1':'';
-  identityRequest++;draftIdentity=null;draftZoomRequest=null;renderDraftIdentity();resetAutoRoute();
+  identityRequest++;draftIdentity=null;renderDraftIdentity();
 });
 $('identifier').addEventListener('change',()=>{pendingIdentity=identifyDraft(state.files);});
 function assignFiles(files){
-  state.files=[...files];
-  const final=singleImageMode()?state.files.find(f=>/\.(png|jpe?g|tiff?)$/i.test(f.name)):state.files.find(file=>/_final\.(png|jpe?g|tiff?)$/i.test(file.name));
-  setFocusImage(final);
+  if(state.uploading)return;
+  state.files=[...files];uploadToken=null;message('upload-error','');
   if(!singleImageMode()&&!$('identifier').dataset.override)$('identifier').value='';
   pendingIdentity=identifyDraft(state.files);
   renderFileList();
 }
 function renderFileList(){const list=$('file-checklist');list.replaceChildren();for(const role of (singleImageMode()?['final','FITS']:['final','starless','stars','stars_laid','FITS'])){const matches=state.files.filter(file=>singleImageMode()&&role==='final'?/\.(png|jpe?g|tiff?)$/i.test(file.name):role==='FITS'?/\.(fits|fit|fts)$/i.test(file.name):new RegExp('_'+role+'\\.(png|jpe?g|tiff?)$','i').test(file.name));const chip=node('span','file-chip'+(matches.length===1?' ready':matches.length>1?' invalid':''),(matches.length===1?'✓ ':'')+role+((role==='FITS'||role==='stars_laid')?' · '+(language==='nl'?'optioneel':'optional'):''));chip.title=matches.map(file=>file.name).join('\n');list.append(chip);}}
 $('image-files').addEventListener('change',event=>assignFiles(event.target.files));const drop=document.querySelector('.dropzone');drop.addEventListener('dragover',event=>{event.preventDefault();drop.classList.add('dragging');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragging'));drop.addEventListener('drop',event=>{event.preventDefault();drop.classList.remove('dragging');assignFiles(event.dataTransfer.files);});
-$('render-button').addEventListener('click',async()=>{if(state.busy||!$('parameters-form').reportValidity())return;setBusy(true);try{if(state.selected){await api(`/api/admin/objects/${state.selected.id}/render`,{method:'POST',body:params()});}else{await pendingIdentity;if(!$('upload-form').reportValidity())return;const images=state.files.filter(file=>/\.(png|jpe?g|tiff?)$/i.test(file.name)),fits=state.files.filter(file=>/\.(fits|fit|fts)$/i.test(file.name));if((singleImageMode()?images.length!==1:![3,4].includes(images.length))||fits.length>1||images.length+fits.length!==state.files.length)throw Error(singleImageMode()?'single_image_required':'four_images_required');const form=new FormData();form.set('identifier',$('identifier').value);if(nightscapeKind()){form.set('capture_kind',nightscapeKind());form.set('title',$('landscape-title').value);}if($('identifier').dataset.override)form.set('identifier_override','1');form.set('session_name',$('session-name').value);form.set('capture_date',$('upload-capture-date').value);form.set('params',JSON.stringify(params()));images.forEach(file=>form.append('images',file));if(fits[0])form.set('fits',fits[0]);message('studio-message',t('uploading'));const result=await api('/api/admin/objects',{method:'POST',body:form});await refreshAdmin();selectObject(result.object.id);}message('studio-message',t('queuedMessage'));await refreshAdmin();}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
+function renderUploadProgress(){
+  $('upload-transfer').hidden=!transfer;
+  if(!transfer)return;
+  const bar=$('upload-progress');
+  if(transfer.saving){
+    bar.value=100;$('upload-status').textContent=t('uploadValidating');return;
+  }
+  const unit=new Intl.NumberFormat(language==='nl'?'nl-NL':'en-GB',{maximumFractionDigits:1});
+  const mib=bytes=>unit.format(bytes/1048576)+' MiB';
+  const status=[t('uploading')];
+  if(transfer.total){
+    const percent=Math.floor(100*transfer.loaded/transfer.total);
+    bar.value=percent;status.push(percent+'%',mib(transfer.loaded)+' / '+mib(transfer.total));
+  }else{
+    bar.removeAttribute('value');status.push(mib(transfer.loaded));
+  }
+  $('upload-status').textContent=status.join(' · ');
+}
+function uploadFiles(body){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST','/api/admin/objects');xhr.responseType='json';
+    xhr.setRequestHeader('X-CSRF-Token',state.session?.csrf||'');
+    xhr.upload.onprogress=event=>{
+      transfer={loaded:event.loaded,total:event.lengthComputable?event.total:0};
+      renderUploadProgress();
+    };
+    xhr.upload.onload=()=>{
+      transfer={saving:true};renderUploadProgress();
+    };
+    xhr.onload=()=>{
+      if(xhr.status>=200&&xhr.status<300&&xhr.response?.object)resolve(xhr.response.object);
+      else reject(Error(xhr.response?.error||(xhr.status===413?'upload_too_large':'internal_error')));
+    };
+    xhr.onerror=xhr.onabort=()=>reject(Error('network_error'));
+    xhr.send(body);
+  });
+}
+function lockUpload(locked){
+  state.uploading=locked;$('upload-fields').disabled=locked;$('new-object').disabled=locked;
+  $('logout').disabled=locked;renderAdminList();
+}
+$('upload-form').addEventListener('input',()=>{uploadToken=null;message('upload-error','');});
+$('upload-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(state.uploading)return;
+  lockUpload(true);message('upload-error','');
+  let object;
+  try{
+    await pendingIdentity;
+    const images=state.files.filter(file=>/\.(png|jpe?g|tiff?)$/i.test(file.name));
+    const fits=state.files.filter(file=>/\.(fits|fit|fts)$/i.test(file.name));
+    if((singleImageMode()?images.length!==1:![3,4].includes(images.length))||fits.length>1||images.length+fits.length!==state.files.length)
+      throw Error(singleImageMode()?'single_image_required':'four_images_required');
+    const body=new FormData();
+    uploadToken??=Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
+    body.set('draft_only','1');body.set('upload_token',uploadToken);body.set('identifier',$('identifier').value);
+    body.set('session_name',$('session-name').value);body.set('capture_date',$('upload-capture-date').value);
+    if(nightscapeKind()){body.set('capture_kind',nightscapeKind());body.set('title',$('landscape-title').value);}
+    if($('identifier').dataset.override)body.set('identifier_override','1');
+    images.forEach(file=>body.append('images',file));if(fits[0])body.set('fits',fits[0]);
+    transfer={loaded:0,total:0};renderUploadProgress();
+    object=await uploadFiles(body);
+  }catch(e){message('upload-error',errorText(e),true);}
+  finally{transfer=null;renderUploadProgress();lockUpload(false);}
+  if(object){
+    state.adminObjects=[object,...state.adminObjects.filter(item=>item.id!==object.id)];
+    selectObject(object.id);$('edit-section').scrollIntoView({block:'start'});
+  }
+});
+$('render-button').addEventListener('click',async()=>{
+  if(!state.selected||state.busy||!$('parameters-form').reportValidity())return;
+  setBusy(true);
+  try{
+    await api('/api/admin/objects/'+encodeURIComponent(state.selected.id)+'/render',{method:'POST',body:params()});
+    message('studio-message',t('queuedMessage'));await refreshAdmin();
+  }catch(e){message('studio-message',errorText(e),true);}
+  finally{setBusy(false);}
+});
 $('preview-button').addEventListener('click',async()=>{if(!state.selected||state.busy||!$('parameters-form').reportValidity())return;setBusy(true);message('studio-message',t('working'));try{const response=await api(`/api/admin/objects/${state.selected.id}/preview?point=${pointIndex+1}`,{method:'POST',body:params(),raw:true});if(state.preview)URL.revokeObjectURL(state.preview);state.preview=URL.createObjectURL(await response.blob());$('preview-image').src=state.preview;$('preview-image').hidden=false;message('studio-message','');}catch(e){message('studio-message',errorText(e),true);}finally{setBusy(false);}});
 $('rename-form').addEventListener('submit',async event=>{
   event.preventDefault();
@@ -998,27 +1090,12 @@ $('fetch-nasa').addEventListener('click',async()=>{
   finally{setBusy(false);}
 });
 $('observation-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body=Object.fromEntries(form);body.publish_location=form.has('publish_location');for(const key of ['latitude','longitude','ra','dec'])if(key in body)body[key]=body[key]===''?null:+body[key];try{await api(`/api/admin/objects/${state.selected.id}/observation`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
-let focusGeneration=0;
-async function setFocusImage(source){
-  const generation=++focusGeneration;
+function setFocusImage(source){
   $('film-orientation').hidden=true;
   resetAutoRoute();$('auto-tools').hidden=true;
-  if(uploadPosterUrl){URL.revokeObjectURL(uploadPosterUrl);uploadPosterUrl=null;}
   const img=$('edit-poster');
   $('focus-image').hidden=true;
-  img.removeAttribute('src');
-  if(source instanceof File){
-    if(/\.tiff?$/i.test(source.name)){
-      const body=new FormData();body.append('image',source);body.set('identifier',$('identifier').value);
-      try{
-        const response=await api('/api/admin/upload-poster',{method:'POST',body,raw:true});
-        source=await response.blob();
-      }catch(e){if(generation===focusGeneration)message('studio-message',errorText(e),true);return;}
-      if(generation!==focusGeneration)return;
-    }
-    uploadPosterUrl=URL.createObjectURL(source);source=uploadPosterUrl;
-  }
-  if(source)img.src=source;
+  if(source)img.src=source;else img.removeAttribute('src');
 }
 function drawFocusImage(){
   const img=$('edit-poster'), canvas=$('rotated-focus');
@@ -1081,57 +1158,22 @@ function showAutoRoute(){
     frames.append(box);$('auto-list').append(item);
   });
 }
-async function loadDraftRoute(){
-  const files=state.files;
-  await pendingIdentity;
-  if(files!==state.files||state.selected)throw Error('invalid_image');
-  const identity=draftIdentity;
-  const img=$('edit-poster'),canvas=document.createElement('canvas');
-  const scale=Math.min(1,640/Math.max(img.naturalWidth,img.naturalHeight));
-  canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
-  canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
-  canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-  const preview=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.92));
-  if(!preview)throw Error('invalid_image');
-  async function request(field,file){
-    if(files!==state.files||identity!==draftIdentity||state.selected)throw Error('invalid_image');
-    const body=new FormData();
-    body.set('count','8');body.set('preview',preview,'preview.jpg');
-    if(identity?.identifier)body.set('identifier',identity.identifier);
-    if(file)body.set(field,file);
-    return api('/api/admin/upload-autozoom',{method:'POST',body});
-  }
-  if(identity?.fits){
-    const reply=await request('fits',identity.fits);
-    if(reply.alignment==='wcs')return reply;
-  }
-  const stars=files.find(file=>/_stars\.(png|jpe?g|tiff?)$/i.test(file.name));
-  return request('stars',identity?.target?.known?stars:null);
-}
-async function draftRoute(count){
-  const request=draftZoomRequest??=loadDraftRoute();
-  try{
-    const reply=await request;
-    if(reply.alignment==='unavailable'&&draftZoomRequest===request)draftZoomRequest=null;
-    return {...reply,points:reply.points.slice(0,count)};
-  }catch(e){
-    if(draftZoomRequest===request)draftZoomRequest=null;
-    throw e;
-  }
-}
-$('auto-zoom').addEventListener('click',async()=>{
+async function findZoomRoute(){
+  const id=state.selected?.id;
+  if(!id)return;
   resetAutoRoute();const generation=autoGeneration;
-  $('auto-zoom').disabled=true;$('auto-review').hidden=false;$('auto-note').textContent=t('working');$('auto-list').replaceChildren();$('auto-apply').hidden=true;
+  $('auto-zoom').disabled=true;$('auto-review').hidden=false;$('auto-note').textContent=t('routeSearching');
+  $('auto-list').replaceChildren();$('auto-apply').hidden=true;
   try{
     const count=Number($('auto-count').value);
-    const reply=state.selected?await api('/api/admin/objects/'+state.selected.id+'/autozoom',{method:'POST',body:{count}}):await draftRoute(count);
+    const reply=await api('/api/admin/objects/'+encodeURIComponent(id)+'/autozoom',{method:'POST',body:{count}});
     if(generation!==autoGeneration)return;
-    suggestions=reply.points;
-    autoAlignment=singleImageMode()&&!state.selected?'':reply.alignment||'';
+    suggestions=reply.points;autoAlignment=reply.alignment||'';
     $('auto-note').textContent=t(suggestions.length?'autoReview':'autoEmpty');$('auto-apply').hidden=!suggestions.length;showAutoRoute();
   }catch(e){if(generation===autoGeneration)$('auto-note').textContent=errorText(e);}
   finally{if(generation===autoGeneration)$('auto-zoom').disabled=false;}
-});
+}
+$('auto-zoom').addEventListener('click',findZoomRoute);
 $('auto-cancel').addEventListener('click',resetAutoRoute);
 $('auto-count').addEventListener('change',resetAutoRoute);
 $('auto-apply').addEventListener('click',()=>{

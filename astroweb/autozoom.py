@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import cv2
 import numpy as np
 
-from .catalogue import canonical, catalogue_labels, name_key
+from .catalogue import canonical, catalogue_position, name_key
 from .discovery import discover
 from .metadata import initial_metadata, known_target
 
@@ -14,9 +14,8 @@ def target_identity(identifier):
     if not identifier:
         return None
     identifier = canonical(identifier)
-    entry = catalogue_labels().get(identifier)
-    seed = known_target(identifier)
-    return {"id":identifier,"known":bool(entry or seed),"name":initial_metadata(identifier)["name"]}
+    known = catalogue_position(identifier) is not None or known_target(identifier) is not None
+    return {"id":identifier,"known":known,"name":initial_metadata(identifier)["name"]}
 
 
 def validate_count(count):
@@ -70,7 +69,7 @@ def draft(store, preview, image, count, identifier, fits, stars):
                 route = propose(store, record, count, image=image)
                 if route["alignment"] != "missing":
                     return route
-        if stars and target in catalogue_labels():
+        if stars and catalogue_position(target) is not None:
             source = folder/"stars"
             stars.save(source)
             w, h = validate_image(source)

@@ -223,9 +223,24 @@ def test_studio_can_render_and_rerender_with_only_one_star_layer(app,images,monk
     store=app.extensions["store"]
     monkeypatch.setattr(queue,"prepare_capture",lambda *_:None)
     monkeypatch.setattr(queue,"prepare_journey",lambda *_:None)
-    files=[(io.BytesIO(images[role].read_bytes()),images[role].name) for role in ("final","starless","stars")]
+    def upload():
+        files=[(io.BytesIO(images[role].read_bytes()),images[role].name) for role in ("final","starless","stars")]
+        return client.post("/api/admin/objects",data=dict(identifier="NGC_7000",images=files,
+                           draft_only="1",upload_token="a"*32),headers=headers)
+
+    saved=upload()
+    assert saved.status_code==201,saved.json
+    assert saved.json["object"]["published"] is False
+    assert store.all("jobs")==[]
+    with app.test_client() as visitor:
+        assert visitor.get("/api/objects").json["objects"]==[]
+        assert visitor.get("/media/NGC_7000/poster").status_code==404
+    duplicate=upload()
+    assert duplicate.status_code==200 and duplicate.json["object"]["id"]=="NGC_7000"
+    assert len(store.all("objects"))==1
+
     params=dict(duration=4,resolution=720,star_source="stars_laid")
-    reply=client.post("/api/admin/objects",data=dict(identifier="NGC_7000",images=files,params=json.dumps(params)),headers=headers)
+    reply=client.post("/api/admin/objects/NGC_7000/render",json=params,headers=headers)
     assert reply.status_code==202,reply.json
     queue.futures[reply.json["job"]["id"]].result(timeout=30)
     record=store.get("objects","NGC_7000")
@@ -287,6 +302,40 @@ def test_studio_recognises_crescent_and_uses_verified_fits_for_draft_zoom(app, m
     fallback=upload().json
     assert fallback["alignment"]=="missing"
     assert fallback["points"] and all(p["kind"]=="structure" for p in fallback["points"])
+
+
+def test_draft_zoom_can_match_gaia_without_sending_files_again(app,images,monkeypatch):
+    from threading import Event
+    from astroweb.gaia import pointing
+
+    client=app.test_client()
+    headers=sign_in(client)
+    store,queue=app.extensions["store"],app.extensions["jobs"]
+    files=[(io.BytesIO(images[role].read_bytes()),"NGC_6939_"+role+".png")
+           for role in ("final","starless","stars")]
+    saved=client.post("/api/admin/objects",data=dict(identifier="NGC_6939",images=files,
+                      draft_only="1",upload_token="b"*32),headers=headers)
+    assert saved.status_code==201
+    reached,released=Event(),Event()
+
+    def solve(store,record):
+        assert pointing(record)==(307.875542,60.662083)
+        assert store.path(record["assets"]["stars"]).read_bytes()==images["stars"].read_bytes()
+        reached.set()
+        assert released.wait(10)
+        return {"status":"unavailable"}
+
+    monkeypatch.setattr("astroweb.gaia.solve",solve)
+    try:
+        response=client.post("/api/admin/objects/NGC_6939/autozoom",json={"count":2},headers=headers)
+        assert response.status_code==200 and response.json["alignment"]=="pending"
+        assert reached.wait(5)
+        assert not store.all("jobs")
+    finally:
+        released.set()
+        queue.executor.submit(lambda:None).result(timeout=15)
+    response=client.post("/api/admin/objects/NGC_6939/autozoom",json={"count":2},headers=headers)
+    assert response.json["alignment"]=="unavailable"
 
 
 def test_auth_csrf_host_and_upload_validation(app, images):

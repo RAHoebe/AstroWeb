@@ -75,6 +75,20 @@ def catalogue_labels():
     return labels
 
 
+@lru_cache(maxsize=1)
+def field_positions():
+    from .galaxy import expanded_catalog
+    return {notation(identifier): (ra, dec) for identifier, ra, dec, _ in expanded_catalog()["field_objects"]}
+
+
+def catalogue_position(name):
+    identifier = canonical(name)
+    entry = catalogue_labels().get(identifier)
+    if entry and "ra" in entry and "dec" in entry:
+        return entry["ra"], entry["dec"]
+    return field_positions().get(identifier)
+
+
 def group_id(record):
     return canonical(record.get("catalog_id") or record["id"])
 

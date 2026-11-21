@@ -257,3 +257,9 @@ body.studio-route > :is(.site-header,main:not(#studio),.skip,.site-footer) { dis
   .studio-object-menu { flex:1 1 200px; margin:0; }
   #job-list .job-item { flex:0 0 155px; }
 }
+
+#upload-fields { min-width:0; margin:0; padding:0; border:0; }
+#upload-button { margin-top:12px; }
+.upload-transfer { max-width:440px; margin-top:18px; }
+.upload-transfer progress { display:block; width:100%; height:12px; accent-color:var(--accent); }
+.upload-transfer p { margin:6px 0 0; }

@@ -4,6 +4,7 @@ import hmac
 import io
 import json
 import os
+import re
 import secrets
 import tempfile
 import threading
@@ -208,13 +209,13 @@ def create_app(data_dir=None, testing=False):
         from .environment import target_galaxy
         from .hubble import eligible as hubble_target
         from .physical import field_scale
-        from .collection import capture_groups,date_option,neighbours
+        from .collection import capture_groups,date_option,gallery,neighbours
         records=store.all("objects")
         catalog=group_id(record)
-        groups=capture_groups([r for r in records if r["published"]])
-        visible=[g[0] for g in groups.values()]
-        primary=groups.get(catalog,[record])[0]
-        allowed=records if session.get("admin") else [r for r in records if r["published"]]
+        published=[r for r in records if r["published"]]
+        visible=gallery(published)
+        primary=next((r for r in visible if group_id(r)==catalog),record)
+        allowed=records if session.get("admin") else published
         dates=capture_groups([r for r in allowed if group_id(r)==catalog]).get(catalog,[])
         if queue.retry_alignments(dates):
             # A cached solve may finish before the first browser poll.
@@ -246,7 +247,17 @@ def create_app(data_dir=None, testing=False):
     @admin_required
     def autozoom(identifier):
         from .autozoom import propose
-        return jsonify(propose(store,get_object(identifier),json_body().get("count",4)))
+        record = get_object(identifier)
+        route = propose(store, record, json_body().get("count",4))
+        if route["alignment"] == "missing" and not record.get("video") and record["assets"].get("stars"):
+            alignment = (record.get("gaia") or {}).get("status")
+            if alignment is None:
+                queue.request_alignment(identifier, alignment_only=True)
+                # The first response can offer image details while the worker matches stars.
+                alignment = "pending"
+            if alignment in {"pending", "running", "unavailable"}:
+                route["alignment"] = "pending" if alignment != "unavailable" else alignment
+        return jsonify(route)
 
     @app.get("/api/objects/<identifier>/solar-system")
     def solar_destinations(identifier):
@@ -478,6 +489,10 @@ def create_app(data_dir=None, testing=False):
     @admin_required
     def upload():
         supplied = request.form.get("identifier", "").strip()
+        draft_only = request.form.get("draft_only") == "1"
+        upload_token = request.form.get("upload_token") if draft_only else None
+        if upload_token is not None and not re.fullmatch(r"[0-9a-f]{32}", upload_token):
+            raise ValueError("invalid_parameters")
         try:
             raw_params = json.loads(request.form.get("params", "{}"))
         except ValueError:
@@ -531,6 +546,10 @@ def create_app(data_dir=None, testing=False):
                 if fits_path and not header.get("OBJECT") and file_prefix(fits_path.name) and prefix and not belongs(fits_path.name, prefix):
                     raise ValueError("invalid_filename")
             with queue.lock:
+                if upload_token:
+                    existing = next((r for r in store.all("objects") if r.get("upload_token") == upload_token), None)
+                    if existing:
+                        return jsonify(object=present(existing, True))
                 manual=request.form.get("capture_date","").strip()
                 if manual:
                     try:
@@ -538,13 +557,15 @@ def create_app(data_dir=None, testing=False):
                     except ValueError:
                         raise ValueError("invalid_observation") from None
                 record = import_object(store, identifier, paths, request.form.get("session_name",""),
-                                       repeat=True,nightscape=kind,title=request.form.get("title",""),capture_date=manual or None, source_prefix=prefix, allow_export_prefix=source in {"fits", "wiki", "manual"})
+                                       repeat=True, nightscape=kind, title=request.form.get("title",""),
+                                       capture_date=manual or None, source_prefix=prefix,
+                                       allow_export_prefix=source in {"fits", "wiki", "manual"},
+                                       fits_source=fits_path, observation=observation, upload_token=upload_token)
                 if source=="wiki":
                     from .wikimedia import add_metadata
                     record = store.update("objects",record["id"],metadata=add_metadata(store,record["metadata"],header["OBJECT"]))
-                if fits_path:
-                    from .observation import attach_fits
-                    record = attach_fits(store, record, fits_path, observation)
+                if draft_only:
+                    return jsonify(object=present(record, True)), 201
                 job = queue.submit(record["id"], params.__dict__)
         return jsonify(object=present(record, True), job=job), 202
 

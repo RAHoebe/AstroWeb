@@ -161,10 +161,9 @@ def pointing(record):
     if obs.get("ra") is not None and obs.get("dec") is not None:
         return float(obs["ra"]), float(obs["dec"])
     name = record["metadata"].get("target") or record["id"].replace("_", " ")
-    from .catalogue import canonical, catalogue_labels
-    entry = catalogue_labels().get(canonical(name), {})
-    if "ra" in entry and "dec" in entry:
-        return float(entry["ra"]), float(entry["dec"])
+    from .catalogue import catalogue_position
+    if position := catalogue_position(name):
+        return position
     response = external_http.get("https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/SNV?"+quote(name,safe=""), timeout=(4,12))
     response.raise_for_status()
     for resolver in ET.fromstring(response.content).iter("Resolver"):

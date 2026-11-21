@@ -61,6 +61,11 @@ def test_gallery_uses_observation_date_and_keeps_each_session_addressable():
     old["capture_date"]="2026-12-15"
     assert gallery([unknown,old,new])==[old]
 
+    undated={"id":"M_31","created_at":"2027-02-01"}
+    other={"id":"M_45","capture_date":"2026-12-10","created_at":"2026-12-27"}
+    old["created_at"]="2026-12-20"
+    assert gallery([undated,other,old,new,unknown])==[old,other,undated]
+
 
 def test_unnamed_repeat_upload_uses_separate_originals(tmp_path):
     paths=[]

@@ -1,5 +1,5 @@
 """Studio must move to a finished render once, then respect the viewer's choice."""
-from threading import Thread
+from threading import Event, Thread
 
 import numpy as np
 import pytest
@@ -23,6 +23,7 @@ def test_finished_render_and_capture_labels(tmp_path, monkeypatch):
     web = make_server("127.0.0.1", 0, app, threaded=True)
     worker = Thread(target=web.serve_forever, daemon=True)
     worker.start()
+    save_started,release_upload=Event(),Event()
     try:
         for ident, size in (("IC_1396", (192, 128)), ("NGC_7000", (128, 192))):
             paths = []
@@ -95,30 +96,58 @@ def test_finished_render_and_capture_labels(tmp_path, monkeypatch):
             y,x=np.mgrid[:192,:256]
             image=np.asarray(220*np.exp(-((x-55)**2+(y-27)**2)/500)+
                              90*np.exp(-((x-190)**2+(y-130)**2)/400)+x/9+y/19,dtype=np.uint8)
-            photo=tmp_path/"C_27_final.png"
-            Image.fromarray(image).save(photo)
+            sources=[]
+            for role in ("final","starless","stars"):
+                image_file=tmp_path/f"NGC_6939_{role}.png"
+                Image.fromarray(image).save(image_file)
+                sources.append(image_file)
             wcs=WCS(naxis=2)
             wcs.wcs.ctype=["RA---TAN","DEC--TAN"]
-            wcs.wcs.crval=[303.027292,38.354944]
-            wcs.wcs.crpix=[91,121]
-            wcs.wcs.cd=[[-.001,.0002],[.0002,.001]]
-            fitted=tmp_path/"C_27_final.fits"
+            wcs.wcs.crval=[308.2967,60.408]
+            wcs.wcs.crpix=[128,96]
+            wcs.wcs.cd=[[-.0037,0],[0,.0037]]
+            fitted=tmp_path/"NGC_6939_final.fits"
             fits.PrimaryHDU(data=image[::-1].copy(),header=wcs.to_header()).writeto(fitted)
             files=page.locator("#image-files")
-            files.set_input_files([photo,fitted])
-            pw.expect(page.locator("#identifier-source")).to_contain_text("NGC 6888 · Sikkelnevel")
-            page.locator("#auto-zoom").click()
-            pw.expect(page.locator("#auto-alignment")).to_contain_text("FITS-hemelcoördinaten")
-            pw.expect(page.locator("#auto-list li").first).to_contain_text("Sikkelnevel")
-            page.locator("#auto-apply").click()
-            pw.expect(page.locator("#point-name")).to_have_value("Sikkelnevel")
+            files.set_input_files([*sources,fitted])
+            pw.expect(page.locator("#identifier-source")).to_contain_text("Herkend in de catalogus: NGC 6939")
+            pw.expect(page.locator("#studio-editor")).to_be_hidden()
+            jobs_before=len(store.all("jobs"))
 
-            files.set_input_files(photo)
-            page.locator("#auto-zoom").click()
-            pw.expect(page.locator("#auto-alignment")).to_contain_text("positie op de foto kon niet worden bevestigd")
-            pw.expect(page.locator("#auto-list li").first).to_contain_text("Beelddetail")
+            def delayed_import(*args,**kwargs):
+                save_started.set()
+                assert release_upload.wait(20)
+                return import_object(*args,**kwargs)
+
+            monkeypatch.setattr("astroweb.app.import_object",delayed_import)
+            upload_posts=[]
+            page.on("request",lambda r: upload_posts.append(r) if r.method=="POST" and
+                    ("upload-autozoom" in r.url or r.url.endswith("/api/admin/objects")) else None)
+            page.locator("#upload-button").click()
+            assert save_started.wait(10)
+            pw.expect(page.locator("#upload-progress")).to_have_attribute("value","100")
+            pw.expect(page.locator("#upload-status")).to_contain_text("server controleert en bewaart")
+            release_upload.set()
+            pw.expect(page.locator("#draft-uploaded")).to_be_visible()
+            assert len(store.all("jobs"))==jobs_before
+            draft=store.get("objects","NGC_6939")
+            assert draft["fits"] and not draft["published"]
+            page.reload()
+            menu.select_option("NGC_6939")
+            pw.expect(page.locator("#draft-uploaded")).to_be_visible()
+            for _ in range(2):
+                page.locator("#auto-zoom").click()
+                pw.expect(page.locator("#auto-alignment")).to_contain_text("FITS-hemelcoördinaten")
+                pw.expect(page.locator("#auto-list li").first).to_contain_text("NGC 6939")
+                pw.expect(page.locator("#auto-list")).to_contain_text("Fireworks Galaxy")
+            page.locator("#auto-apply").click()
+            pw.expect(page.locator("#point-name")).to_have_value("NGC 6939")
+            page.locator("#render-button").click()
+            pw.expect(page.locator("#version-list option")).to_have_count(1,timeout=60000)
+            assert len(upload_posts)==1
             browser.close()
     finally:
+        release_upload.set()
         web.shutdown()
         web.server_close()
         queue.shutdown()

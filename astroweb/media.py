@@ -149,7 +149,9 @@ def render_paths(store, record):
     return paths
 
 
-def import_object(store, identifier, paths, session_name="", *, repeat=False, capture_date=None, source_prefix=None, allow_export_prefix=False, nightscape=None, title=""):
+def import_object(store, identifier, paths, session_name="", *, repeat=False, capture_date=None,
+                  source_prefix=None, allow_export_prefix=False, nightscape=None, title="",
+                  fits_source=None, observation=None, upload_token=None):
     if nightscape:
         if nightscape not in NIGHTSCAPES:
             raise ValueError("capture_kind_mismatch")
@@ -208,9 +210,9 @@ def import_object(store, identifier, paths, session_name="", *, repeat=False, ca
         if solar:
             record["body"]=catalog_id
             from .observation import asi_filename_observation
-            observation = asi_filename_observation(roles["final"].name)
-            if observation:
-                record["observation"] = observation
+            filename_observation = asi_filename_observation(roles["final"].name)
+            if filename_observation:
+                record["observation"] = filename_observation
             prepared = enlarge_small_solar(image)
             if prepared is not image:
                 derived = folder / ("render-input-"+uuid.uuid4().hex+".png")
@@ -232,6 +234,12 @@ def import_object(store, identifier, paths, session_name="", *, repeat=False, ca
             if siblings:
                 import copy
                 record["metadata"] = copy.deepcopy((existing or siblings[0])["metadata"])
+        if fits_source is not None:
+            dest = folder / fits_source.name
+            shutil.copyfile(fits_source, dest)
+            record.update(fits=dest.relative_to(store.root).as_posix(), observation=observation)
+        if upload_token:
+            record["upload_token"] = upload_token
         save_jpg(poster, resize_long(image, 1600))
         return store.put("objects", identifier, record)
     except BaseException:

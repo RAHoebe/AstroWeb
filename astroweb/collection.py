@@ -39,7 +39,7 @@ def capture_groups(records):
 
 
 def gallery(records):
-    return [group[0] for group in capture_groups(records).values()]
+    return sorted((group[0] for group in capture_groups(records).values()), key=date_order, reverse=True)
 
 
 def date_option(record):

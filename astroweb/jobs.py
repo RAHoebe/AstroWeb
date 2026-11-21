@@ -58,7 +58,9 @@ class JobQueue:
                 if alignment.get("status") in (None, "pending", "running"):
                     if alignment.get("retry_only"):
                         store.update("objects", record["id"], gaia={**alignment, "status":"unavailable"})
-                    else:
+                    elif alignment.get("alignment_only"):
+                        self.executor.submit(self.align, record["id"])
+                    elif alignment or not record.get("upload_token") or record.get("video"):
                         self.executor.submit(self.prepare_capture, record["id"])
                 if record.get("video"):
                     self.executor.submit(self.ensure_preview, record["video"])
@@ -170,7 +172,7 @@ class JobQueue:
             self.store.update("objects", identifier, pending_movie_cleanup=pending)
             return bool(pending)
 
-    def request_alignment(self, identifier):
+    def request_alignment(self, identifier, *, alignment_only=False):
         with self.store.lock:
             record = self.store.get("objects", identifier)
             if not record:
@@ -178,8 +180,9 @@ class JobQueue:
             previous = record.get("gaia") or {}
             if record.get("capture_kind") or record.get("body") or previous.get("status") in {"solved","pending","running"}:
                 return
-            self.store.update("objects", identifier, gaia={"status":"pending", "request":uuid.uuid4().hex})
-            self.executor.submit(self.prepare_capture, identifier)
+            self.store.update("objects", identifier, gaia={"status":"pending", "request":uuid.uuid4().hex,
+                                                            "alignment_only":alignment_only})
+            self.executor.submit(self.align if alignment_only else self.prepare_capture, identifier)
 
     def prepare_capture(self, identifier, checkpoint=lambda: None):
         self.align(identifier)
