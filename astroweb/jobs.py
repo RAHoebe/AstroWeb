@@ -4,6 +4,7 @@ import os
 import threading
 import time
 import uuid
+from collections import deque
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -38,6 +39,8 @@ class JobQueue:
         self.futures = {}
         self.file_lock = threading.Lock()
         self.stopping = threading.Event()
+        self.detail_work = deque()
+        self.detail_scheduled = False
         self.retry_thread = None
         self.retry_future = None
         self.restore_versions()
@@ -64,8 +67,44 @@ class JobQueue:
                         self.executor.submit(self.prepare_capture, record["id"])
                 if record.get("video"):
                     self.executor.submit(self.ensure_preview, record["video"])
+                    if record.get("body"):
+                        self.schedule_details(record["id"])
             self.retry_thread = threading.Thread(target=self.retry_loop, name="astro-gaia-retry", daemon=True)
             self.retry_thread.start()
+
+    def schedule_details(self, identifier):
+        with self.lock:
+            if self.stopping.is_set():
+                return
+            self.detail_work.append((identifier,None))
+            if not self.detail_scheduled:
+                self.detail_scheduled = True
+                self.executor.submit(self.prepare_next_detail)
+
+    def prepare_next_detail(self):
+        from . import solar_detail
+        with self.lock:
+            if self.stopping.is_set():
+                return
+            identifier, destination = self.detail_work.popleft()
+        try:
+            record = self.store.get("objects", self.store.current_id(identifier))
+            if record and record.get("body") and record.get("video"):
+                if destination is None:
+                    missing = solar_detail.missing_destinations(self.store, record)
+                    with self.lock:
+                        self.detail_work.extend((record["id"], ident) for ident in missing)
+                else:
+                    solar_detail.movie(self.store, record, destination)
+        except Exception:
+            logging.warning("Could not prepare detail journey for %s (%s)", identifier, destination, exc_info=True)
+        finally:
+            # Yield the single render worker to already queued Studio jobs after each destination.
+            with self.lock:
+                if self.detail_work and not self.stopping.is_set():
+                    self.executor.submit(self.prepare_next_detail)
+                else:
+                    self.detail_scheduled = False
 
     def retry_loop(self):
         while not self.stopping.wait(60):
@@ -368,6 +407,7 @@ class JobQueue:
                 record = self.store.get("objects", record["id"])
                 finished = now()
                 version = {"id": job_id, "video": relative, "params": params.__dict__, "render": stats, "created_at": finished}
+                first_solar_film = bool(record.get("body")) and not record.get("video")
                 record.setdefault("versions", []).append(version)
                 record.update(video=relative, params=params.__dict__, render=stats, published=True)
                 job.update(status="completed", progress=100, error=None, finished_at=finished)
@@ -381,8 +421,13 @@ class JobQueue:
                     known = str(exc) if str(exc) in {"ffmpeg_missing", "encode_failed", "invalid_image"} else "render_failed"
                     self.store.update("jobs", job_id, status="failed", error=known, finished_at=now())
 
+            return
+        if first_solar_film:
+            self.schedule_details(record["id"])
+
     def shutdown(self):
-        self.stopping.set()
+        with self.lock:
+            self.stopping.set()
         if self.retry_thread:
             self.retry_thread.join(timeout=2)
         self.executor.shutdown(wait=True)

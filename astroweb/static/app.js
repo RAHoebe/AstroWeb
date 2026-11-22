@@ -520,7 +520,7 @@ function hubbleCaption(){
   source.href=active?.source||(active?.filter?'https://hla.stsci.edu/hlaview.html#Images|'+encodeURIComponent(active.id):'https://esahubble.org/images/heic2501a/');
   source.textContent=active?.credit?active.credit+' ↗':active?.filter?'NASA/ESA Hubble · '+active.id+' ↗':'NASA, ESA, B. Williams (University of Washington) ↗';
   $('hubble-description').textContent=active?.provider?t('archiveMissionNote')+(active.provider==='jwst'?' '+t('archiveInfrared'):'')+' · '+active.telescope+' · '+active.filter:active?.name?t('solarMissionNote'):active?t('hubble_'+active.relation)+' · '+t(active.id.startsWith('skymap-')?'skymapNote':active.full_footprint?'fullHstNote':active.telescope?'hstPlateNote':active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
-  const status=state.current?.body?({hubbleLoading:'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
+  const status=state.current?.body?({hubbleLoading:active?.cached===false?'solarPreparing':'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
   if(active?.full_footprint)$('hubble-description').textContent+=' RA '+active.ra.toFixed(4)+'° · Dec '+active.dec.toFixed(4)+'°';
   if(active?.alignment==='lunar-map')$('hubble-description').textContent=t('lunarMissionNote');
   if(active?.alignment==='merope-wfpc2')$('hubble-description').textContent=t('meropeHubbleNote');
@@ -562,7 +562,7 @@ async function openHubble(){
 $('hubble-field').addEventListener('change',loadHubbleField);
 $('hubble-retry').addEventListener('click',()=>hubbleFields?.length?loadHubbleField():openHubble());
 $('hubble-video').addEventListener('error',()=>{hubbleState='hubble_unavailable';hubbleCaption();});
-$('hubble-video').addEventListener('loadeddata',()=>{hubbleState='';hubbleCaption();});
+$('hubble-video').addEventListener('loadeddata',()=>{const active=hubbleObservations.find(o=>o.id===$('hubble-field').value);if(active&&state.current?.body)active.cached=true;hubbleState='';hubbleCaption();});
 function journeyCaption(){
   if(!journeyInfo)return;
   $('journey-note').textContent=journeyInfo.solar?[t(journeyInfo.url?'solarJourneyNote':'solarDateMissing'),journeyInfo.default_site?t('centralNL'):'',journeyInfo.day_only?t('solarNoon'):''].filter(Boolean).join(' '):t('journey_'+journeyInfo.kind);

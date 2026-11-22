@@ -263,8 +263,11 @@ def create_app(data_dir=None, testing=False):
 
     @app.get("/api/objects/<identifier>/solar-system")
     def solar_destinations(identifier):
-        from .solar_detail import options
-        fields = options(get_object(identifier).get("body"))
+        from .solar_detail import movie_spec, options
+        record = get_object(identifier)
+        fields = options(record.get("body"))
+        for field in fields:
+            field["cached"] = movie_spec(store,record,field["id"])[0].is_file()
         return jsonify(fields=[f["id"] for f in fields], observations=fields)
 
     @app.get("/media/<identifier>/solar-system/<name>")

@@ -302,7 +302,7 @@ def aligned_limb_frames(photo,image,focus):
         yield np.uint8(np.clip(blended,0,255))
 
 
-def movie(store,record,ident):
+def movie_spec(store,record,ident):
     lunar = record.get("body") == "MOON"
     saturn = record.get("body") == "SATURN" and ident in (SATURN_OVERVIEW,SATURN_RINGS)
     if lunar:
@@ -311,20 +311,43 @@ def movie(store,record,ident):
         if ident not in lunar_detail.SITES:
             raise ValueError("solarDetailMissing")
         item = lunar_detail.SITES[ident]
-        credit = lunar_detail.CREDIT
         signature = (lunar_detail.VERSION,item,record["sha256"]["final"],capture_date(record))
     else:
         item=next((f for f in FEATURES.get(record.get("body"),[]) if f[0]==ident),None)
         if not item:
             raise ValueError("solarDetailMissing")
-        _,file,_,_,credit,x,y=item
         version = ("saturn-rings-v1" if saturn else "limb-registered-v6" if ident=="NHQ202404080107"
                    else "separate-moon-v1" if ident==ENCELADUS else "solar-tour-v1")
         signature = (version,item,record["sha256"]["final"])
-    limb=ident=="NHQ202404080107"
     key=hashlib.sha256(str(signature).encode()).hexdigest()[:20]
     folder=store.path(f"objects/{record.get('storage_id',record['id'])}/solar-system")
-    output=folder/(key+".mp4")
+    return folder/(key+".mp4"), item
+
+
+def missing_destinations(store, record):
+    ids = [item["id"] for item in options(record.get("body"))]
+    missing = [ident for ident in ids if not movie_spec(store,record,ident)[0].is_file()]
+    if missing and record.get("body") == "MOON":
+        from .surface_labels import lunar_points
+        visible = {point["journey"] for point in lunar_points(store,record)}
+        missing = [ident for ident in missing if ident in visible]
+    return missing
+
+
+def movie(store,record,ident):
+    output,item = movie_spec(store,record,ident)
+    # Only complete, atomically renamed MP4s are visible at this path.
+    if output.is_file():
+        return output
+    lunar = record.get("body") == "MOON"
+    saturn = record.get("body") == "SATURN" and ident in (SATURN_OVERVIEW,SATURN_RINGS)
+    limb = ident == "NHQ202404080107"
+    if lunar:
+        from . import lunar_detail
+        credit = lunar_detail.CREDIT
+    else:
+        _,file,_,_,credit,x,y = item
+    folder = output.parent
     with LOCK:
         if not output.is_file():
             if not lunar:
