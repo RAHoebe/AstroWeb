@@ -46,7 +46,7 @@ def main():
     from .jobs import JobQueue
     from .media import EXTENSIONS, import_object, upload_identity
     from .catalogue import canonical, group_id
-    from .observation import attach_fits, read_observation
+    from .observation import attach_fits, header_target, read_observation
     queue = JobQueue(store)
     submitted = []
     try:
@@ -56,7 +56,7 @@ def main():
             paths = sorted(p for p in folder.iterdir() if p.suffix.lower() in EXTENSIONS)
             fits = sorted(p for p in folder.iterdir() if p.suffix.lower() in {".fits", ".fit", ".fts"})
             observation = read_observation(fits[0],paths[0].name if len(paths)==1 else None) if fits else {}
-            object_name = observation.get("header",{}).get("OBJECT")
+            object_name = header_target(observation.get("header",{}))
             identifier, source, prefix = upload_identity([p.name for p in paths],object_name,folder.name,store=store)
             target = store.get("objects", store.current_id(canonical(identifier)))
             family = group_id(target) if target else canonical(identifier)

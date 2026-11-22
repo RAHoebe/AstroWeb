@@ -13,9 +13,14 @@ from astropy.time import Time
 
 from .store import now
 
-FIELDS = ["DATE-OBS", "DATE-END", "TIMESYS", "SWCREATE", "OBJECT", "TELESCOP", "INSTRUME", "FILTER", "RA", "DEC", "CRVAL1", "CRVAL2", "CTYPE1", "CTYPE2", "OBJCTRA", "OBJCTDEC", "SITELAT", "SITELONG", "SITEELEV", "OBSGEO-B", "OBSGEO-L", "OBSGEO-H", "EXPTIME", "EXPOSURE", "LIVETIME", "NCOMBINE", "WZNSUBS", "WZNOTE", "WZCENTRE", "FOCALLEN", "XPIXSZ", "YPIXSZ", "GAIN", "CCD-TEMP", "NAXIS1", "NAXIS2"]
+FIELDS = ["DATE-OBS", "DATE-END", "TIMESYS", "SWCREATE", "OBJECT", "TARGNAME", "OBJNAME", "TELESCOP", "INSTRUME", "FILTER", "RA", "DEC", "CRVAL1", "CRVAL2", "CTYPE1", "CTYPE2", "OBJCTRA", "OBJCTDEC", "SITELAT", "SITELONG", "SITEELEV", "OBSGEO-B", "OBSGEO-L", "OBSGEO-H", "EXPTIME", "EXPOSURE", "LIVETIME", "NCOMBINE", "WZNSUBS", "WZNOTE", "WZCENTRE", "FOCALLEN", "XPIXSZ", "YPIXSZ", "GAIN", "CCD-TEMP", "NAXIS1", "NAXIS2"]
 ASI_TIMESTAMP = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6})(?=[._-]|$)")
 ASI_PLANET_TAG = re.compile(r"-RAW_Planet_[0-9]+(?:[._-]|$)", re.IGNORECASE)
+
+
+def header_target(header):
+    return next((value.strip() for key in ("OBJECT","TARGNAME","OBJNAME")
+                 if isinstance(value:=header.get(key),str) and value.strip()), None)
 
 
 def finite(value, low=-1e12, high=1e12):

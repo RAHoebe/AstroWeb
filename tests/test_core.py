@@ -708,3 +708,25 @@ def test_studio_source_failure_discards_old_external_text(app,images,monkeypatch
     assert "external" not in saved
     assert saved["name"]==metadata["name"] and saved["description"]==metadata["description"]
     assert all(source["url"]!="https://example.org/old" for source in saved["sources"])
+
+def test_new_draft_enriches_an_unseeded_catalogue_object_before_render(app,images,monkeypatch):
+    from threading import Event
+    from astroweb.metadata import initial_metadata
+
+    store,queue=app.extensions["store"],app.extensions["jobs"]
+    called=Event()
+    def lookup(metadata,*,store):
+        assert metadata["target"]=="NGC 1788"
+        value=initial_metadata("NGC_1788")
+        value["external"]={"text":{"nl":"Een reflectienevel in Orion.","en":"A reflection nebula in Orion."}}
+        called.set()
+        return value
+    monkeypatch.setattr("astroweb.metadata.refresh_metadata",lookup)
+    client=app.test_client()
+    headers=sign_in(client)
+    files=[(io.BytesIO(images[role].read_bytes()),"NGC_1788_"+role+".png") for role in ("final","starless","stars")]
+    saved=client.post("/api/admin/objects",data=dict(identifier="NGC_1788",images=files,draft_only="1"),headers=headers)
+    assert saved.status_code==201 and called.wait(5)
+    queue.executor.submit(lambda:None).result(timeout=5)
+    assert store.get("objects","NGC_1788")["metadata"]["summary"]["nl"]=="Een reflectienevel in Orion."
+    assert not store.all("jobs")

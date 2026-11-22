@@ -9,6 +9,16 @@ CATALOG=Path(__file__).with_name("catalog")
 IDENTIFIER = re.compile(r"[A-Z][A-Z0-9]{0,14}_[0-9]{1,8}[A-Z]?")
 
 
+TYPES = {"Other":("Overig catalogusobject","Other catalogue object"), "Nova":("Nova","Nova"), "G":("Sterrenstelsel","Galaxy"), "GPair":("Stelselpaar","Galaxy pair"),
+         "GTrpl":("Stelseltrio","Galaxy triplet"), "GGroup":("Groep sterrenstelsels","Galaxy group"),
+         "GCl":("Bolhoop","Globular cluster"), "OCl":("Open sterrenhoop","Open cluster"),
+         "Cl+N":("Sterrenhoop met nevel","Cluster with nebulosity"), "SNR":("Supernovarest","Supernova remnant"),
+         "PN":("Planetaire nevel","Planetary nebula"), "HII":("H II-gebied","H II region"),
+         "RfN":("Reflectienevel","Reflection nebula"), "Neb":("Nevel","Nebula"),
+         "EmN":("Emissienevel","Emission nebula"), "DrkN":("Donkerwolk","Dark nebula"),
+         "*Ass":("Sterassociatie","Stellar association"), "*":("Ster","Star"), "**":("Dubbelster","Double star")}
+
+
 def notation(value):
     compact=re.sub(r"[\s_-]+","",str(value).strip().upper())
     compact=re.sub(r"^CALDWELL(?=\d)","C",compact)
@@ -18,6 +28,26 @@ def notation(value):
     if not match:
         return str(value).strip().upper()
     return f"{match[1]}_{int(match[2])}{match[3]}"
+
+
+@lru_cache(maxsize=1)
+def facts():
+    return json.loads((CATALOG/"object-facts.json").read_text(encoding="utf8"))
+
+
+@lru_cache(maxsize=1)
+def nasa_pages():
+    pages = {}
+    for code,url in facts()["nasa"].items():
+        pages.setdefault(canonical(code), []).append({"label":"NASA · "+code.replace("_"," "), "url":url})
+    return pages
+
+
+def fact_id(value):
+    data = facts()
+    key = canonical(value)
+    key = data["messier"].get(key,key)
+    return data["duplicates"].get(key,key)
 
 
 @lru_cache(maxsize=1)
@@ -57,6 +87,14 @@ def named_ids():
         for name in (row.get("nl"),row.get("en"),*row.get("aliases",[]),*row.get("match_names",[])):
             if name and not IDENTIFIER.fullmatch(notation(name)):
                 names.setdefault(name_key(name),set()).add(ident)
+    for ident,row in facts()["objects"].items():
+        for name in row[7]:
+            names.setdefault(name_key(name),set()).add(cross_ids().get(ident,ident))
+    for ident,article in facts()["wikidata"].items():
+        for lang in ("nl","en"):
+            label=article[lang][0]
+            if label and not IDENTIFIER.fullmatch(notation(label)):
+                names.setdefault(name_key(label),set()).add(cross_ids().get(ident,ident))
     return {name:next(iter(matches)) for name,matches in names.items() if len(matches)==1}
 
 
@@ -72,13 +110,24 @@ def catalogue_labels():
     labels = {}
     for row in object_catalogue():
         labels.setdefault(canonical(row["id"]),row)
-    return labels
-
-
-@lru_cache(maxsize=1)
-def field_positions():
     from .galaxy import expanded_catalog
-    return {notation(identifier): (ra, dec) for identifier, ra, dec, _ in expanded_catalog()["field_objects"]}
+    atlas = expanded_catalog()
+    previous_positions = {notation(id):(ra,dec) for id,ra,dec,_ in atlas["field_objects"]}
+    data = facts()
+    for ident,row in data["objects"].items():
+        display = ident.replace("_"," ")
+        ra,dec = previous_positions.get(ident,(row[2],row[3]))
+        labels.setdefault(canonical(ident), {"id":display,"en":next(iter(row[7]),display),
+                          "ra":ra,"dec":dec,"type":row[0],"aliases":row[7],
+                          "source":"https://github.com/mattiaverga/OpenNGC/tree/"+data["revision"]})
+    for alias,ident in {**data["duplicates"],**data["messier"]}.items():
+        if entry := labels.get(canonical(ident)):
+            labels.setdefault(canonical(alias),entry)
+    # Preserve atlas entries outside the scope of the detailed NGC/IC tables.
+    for identifier, ra, dec, code in atlas["field_objects"]:
+        labels.setdefault(canonical(identifier), {"id":identifier,"ra":ra,"dec":dec,
+                          "type":code,"source":atlas["sources"]["O"]})
+    return labels
 
 
 def catalogue_position(name):
@@ -86,7 +135,7 @@ def catalogue_position(name):
     entry = catalogue_labels().get(identifier)
     if entry and "ra" in entry and "dec" in entry:
         return entry["ra"], entry["dec"]
-    return field_positions().get(identifier)
+    return None
 
 
 def group_id(record):

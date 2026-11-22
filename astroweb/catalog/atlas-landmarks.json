@@ -1,6 +1,7 @@
 {
 "sources":{"H": "https://physics.mcmaster.ca/~harris/mwgc.dat", "S": "https://github.com/astronexus/HYG-Database/tree/main/hyg/CURRENT", "O": "https://github.com/mattiaverga/OpenNGC", "C": "https://cds.unistra.fr/cgi-bin/Sesame"},
 "objects":[
+{"id":"IC 1805","nl":"Hartnevel","en":"Heart Nebula","ra":38.172958,"dec":61.456889,"src":"O","type":"Cl+N"},
 {"id":"IC 1848","nl":"Zielnevel","en":"Soul Nebula","ra":42.794125,"dec":60.402472,"src":"O","type":"Cl+N","aliases":["Embryonevel","Embryo Nebula"]},
 {"id":"IC 1396A","nl":"Slurfnevel","en":"Elephant’s Trunk","ra":324.0,"dec":57.4,"src":"C"},
 {"id":"Trumpler 37","nl":"Trumpler 37","en":"Trumpler 37","ra":324.71417,"dec":57.53111,"src":"C"},
@@ -2396,7 +2397,6 @@
 ["IC 1802",37.30825,23.082694,"G"],
 ["IC 1803",37.458083,23.108583,"G"],
 ["IC 1804",37.47675,23.097083,"G"],
-["IC 1805",38.172958,61.456889,"Cl+N"],
 ["IC 1806",37.395625,22.943222,"G"],
 ["IC 1807",37.629167,22.949722,"G"],
 ["IC 1809",37.918125,22.917194,"G"],

@@ -74,6 +74,44 @@ def cache_image(store, key, url, params=None, shape=None):
     return image
 
 
+def reference_disk(image):
+    center, radius = disk_in_photo(image)
+    if radius is not None:
+        return center, radius
+    # Dial-a-Moon frames are centred on the Moon, including at partial phases.
+    # Fit the *outer* illuminated limb. The terminator lies inside this circle.
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+    if w != h or w < 100:
+        raise ValueError("solarDetailAlignment")
+    center = (np.array([w,h])-1)/2
+    angles = np.linspace(0, 2*np.pi, 360, endpoint=False)
+    rays = np.column_stack((np.cos(angles),np.sin(angles)))
+    distances = np.arange(.32*w, .495*w, .5)
+    xy = center + rays[:,None,:]*distances[None,:,None]
+    lit = cv2.remap(gray, xy[:,:,0].astype("float32"), xy[:,:,1].astype("float32"),
+                    cv2.INTER_LINEAR) > 16
+    if np.any(lit[:,-1]) or np.count_nonzero(lit.any(axis=1)) < 100:
+        raise ValueError("solarDetailAlignment")
+    outer = distances[len(distances)-1-np.argmax(lit[:,::-1],axis=1)]
+    radius = np.percentile(outer[lit.any(axis=1)],90)
+    limb = lit.any(axis=1) & (np.abs(outer-radius)<.009*w)
+    if limb.sum()<90:
+        raise ValueError("solarDetailAlignment")
+    points = center + rays[limb]*outer[limb,None]
+    train = np.arange(len(points))%4 != 0
+    x,y = (points[train]-center).T
+    coeff = np.linalg.lstsq(np.c_[2*x,2*y,np.ones_like(x)],x*x+y*y,rcond=None)[0]
+    offset = coeff[:2]
+    radius = np.sqrt(max(0,coeff[2]+offset@offset))
+    checked = points[~train]
+    residual = np.abs(np.linalg.norm(checked-center-offset,axis=1)-radius)
+    if (np.linalg.norm(offset)>.012*w or np.ptp(checked,axis=0).min()<.22*w
+            or np.percentile(residual,90)>.005*w):
+        raise ValueError("solarDetailAlignment")
+    return center+offset, radius
+
+
 def reference(store, record):
     try:
         stamp = datetime.fromisoformat(capture_date(record).replace("Z", "+00:00"))
@@ -97,9 +135,7 @@ def reference(store, record):
         raise ValueError("solarDetailUnavailable") from None
     store.put("settings", key, data)
     image = cache_image(store, key, "https://svs.gsfc.nasa.gov" + url.path, shape=(730, 730))
-    center, radius = disk_in_photo(image)
-    if radius is None:
-        raise ValueError("solarDetailAlignment")
+    center, radius = reference_disk(image)
     return image, data, center, radius
 
 

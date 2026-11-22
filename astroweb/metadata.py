@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 from . import external_http
-from .catalogue import canonical, catalogue_labels, name_key
+from .catalogue import facts, fact_id, nasa_pages, TYPES, canonical, catalogue_labels, name_key
 
 from .store import now
 from .solar import BODIES,body_metadata
@@ -84,6 +84,17 @@ SEEDS = {
         },
         "sources": [{"label": "NASA · Caldwell 20", "url": NASA_NGC}],
         "aliases": ["NGC 7000", "North America Nebula", "Caldwell 20"],
+    },
+    "IC_1805": {
+        "target":"IC 1805", "aliases":["IC 1805","Hartnevel","Heart Nebula"],
+        "name":{"nl":"Hartnevel","en":"Heart Nebula"},
+        "type":{"nl":"Emissienevel en sterrenhoop","en":"Emission nebula and star cluster"},
+        "constellation":{"nl":"Cassiopeia","en":"Cassiopeia"},
+        "summary":{"nl":"In de Hartnevel in Cassiopeia laten jonge, hete sterren het omringende waterstofgas oplichten.",
+                   "en":"Hot young stars light up hydrogen gas in the Heart Nebula in Cassiopeia."},
+        "description":{"nl":"In het hart van IC 1805 ligt de open sterrenhoop Melotte 15. Straling en sterrenwinden van de zwaarste sterren vormen de randen en stofzuilen van de nevel.",
+                       "en":"The open cluster Melotte 15 lies at the centre of IC 1805. Radiation and stellar winds from its massive stars sculpt the nebula’s rims and dust pillars."},
+        "sources":[{"label":"NASA · IC 1805","url":"https://science.nasa.gov/image-article/apod-2019-september-11-ic-1805-the-heart-nebula/"}],
     },
     "IC_1848": {
         "target": "IC 1848",
@@ -227,9 +238,49 @@ def initial_metadata(identifier):
         }
         if entry := catalogue_labels().get(canonical(identifier)):
             result["name"].update(nl=entry.get("nl",name),en=entry.get("en",name))
+            if entry.get("type") in TYPES:
+                nl, en = TYPES[entry["type"]]
+                result["type"] = {"nl":nl,"en":en}
             result["aliases"]=list(dict.fromkeys([name,*result["name"].values(),*entry.get("aliases",[])]))
             if entry.get("source"):
                 result["sources"]=[{"label":entry["id"],"url":entry["source"]}]
+    data = facts()
+    key = fact_id(identifier)
+    row = data["objects"].get(key)
+    if row and not seed and identifier not in BODIES:
+        labels = TYPES.get(row[0])
+        if labels:
+            result["type"] = dict(zip(("nl","en"),labels))
+        code = data["constellations"].get(row[1],row[1])
+        result["constellation"] = {"nl":code,"en":code}
+        result["sources"].append({"label":"OpenNGC","url":"https://github.com/mattiaverga/OpenNGC/tree/"+data["revision"]})
+        designation = key.replace("_"," ")
+        nl = f"{designation} staat in OpenNGC als {result['type']['nl'].lower()} in het sterrenbeeld {code}."
+        en = f"OpenNGC lists {designation} in {code} ({result['type']['en'].lower()})."
+        result["summary"] = {"nl":nl,"en":en}
+        if article := data["wikidata"].get(key):
+            for lang in ("nl","en"):
+                label, brief = article[lang]
+                if label and generated_placeholder("name",lang,result["name"][lang],result["target"]):
+                    result["name"][lang] = label
+                if brief:
+                    result["summary"][lang] = brief
+            result["sources"].append({"label":"Wikidata · "+article["qid"],
+                                      "url":"https://www.wikidata.org/wiki/"+article["qid"]})
+        if row[4]:
+            size = f"{row[4]:g}" + (f" × {row[5]:g}" if row[5] else "")
+            nl += " De schijnbare grootte is "+size.replace(".",",")+" boogminuten."
+            en += " Its apparent size is "+size+" arcminutes."
+        if row[6] is not None:
+            nl += " De V-magnitude is "+format(row[6],"g").replace(".",",")+"."
+            en += f" Its V magnitude is {row[6]:g}."
+        if distance := data["distances"].get(key):
+            nl += " De Updated Nearby Galaxy Catalog (2013) geeft een afstandsschatting van "+str(distance[0]).replace(".",",")+" Mpc."
+            en += f" The Updated Nearby Galaxy Catalog (2013) gives a distance estimate of {distance[0]} Mpc."
+            result["sources"].append({"label":"Karachentsev et al. · UNGC (2013)",
+                                     "url":"https://vizier.cds.unistra.fr/viz-bin/VizieR?-source=J/AJ/145/101"})
+        result["description"] = {"nl":nl,"en":en}
+    result["sources"] = list({link["url"]:link for link in result.get("sources",[])+nasa_pages().get(canonical(identifier),[])}.values())
     result["updated_at"] = now()
     return result
 
@@ -276,7 +327,7 @@ def use_catalogue_metadata(metadata):
     refresh_generated = known and (result.get("translation") != "curated" or lookup_only)
     current = initial_metadata(canonical(target))
     changed = False
-    for field in TEXT_FIELDS if known else ("name",):
+    for field in TEXT_FIELDS if known or fact_id(target) in facts()["objects"] else ("name","type"):
         for lang, text in current[field].items():
             value = result.get(field, {}).get(lang)
             if (f"{field}.{lang}" not in overrides and text != value and
@@ -385,7 +436,12 @@ def refresh_metadata(metadata, force=False, *, store=None):
     aliases = list(dict.fromkeys([target, *result.get("aliases", []), *(known["aliases"] if known else [])]))
     # Query additional designations, but accept a media caption only when it
     # identifies the target. Caldwell 33 is a wider region than NGC 6992.
+    if entry := catalogue_labels().get(canonical(target)):
+        aliases = list(dict.fromkeys([*aliases,*[v for v in (entry.get("en"),entry.get("nl")) if v],*entry.get("aliases",[])]))
     queries = list(aliases)
+    compact = target.replace(" ", "").replace("_", "")
+    if compact != target and compact not in queries:
+        queries.append(compact)
     if known is SEEDS["NGC_6992"]:
         queries.extend(["Eastern Veil Nebula", "Caldwell 33"])
     external = wikipedia
@@ -398,8 +454,12 @@ def refresh_metadata(metadata, force=False, *, store=None):
         matches = []
         for item in response.json().get("collection", {}).get("items", []):
             data = next(iter(item.get("data", [])), {})
-            text = clean_text(data.get("title", "") + " " + data.get("description", ""))
-            score = sum(bool(re.search(r"(?<![a-z0-9])" + re.escape(alias).replace(r"\ ", r"\s*") + r"(?![a-z0-9])", text, re.I)) for alias in aliases)
+            title = clean_text(data.get("title", ""))
+            keywords = {name_key(v) for v in (data.get("keywords") or []) if isinstance(v,str)}
+            # NASA full-text results also describe neighbouring objects. Accept
+            # a named subject in the title or an explicit catalogue keyword.
+            score = sum(2*bool(re.search(r"(?<![a-z0-9])"+re.escape(alias).replace(r"\\ ",r"\\s*")+r"(?![a-z0-9])",title,re.I))
+                        + (name_key(alias) in keywords) for alias in aliases)
             if score and data.get("nasa_id") and data.get("description"):
                 matches.append((score, data))
         if matches:
@@ -413,6 +473,12 @@ def refresh_metadata(metadata, force=False, *, store=None):
         # Local, bilingual editorial summary with the relevant primary source.
         external = {"provider":"NASA Science", "title":known["name"]["en"], "text":copy.deepcopy(known["summary"]),
                     "credit":"AstroWeb · NASA Science", "url":known["sources"][0]["url"]}
+    if external is None and fact_id(target) in facts()["objects"]:
+        catalogue = initial_metadata(target)
+        external = {"provider":"OpenNGC","title":catalogue["name"]["en"],"text":catalogue["description"],
+                    "credit":"OpenNGC · Mattia Verga and contributors · CC BY-SA 4.0",
+                    "url":"https://github.com/mattiaverga/OpenNGC/tree/"+facts()["revision"],
+                    "sources":catalogue["sources"]}
     if external is None:
         url = "https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/S?"+requests.utils.quote(target, safe="")
         response = external_http.get(url, timeout=(4,12))
@@ -429,6 +495,11 @@ def refresh_metadata(metadata, force=False, *, store=None):
         external = {"provider":"CDS/SIMBAD", "title":name, "text":{"en":f"Catalogue identification: {name}{position}.",
                     "nl":f"Catalogusidentificatie: {name}{position}."}, "credit":"CDS, Strasbourg",
                     "url":"https://simbad.cds.unistra.fr/simbad/sim-id?Ident="+requests.utils.quote(name,safe="")}
+    if names := external.pop("article_names", {}):
+        overrides = text_overrides(result)
+        for lang, name in names.items():
+            if f"name.{lang}" not in overrides and generated_placeholder("name", lang, result["name"][lang], target):
+                result["name"][lang] = name
     if extra := external.pop("sources", []):
         result["sources"] = list({s["url"]:s for s in result.get("sources", []) + extra}.values())
     result["external"] = external

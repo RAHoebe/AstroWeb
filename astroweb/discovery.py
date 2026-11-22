@@ -13,16 +13,8 @@ from astropy.wcs.utils import skycoord_to_pixel
 from .galaxy import landmarks, field_catalog
 from .journey import SOLUTIONS, fits_registration
 from .metadata import known_target
-from .catalogue import canonical,name_key
+from .catalogue import TYPES, canonical,name_key
 
-TYPES = {"G":("Sterrenstelsel","Galaxy"), "GPair":("Stelselpaar","Galaxy pair"),
-         "GTrpl":("Stelseltrio","Galaxy triplet"), "GGroup":("Groep sterrenstelsels","Galaxy group"),
-         "GCl":("Bolhoop","Globular cluster"), "OCl":("Open sterrenhoop","Open cluster"),
-         "Cl+N":("Sterrenhoop met nevel","Cluster with nebulosity"), "SNR":("Supernovarest","Supernova remnant"),
-         "PN":("Planetaire nevel","Planetary nebula"), "HII":("H II-gebied","H II region"),
-         "RfN":("Reflectienevel","Reflection nebula"), "Neb":("Nevel","Nebula"),
-         "EmN":("Emissienevel","Emission nebula"), "DrkN":("Donkerwolk","Dark nebula"),
-         "*Ass":("Sterassociatie","Stellar association"), "*":("Ster","Star"), "**":("Dubbelster","Double star")}
 LOCAL_TYPES = {"IC 1396A":"DrkN","Trumpler 37":"OCl","HD 206267":"*","Sh2-129":"HII",
                "Barnard 352":"DrkN","LDN 935":"DrkN","52 Cyg":"*","NGC 1432":"RfN","NGC 1435":"RfN"}
 PLEIADES_STARS = {"HIP 17702","HIP 17847","HIP 17499","HIP 17573","HIP 17608","HIP 17531","HIP 17851","HIP 17489","HIP 17579"}

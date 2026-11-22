@@ -537,15 +537,17 @@ def create_app(data_dir=None, testing=False):
                 if kind and "orientation" not in raw_params:
                     params.orientation = "original"
             else:
+                from .observation import header_target
                 header = (observation or {}).get("header", {})
-                identifier, source, prefix = upload_identity([p.name for p in paths], header.get("OBJECT"), supplied,
+                object_name = header_target(header)
+                identifier, source, prefix = upload_identity([p.name for p in paths], object_name, supplied,
                                                              store=None if request.form.get("identifier_override")=="1" else store)
                 if request.form.get("identifier_override") == "1":
                     identifier = normalize_id(supplied)
                     source = "manual"
                 if not identifier:
                     raise ValueError("invalid_identifier")
-                if fits_path and not header.get("OBJECT") and file_prefix(fits_path.name) and prefix and not belongs(fits_path.name, prefix):
+                if fits_path and not object_name and file_prefix(fits_path.name) and prefix and not belongs(fits_path.name, prefix):
                     raise ValueError("invalid_filename")
             with queue.lock:
                 if upload_token:
@@ -565,8 +567,10 @@ def create_app(data_dir=None, testing=False):
                                        fits_source=fits_path, observation=observation, upload_token=upload_token)
                 if source=="wiki":
                     from .wikimedia import add_metadata
-                    record = store.update("objects",record["id"],metadata=add_metadata(store,record["metadata"],header["OBJECT"]))
+                    record = store.update("objects",record["id"],metadata=add_metadata(store,record["metadata"],object_name))
                 if draft_only:
+                    if record["metadata"].get("translation") == "pending":
+                        queue.executor.submit(queue.enrich_metadata, record["id"])
                     return jsonify(object=present(record, True)), 201
                 job = queue.submit(record["id"], params.__dict__)
         return jsonify(object=present(record, True), job=job), 202

@@ -319,6 +319,26 @@ class JobQueue:
             # The viewer can retry independently if the optional journey failed.
             logging.warning("Could not prepare sky journey for %s", identifier, exc_info=True)
 
+    def enrich_metadata(self, identifier):
+        record = self.store.get("objects", identifier)
+        if not record or record["metadata"].get("translation") != "pending" or record["metadata"].get("external"):
+            return
+        from .metadata import refresh_metadata
+        try:
+            metadata = refresh_metadata(record["metadata"], store=self.store)
+            external = metadata.get("external", {})
+            for language, text in external.get("text", {}).items():
+                if text:
+                    metadata["description"][language] = text
+                    metadata["summary"][language] = text.split(". ", 1)[0][:300]
+            metadata["translation"] = external.get("translation", "partial") if external.get("text", {}).get("nl") else "partial"
+            with self.store.lock:
+                current = self.store.get("objects", identifier)
+                if current and current["metadata"] == record["metadata"]:
+                    self.store.update("objects", identifier, metadata=metadata)
+        except Exception:
+            logging.info("Object metadata unavailable for %s; keeping local descriptions", identifier)
+
     def run(self, job_id):
         with self.store.lock:
             if self.store.get("jobs",job_id)["status"] != "queued":
@@ -326,22 +346,7 @@ class JobQueue:
             job = self.store.update("jobs", job_id, status="running", started_at=now(), progress=2)
         try:
             record = self.store.get("objects", job["object_id"])
-            if record["metadata"].get("translation") == "pending" and not record["metadata"].get("external"):
-                # New, uncurated targets are enriched automatically; offline failures never block a movie.
-                from .metadata import refresh_metadata
-                try:
-                    metadata = refresh_metadata(record["metadata"], store=self.store)
-                    external = metadata.get("external", {})
-                    for language, text in external.get("text", {}).items():
-                        if text:
-                            metadata["description"][language] = text
-                            metadata["summary"][language] = text.split(". ", 1)[0][:300]
-                    metadata["translation"] = external.get("translation", "partial") if external.get("text", {}).get("nl") else "partial"
-                    current = self.store.get("objects", record["id"])
-                    if current["metadata"].get("updated_at") == record["metadata"].get("updated_at"):
-                        self.store.update("objects", record["id"], metadata=metadata)
-                except Exception:
-                    logging.info("Object metadata unavailable for %s; keeping local descriptions", record["id"])
+            self.enrich_metadata(record["id"])
             self.checkpoint(job_id)
             self.prepare_capture(record["id"], lambda: self.checkpoint(job_id))
             self.checkpoint(job_id)

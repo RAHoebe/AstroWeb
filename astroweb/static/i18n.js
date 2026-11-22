@@ -216,6 +216,8 @@ export const words = {
   routeAlignment_wcs:["Posities op de foto bevestigd met de FITS-hemelcoördinaten. Overige stops volgen beelddetails.","Positions confirmed in the photo using the FITS sky coordinates. Other stops follow image details."],
   routeAlignment_missing:["De positie op de foto kon niet worden bevestigd. Deze route volgt beelddetails.","The positions could not be confirmed in the photo. This route follows image details."],
   routeAlignment_unavailable:["Gaia is tijdelijk onbereikbaar. Deze route volgt beelddetails.","Gaia is temporarily unavailable. This route follows image details."],
+  routeAlignment_lunar_reference_unavailable:["De maanreferentie is niet bereikbaar. Voorlopig zijn alleen beelddetails beschikbaar.","The lunar reference is unavailable. Only image details are available for now."],
+  routeAlignment_lunar_unmatched:["De maanreferentie kon niet op deze foto worden uitgelijnd. Deze route volgt beelddetails.","The lunar reference could not be aligned with this photo. This route follows image details."],
   routeAlignment_surface:["Opgeslagen markeringen en beelddetails in deze opname.","Saved markers and image details in this capture."],
   routeAlignment_landscape:["Deze route volgt details in de opname.","This route follows details in the capture."],
   routeCataloguePoint:["Cataloguspositie","Catalogue position"],

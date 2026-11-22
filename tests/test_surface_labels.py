@@ -139,3 +139,19 @@ def test_viewer_guide_mark_cycle_zoom_and_original_tab(app):
             browser.close()
     finally:
         web.shutdown()
+
+
+def test_partial_lunar_reference_uses_outer_limb():
+    from astroweb.lunar_detail import reference_disk
+    import numpy as np
+    h=w=730
+    y,x=np.ogrid[:h,:w]
+    circle=(x-365)**2+(y-363)**2<=335**2
+    illuminated=circle & (x>320)
+    image=np.repeat(np.uint8(illuminated*180)[:,:,None],3,axis=2)
+    center,radius=reference_disk(image)
+    np.testing.assert_allclose(center,[365,363],atol=2)
+    assert abs(radius-335)<2
+    import pytest
+    with pytest.raises(ValueError):
+        reference_disk(np.zeros_like(image))

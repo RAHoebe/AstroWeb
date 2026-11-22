@@ -12,3 +12,5 @@
   The unmodified source is retained. See the bundled description for attribution
   and upstream licensing, and the project's existing Stellarium credits.
 - The animated charts use the names, positions and observing-night calculations in `astroweb/sky.py`. See [sources and licences](../../THIRD_PARTY.md) for other bundled catalogues, images and derived tables.
+
+- `object-facts.json`: offline NGC/IC facts, unique cross-references, galaxy distances in Mpc, verified Dutch/English Wikidata names and descriptions, and NASA article links. For each object the array contains the OpenNGC type, IAU constellation abbreviation, ICRS RA and Dec in degrees, major and minor axes in arcminutes, V magnitude and common names. Missing measurements are null. Run `python tools/update_object_catalogue.py` to build a new snapshot. Review the diff and run the recognition tests before publishing it. See [source credits](../../THIRD_PARTY.md).

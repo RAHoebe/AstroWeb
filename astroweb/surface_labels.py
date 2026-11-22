@@ -125,11 +125,14 @@ def lunar_points(store, record):
 def discover(store, record):
     body = record["body"]
     points = {}
+    alignment_error = None
     if body == "MOON" and record.get("poster"):
         try:
             points = {point["id"]:point for point in lunar_points(store,record)}
-        except (OSError, requests.RequestException, ValueError, cv2.error, np.linalg.LinAlgError):
-            pass  # The user can place markers when the reference cannot be registered.
+        except (OSError, requests.RequestException):
+            alignment_error = "lunar_reference_unavailable"
+        except (ValueError, cv2.error, np.linalg.LinAlgError):
+            alignment_error = "lunar_unmatched"
     known = {p["id"]:p for p in presets(body)}
     saved = manual(record)
     if body == "SATURN" and record.get("poster") and not any(p["id"]=="rings" for p in saved):
@@ -144,7 +147,10 @@ def discover(store, record):
         if info is None:
             info = dict(id=point["id"],name=dict(nl=point["name"],en=point["name"]),source=None,journey=None)
         points[point["id"]] = labelled(dict(x=point["x"],y=point["y"]),info,"manual")
-    return {"kind":"surface","objects":list(points.values())}
+    result = {"kind":"surface","objects":list(points.values())}
+    if alignment_error and not points:
+        result["alignment_error"] = alignment_error
+    return result
 
 
 def save(store, record, payload):

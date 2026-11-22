@@ -59,7 +59,7 @@ def lookup(store, value):
     title = " ".join(value.replace("_"," ").split())
     if not re.fullmatch(r"[\w .’'()\-]{2,64}",title) or not any(c.isalpha() for c in title):
         return None
-    key = "wikipedia-object-v1:"+title
+    key = "wikipedia-object-v2:"+title
     current = datetime.now(timezone.utc).timestamp()
     saved = store.get("settings",key)
     if saved and saved["until"]>current:
@@ -76,10 +76,49 @@ def lookup(store, value):
             matches = [m for entity in data.get("entities",{}).values() if (m:=read_identity(entity))]
         except (requests.RequestException,TypeError,ValueError,AttributeError):
             return None  # An outage should not be cached as an unidentified object.
-        if len(matches)==1:
+        if len(matches)==1 and (not SUPPORTED.fullmatch(canonical(title)) or matches[0]["identifier"]==canonical(title)):
             store.put("settings",key,{"until":current+30*86400,"identity":matches[0]})
             return matches[0]
         if len(matches)>1:
+            return None
+    # Wikidata sitelinks are article titles. Catalogue identifiers often redirect
+    # on Wikipedia (IC 1805 -> Hartnevel) without being sitelinks themselves.
+    identifier = canonical(title)
+    if SUPPORTED.fullmatch(identifier):
+        for lang in ("nl","en"):
+            try:
+                page = external_http.get(f"https://{lang}.wikipedia.org/w/api.php", headers=CONTACT,timeout=(3,6),
+                    params={"action":"query","format":"json","formatversion":2,"redirects":1,
+                            "titles":identifier.replace("_"," "),"prop":"pageprops","ppprop":"wikibase_item"})
+                page.raise_for_status()
+                qids = {p.get("pageprops",{}).get("wikibase_item","") for p in page.json()["query"]["pages"]}
+                if len(qids)!=1 or not re.fullmatch(r"Q[1-9][0-9]*",qid:=qids.pop()):
+                    continue
+                entity = external_http.get(API,headers=CONTACT,timeout=(3,6),params={"action":"wbgetentities",
+                    "ids":qid,"props":"labels|claims|sitelinks","languages":"nl|en","sitefilter":"nlwiki|enwiki","format":"json"})
+                entity.raise_for_status()
+                match = read_identity(entity.json()["entities"][qid])
+                if match and match["identifier"]==identifier:
+                    store.put("settings",key,{"until":current+30*86400,"identity":match})
+                    return match
+            except (requests.RequestException,ValueError,KeyError,TypeError,AttributeError):
+                return None
+        # Entity search also finds identifier aliases that have no Wikipedia redirect.
+        try:
+            search = external_http.get(API,headers=CONTACT,timeout=(3,6),params={"action":"wbsearchentities",
+                "search":identifier.replace("_"," "),"language":"en","limit":8,"format":"json"})
+            search.raise_for_status()
+            ids=[row["id"] for row in search.json().get("search",[]) if re.fullmatch(r"Q[1-9][0-9]*",row.get("id",""))]
+            if ids:
+                response=external_http.get(API,headers=CONTACT,timeout=(3,6),params={"action":"wbgetentities",
+                    "ids":"|".join(ids),"props":"labels|claims|sitelinks","languages":"nl|en","sitefilter":"nlwiki|enwiki","format":"json"})
+                response.raise_for_status()
+                matches=[m for e in response.json()["entities"].values()
+                         if (m:=read_identity(e)) and m["identifier"]==identifier]
+                if len(matches)==1:
+                    store.put("settings",key,{"until":current+30*86400,"identity":matches[0]})
+                    return matches[0]
+        except (requests.RequestException,ValueError,KeyError,TypeError,AttributeError):
             return None
     store.put("settings",key,{"until":current+86400,"identity":None})
     return None
@@ -116,7 +155,7 @@ def description(store, target):
         return None
     return {"provider":"Wikipedia / Wikidata","title":identity["name"].get("en",target),"text":text,
             "credit":"Wikipedia contributors · CC BY-SA 4.0","url":articles[0]["url"],
-            "sources":[*articles,identity["sources"][0]]}
+            "sources":[*articles,identity["sources"][0]],"article_names":identity["name"]}
 
 
 def add_metadata(store, metadata, value):

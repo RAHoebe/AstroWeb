@@ -927,16 +927,17 @@ function fillObservation(object){
 let pendingIdentity=Promise.resolve(),identityRequest=0,draftIdentity=null,uploadToken=null,transfer=null;
 async function fitsObject(file){
   if(!file)return '';
-  const block=28800;
+  const block=28800,names={};
   for(let offset=0;offset<Math.min(file.size,1024*1024);offset+=block){
     const text=await file.slice(offset,offset+block).text();
     if(!offset&&!text.startsWith('SIMPLE  ='))return '';
     for(let pos=0;pos+80<=text.length;pos+=80){
       const card=text.slice(pos,pos+80),key=card.slice(0,8).trim();
-      if(key==='END')return '';
-      if(key==='OBJECT'){
+      if(key==='END')return names.TARGNAME||names.OBJNAME||'';
+      if(['OBJECT','TARGNAME','OBJNAME'].includes(key)){
         const value=card.slice(10).trimStart().match(/^'((?:[^']|'')*)'/);
-        return value?value[1].replaceAll("''","'").trim():'';
+        if(value)names[key]=value[1].replaceAll("''","'").trim();
+        if(names.OBJECT)return names.OBJECT;
       }
     }
   }

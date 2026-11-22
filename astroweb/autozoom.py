@@ -33,7 +33,7 @@ def propose(store, record, count, *, image=None):
         return {"points":propose_image(image, count), "alignment":"landscape"}
     guide = discover(store, record, links=False)
     target = canonical(record.get("metadata", {}).get("target") or record["id"])
-    return {"points":propose_image(image, count, guide["objects"], target), "alignment":guide["kind"]}
+    return {"points":propose_image(image, count, guide["objects"], target), "alignment":guide.get("alignment_error",guide["kind"])}
 
 
 def draft(store, preview, image, count, identifier, fits, stars):

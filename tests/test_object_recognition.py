@@ -134,3 +134,51 @@ def test_cached_english_caption_can_be_translated_when_service_is_configured(mon
     translated=refresh_metadata(metadata)["external"]
     assert translated["translation"]=="machine"
     assert translated["text"]["nl"]=="Openbare Nederlandse beschrijving."
+
+
+def test_catalogue_facts_and_verified_links_are_available_without_network(monkeypatch):
+    monkeypatch.setenv("ASTROWEB_OFFLINE","1")
+    for label in ("IC 1805","IC1805","Hartnevel","Heart Nebula"):
+        assert initial_metadata(label)["name"]["nl"]=="Hartnevel"
+    nebula=initial_metadata("NGC_1788")
+    assert nebula["type"]["nl"]=="Reflectienevel"
+    assert "Orion" in nebula["summary"]["nl"] and "boogminuten" in nebula["description"]["nl"]
+    galaxy=initial_metadata("NGC_2403")
+    assert "Mpc" in galaxy["description"]["en"]
+    assert any("caldwell-7/" in item["url"] for item in galaxy["sources"])
+    assert any("vizier" in item["url"] for item in galaxy["sources"])
+
+
+def test_wikipedia_numeric_redirect_checks_catalogue_identity(tmp_path,monkeypatch):
+    qid="Q33586"
+    entity={"id":qid,"claims":{"P3083":[claim("IC 1805")]},"labels":{"nl":{"value":"Hartnevel"}}}
+    def get(url,params,**kwargs):
+        if "sites" in params:
+            return response({"success":1,"entities":{}})
+        if params["action"]=="query":
+            assert params["redirects"]==1 and params["titles"]=="IC 1805"
+            return response({"query":{"pages":[{"pageprops":{"wikibase_item":qid}}]}})
+        if params["action"]=="wbsearchentities":
+            return response({"search":[{"id":qid}]})
+        assert params["ids"]==qid
+        return response({"entities":{qid:entity}})
+    monkeypatch.setattr(wikimedia.external_http,"get",get)
+    assert wikimedia.lookup(Store(tmp_path/"one"),"IC1805")["name"]["nl"]=="Hartnevel"
+    entity["claims"]["P3083"]=[claim("IC 1848")]
+    assert wikimedia.lookup(Store(tmp_path/"two"),"IC1805") is None
+
+def test_nasa_caption_mentioning_neighbour_is_not_used_for_heart_nebula(monkeypatch):
+    def get(url,params,**kwargs):
+        return response({"collection":{"items":[{"data":[{"nasa_id":"PIA13014","title":"Soul Nebula",
+                         "description":"The Soul Nebula is near the Heart Nebula (IC 1805)."}]}]}})
+    monkeypatch.setattr(wikimedia.external_http,"get",get)
+    found=refresh_metadata(initial_metadata("IC_1805"),force=True)
+    assert found["external"]["provider"]=="NASA Science"
+    assert "ic-1805" in found["external"]["url"]
+
+
+def test_fits_target_keywords_have_stable_precedence():
+    from astroweb.observation import header_target
+    assert header_target({"OBJECT":" IC 1805 ","TARGNAME":"other"})=="IC 1805"
+    assert header_target({"OBJECT":" ", "TARGNAME":"M 31","OBJNAME":"IC 1805"})=="M 31"
+    assert header_target({"OBJNAME":"NGC 6946"})=="NGC 6946"
