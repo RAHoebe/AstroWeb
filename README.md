@@ -20,6 +20,8 @@ Op TV staan **Sterren in 3D**, **Lichtreis**, **Mozaïek** en **Zonvergelijking*
 
 Zware voorbereiding loopt in de begrensde serverwachtrij. Resultaten staan buiten de broncode onder `data/observatory/`; opgehaalde Gaia-metingen blijven offline bruikbaar. Ontbrekende brongegevens worden gemeld en tijdelijke Gaia-uitval wordt opnieuw geprobeerd. Privé-opnamen blijven afgeschermd; openbare kijktijden gebruiken geen privé-locatie. Gebruik [web v1.6.5](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.6.5) en [TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2).
 
+Bij nevels zoekt AstroWeb ook in Pan-STARRS1 naar driekleurenbeelden van de nevel en van deelgebieden. Voor geselecteerde NOIRLab-foto’s kan AstroWeb de positie, schaal en draaiing uit gedeelde sterren bepalen, ook als de archieffoto geen hemelcoördinaten bevat. Alleen volledig overlappende en gecontroleerde beelden worden als bestemming aangeboden.
+
 TV 0.8 houdt de viewerknoppen op één rij, met draaien en volledig scherm rechts als icoonknoppen. **Verken** biedt alleen de opnamenacht/vanavond en de benoemde onderdelen van de geopende opname. **Kijkmodi** op het hoofdscherm start direct een willekeurige avondvoorstelling van vijf minuten of een fotolijst van één uur. Galerij opent de hoofdgalerij met je object geselecteerd; Terug behoudt de herkomst, bijvoorbeeld de kalender.
 
 ## Aan de slag

@@ -270,7 +270,7 @@ def render(store,record,name,registration_matrix,path,archive=None,tv=False):
         layers=[(patch(store,x,y,level,extent),level) for level,extent in ((5,10000),(7,5500),(8,2400))]
         credit="Hubble: NASA, ESA, B. Williams (University of Washington)"
     else:
-        if archive.get("provider") in {"euclid", "jwst"}:
+        if archive.get("provider"):
             from .mission_archive import registered_cutout
         else:
             from .hst_archive import registered_cutout

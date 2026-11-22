@@ -68,6 +68,8 @@ def test_independent_provider_failures_preserve_hst_priority_and_cached_success(
     calls=[]
     def lookup(store,record,provider):
         calls.append(provider)
+        if provider in ("panstarrs","noirlab"):
+            return []
         if provider=="jwst":
             raise requests.ConnectionError("unavailable")
         return [entry()]
@@ -75,7 +77,7 @@ def test_independent_provider_failures_preserve_hst_priority_and_cached_success(
     missions.discover(store,record["id"])
     missions.discover(store,record["id"])
     saved=store.get("objects",record["id"])
-    assert calls==["euclid","jwst"]
+    assert calls==["euclid","jwst","panstarrs","noirlab"]
     assert hubble.fields(store,saved,local_only=True)==[preferred,hst,entry()]
     monkeypatch.setattr(missions,"lookup",lambda *args: (_ for _ in ()).throw(requests.ConnectionError("offline")))
     missions.discover(store,record["id"],force=True)
@@ -96,7 +98,7 @@ def test_full_upload_pipeline_still_searches_extra_providers_after_hst_failure(t
         queue.prepare_capture(record["id"])
     finally:
         queue.shutdown()
-    assert calls==["euclid","jwst"]
+    assert calls==["euclid","jwst","panstarrs","noirlab"]
 
 
 def test_no_network_for_unregistered_solar_or_panorama_uploads(tmp_path,monkeypatch):
@@ -138,7 +140,7 @@ def test_euclid_coverage_handles_ra_wrap():
 
 def test_empty_science_product_is_never_a_destination(tmp_path):
     store=Store(tmp_path);item=entry();path=science_file(store,item)
-    with fits.open(path,mode="update") as hdus:
+    with fits.open(path,mode="update",memmap=False) as hdus:
         hdus[0].data[:]=0
     with pytest.raises(ValueError,match="hubble_no_field"):
         missions.registered_cutout(store,capture(),item)
@@ -150,3 +152,49 @@ def test_euclid_destination_is_offered_when_hst_is_temporarily_unavailable(tmp_p
     record["hst_search"]={"field":signature,"options":[],"unavailable":True}
     monkeypatch.setattr(missions.external_http,"get",lambda *args,**kwargs:pytest.fail("unexpected network"))
     assert hubble.fields(store,record,local_only=True)==[entry()]
+
+
+def test_panstarrs_colour_rejects_band_offset(tmp_path):
+    from astroweb import panstarrs
+    store=Store(tmp_path); record=capture(); item=entry("panstarrs")
+    path=science_file(store,item)
+    with fits.open(path,mode="update",memmap=False) as hdus:
+        for name in ("G","I"):
+            hdus.append(fits.ImageHDU(hdus[0].data.copy(),hdus[0].header,name=name))
+    image,matrix,focus=missions.registered_cutout(store,record,item)
+    assert image.shape==(160,200,3)
+    with fits.open(path,mode="update",memmap=False) as hdus:
+        hdus["G"].header["CRPIX1"]+=1
+    with pytest.raises(ValueError,match="hubble_no_field"):
+        missions.registered_cutout(store,record,item)
+    assert panstarrs.FILE.fullmatch("/rings.v3.skycell/2459/037/rings.v3.skycell.2459.037.stk.r.unconv.fits")
+
+
+def test_unlocated_plate_uses_held_out_features_and_rejects_partial_overlap():
+    from astroweb.noirlab import match_plate
+    rng=np.random.default_rng(137)
+    plate=np.zeros((420,500),np.uint8)
+    for x,y in rng.integers([3,3],[497,417],size=(550,2)):
+        cv2.circle(plate,(int(x),int(y)),int(rng.integers(1,4)),int(rng.integers(55,255)),-1)
+    plate=cv2.GaussianBlur(plate,(0,0),1)
+    transform=cv2.getRotationMatrix2D((250,210),19,.85)
+    transform[:,2]+=[150,115]
+    own=cv2.warpAffine(plate,transform,(800,700))
+    matrix,report=match_plate(plate,own)
+    assert np.max(np.abs(matrix[:2]-transform))<.3
+    assert report["verified"]>=10 and report["residual_px"]<1.2
+    with pytest.raises(ValueError,match="hubble_no_field"):
+        match_plate(plate,own[220:480,280:600].copy())
+
+
+def test_survey_texture_rejects_shifted_field(tmp_path):
+    from astroweb.panstarrs import verify_texture
+    rng = np.random.default_rng(1997)
+    photo = cv2.GaussianBlur(rng.integers(0, 200, (180, 180), dtype=np.uint8), (3, 3), 0)
+    store = Store(tmp_path)
+    cv2.imwrite(str(store.path("own.png")), photo)
+    record = {"assets": {"final": "own.png"}}
+    patch = cv2.cvtColor(photo, cv2.COLOR_GRAY2BGR)
+    assert verify_texture(store, record, patch, np.eye(3)) < 1
+    with pytest.raises(ValueError, match="hubble_no_field"):
+        verify_texture(store, record, np.roll(patch, 8, axis=1), np.eye(3))

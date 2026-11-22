@@ -1,4 +1,4 @@
-"""Optional Euclid VIS and JWST imaging destinations, verified against the capture.
+"""Optional Euclid VIS, JWST and Pan-STARRS1 imaging destinations, verified against the capture.
 
 Discovery runs in the existing background worker. Catalogue coverage alone is
 never enough: every offered destination has a cached, readable FITS image whose
@@ -33,6 +33,7 @@ MAX_BYTES = 96 * 1024**2
 MAX_PIXELS = 24_000_000
 MAX_FIELDS = 3
 VERSION = 1
+PROVIDERS = ("euclid","jwst","panstarrs","noirlab")
 
 
 class TimedConnections:
@@ -121,16 +122,26 @@ def mast_jwst_rows(corners):
 
 def image_file(store, entry):
     # IDs are locally generated hashes, never remote filenames or user paths.
-    if not re.fullmatch(r"(?:euclid|jwst)-[0-9a-f]{24}", entry["id"]):
+    if not re.fullmatch(r"(?:euclid|jwst|panstarrs)-[0-9a-f]{24}", entry["id"]):
         raise ValueError("invalid_archive_product")
     return store.path(f"survey-cache/mission-archive/{entry['id']}.fits")
 
 
 def download(store, entry):
-    if entry.get("provider") not in {"euclid", "jwst"} or not entry["id"].startswith(entry["provider"]+"-"):
+    if entry.get("provider") not in PROVIDERS or not entry["id"].startswith(entry["provider"]+"-"):
         raise ValueError("invalid_archive_product")
     path = image_file(store, entry)
     if path.is_file():
+        return path
+    if entry["provider"] == "panstarrs":
+        from . import panstarrs
+        path.parent.mkdir(parents=True,exist_ok=True)
+        tmp=path.with_suffix("."+uuid.uuid4().hex+".part")
+        try:
+            panstarrs.download(entry,tmp)
+            tmp.replace(path)
+        finally:
+            tmp.unlink(missing_ok=True)
         return path
     if entry["provider"] == "euclid":
         remote = entry["file_path"].rstrip("/") + "/" + entry["file_name"]
@@ -190,6 +201,9 @@ def download(store, entry):
 
 
 def registered_cutout(store, record, entry):
+    if entry["provider"]=="noirlab":
+        from . import noirlab
+        return noirlab.registered_cutout(store,record,entry)
     path = download(store, entry)
     with fits.open(path, memmap=True) as hdus:
         # JWST calibrated images have SCI; Euclid cutouts use the primary HDU.
@@ -228,18 +242,23 @@ def registered_cutout(store, record, entry):
             raise ValueError("hubble_no_field") from None
         if not np.isfinite(recovered).all() or np.max(np.linalg.norm(recovered-grid,axis=1)) > .5:
             raise ValueError("hubble_no_field")
-        data = np.flipud(hdu.data).astype(np.float32)
-    valid = np.isfinite(data) & (data != 0)
-    if valid.mean() < .5:
-        raise ValueError("hubble_no_field")
-    lo, hi = np.percentile(data[valid], [15, 99.7])
-    if not np.isfinite([lo,hi]).all() or hi <= lo:
-        raise ValueError("hubble_no_field")
-    signal = np.nan_to_num(data, nan=lo, posinf=hi, neginf=lo)
-    signal = cv2.GaussianBlur(signal,(0,0),.65)
-    stretch = np.arcsinh(6*np.clip((signal-lo)/(hi-lo),0,1))/np.arcsinh(6)
-    img = np.uint8(6+249*stretch)
-    img[~valid] = 0
+        if entry["provider"]=="panstarrs":
+            from .panstarrs import colour
+            image,valid = colour(hdus)
+        else:
+            data = np.flipud(hdu.data).astype(np.float32)
+            valid = np.isfinite(data) & (data != 0)
+            if valid.mean() < .5:
+                raise ValueError("hubble_no_field")
+            lo, hi = np.percentile(data[valid], [15, 99.7])
+            if not np.isfinite([lo,hi]).all() or hi <= lo:
+                raise ValueError("hubble_no_field")
+            signal = np.nan_to_num(data, nan=lo, posinf=hi, neginf=lo)
+            signal = cv2.GaussianBlur(signal,(0,0),.65)
+            stretch = np.arcsinh(6*np.clip((signal-lo)/(hi-lo),0,1))/np.arcsinh(6)
+            img = np.uint8(6+249*stretch)
+            img[~valid] = 0
+            image = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     # End on the requested named feature when possible; never on an unexposed gap.
     x, y = wcs.world_to_pixel(SkyCoord(entry["ra"], entry["dec"], unit="deg"))
     focus = (float(x), float(height-1-y))
@@ -247,7 +266,7 @@ def registered_cutout(store, record, entry):
         raise ValueError("hubble_no_field")
     if not valid[int(round(min(height-1,focus[1]))), int(round(min(width-1,focus[0])))]:
         raise ValueError("hubble_no_field")
-    return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), matrix, focus
+    return image, matrix, focus
 
 
 def seeds(store, record):
@@ -273,6 +292,12 @@ def contains(polygon, ra, dec, radius=0):
 
 
 def candidates(store, record, provider):
+    if provider=="noirlab":
+        from . import noirlab
+        return noirlab.candidates(store,record)
+    if provider=="panstarrs":
+        from . import panstarrs
+        return panstarrs.candidates(store,record)
     corners = geometry(store, record)["corners"]
     if provider == "euclid":
         rows = euclid_rows(corners)
@@ -341,6 +366,9 @@ def lookup(store, record, provider):
             continue
         try:
             image, matrix, _ = registered_cutout(store, record, entry)
+            if provider == "panstarrs":
+                from .panstarrs import verify_texture
+                entry["residual_px"] = verify_texture(store,record,image,matrix)
         except requests.RequestException as exc:
             errors.append(exc)
             continue
@@ -366,7 +394,7 @@ def cached_options(store, record):
     state = record.get("mission_search") or {}
     if not state or state.get("field") != archive_search.field_key(store, record):
         return []
-    return [item for provider in ("euclid", "jwst") for item in state.get(provider, {}).get("options", [])]
+    return [item for provider in PROVIDERS for item in state.get(provider, {}).get("options", [])]
 
 
 def discover(store, identifier, force=False):
@@ -376,7 +404,7 @@ def discover(store, identifier, force=False):
     signature = archive_search.field_key(store, record)
     if signature is None:
         return
-    for provider in ("euclid", "jwst"):
+    for provider in PROVIDERS:
         state = record.get("mission_search") or {}
         prior = state.get(provider, {}) if state.get("field") == signature else {}
         if not force and prior.get("version") == VERSION and prior.get("retry",0) > time.time():

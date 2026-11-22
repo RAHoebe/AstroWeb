@@ -20,6 +20,8 @@ On TV, **Stars in 3D**, **Light journey**, **Mosaic** and **Solar comparison** a
 
 Heavy preparation uses the bounded server queue. Results live outside the source tree under `data/observatory/`; downloaded Gaia measurements remain usable offline. Missing source data are reported and temporary Gaia outages are retried. Private captures stay protected and public observing windows do not use private sites. Use [web v1.6.5](https://github.com/RAHoebe/AstroWeb/releases/tag/v1.6.5) and [TV 0.8.2](https://github.com/RAHoebe/AstroWeb/releases/tag/tv-v0.8.2).
 
+For nebulae, AstroWeb also searches Pan-STARRS1 for three-filter colour images of the target and its surroundings. For selected NOIRLab photographs, shared stars can establish position, scale and rotation even without sky coordinates in the archive image. Only verified fields entirely inside the capture become destinations.
+
 TV 0.8 fits the viewer actions on one row, with rotate and fullscreen icons at the right. **Explore** offers only the capture-night/tonight chart and named features for the open capture. **Viewing modes** on the home screen starts a random five-minute evening programme or a one-hour photo frame immediately. Gallery opens the main collection with the current object selected; Back preserves the route, including the capture calendar.
 
 ## Quick start
