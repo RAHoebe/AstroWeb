@@ -1,6 +1,7 @@
 """Register licensed NOIRLab optical photographs directly to the user's star field."""
 
 import hashlib
+import re
 import uuid
 
 import cv2
@@ -294,7 +295,15 @@ def candidates(store, record):
 
 
 def registered_cutout(store, record, entry):
-    path = plate(store, entry["slug"])
+    if entry["provider"] == "colour-plate":
+        digest = entry["digest"]
+        if not re.fullmatch("[0-9a-f]{64}", digest):
+            raise ValueError("invalid_archive_product")
+        path = store.path(f"survey-cache/colour-plates/{digest}.jpg")
+        if not path.is_file():
+            raise ValueError("hubble_no_field")
+    else:
+        path = plate(store, entry["slug"])
     if (
         record["sha256"]["final"] != entry["capture_digest"]
         or hashlib.sha256(path.read_bytes()).hexdigest() != entry["digest"]

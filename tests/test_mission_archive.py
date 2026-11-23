@@ -198,3 +198,24 @@ def test_survey_texture_rejects_shifted_field(tmp_path):
     assert verify_texture(store, record, patch, np.eye(3)) < 1
     with pytest.raises(ValueError, match="hubble_no_field"):
         verify_texture(store, record, np.roll(patch, 8, axis=1), np.eye(3))
+
+
+def test_curated_colour_plate_survives_archive_refresh_and_checks_capture(tmp_path):
+    store = Store(tmp_path)
+    record = capture()
+    pixels = np.full((90, 120, 3), [20, 80, 130], np.uint8)
+    ok, encoded = cv2.imencode(".jpg", pixels)
+    assert ok
+    digest = hashlib.sha256(encoded).hexdigest()
+    photo = dict(id="colour-test", provider="colour-plate", capture_digest="test", digest=digest,
+                 matrix=np.eye(3).tolist(), focus=[58, 44])
+    path = store.path(f"survey-cache/colour-plates/{digest}.jpg")
+    path.parent.mkdir(parents=True)
+    path.write_bytes(encoded.tobytes())
+    record["colour_plates"] = [photo]
+    assert missions.cached_options(store, record) == [photo]
+    assert missions.registered_cutout(store, record, photo)[0].shape == pixels.shape
+    record["sha256"]["final"] = "different"
+    assert missions.cached_options(store, record) == []
+    with pytest.raises(ValueError):
+        missions.registered_cutout(store, record, photo)

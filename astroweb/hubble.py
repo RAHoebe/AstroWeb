@@ -282,6 +282,14 @@ def render(store,record,name,registration_matrix,path,archive=None,tv=False):
     centre=cv2.perspectiveTransform(np.float64([[[x,y],[x+1,y],[x,y+1]]]),plane)[0]
     origin,start=capture_bounds(photo,basis)
     sampling={"m32":.24,"nucleus":.21}.get(name,1.10 if archive else 1.05)
+    colour_plate = archive is not None and archive.get("provider") == "colour-plate"
+    if colour_plate:
+        # Compose the final view around the luminous shell or filament selected
+        # for this plate, independently of the downloaded image's resolution.
+        fraction = float(archive.get("end_height", .65))
+        if not .2 <= fraction <= 1:
+            raise ValueError("hubble_no_field")
+        sampling = HEIGHT / (image.shape[0] * fraction)
     end=sampling/min(np.linalg.norm(centre[i]-centre[0]) for i in (1,2))
     camera=FocusZoom(origin,centre[0],start,end,WIDTH,HEIGHT)
     masks={}
@@ -305,6 +313,9 @@ def render(store,record,name,registration_matrix,path,archive=None,tv=False):
                 # pixels approach display size, preserving registration at every frame.
                 native=scale*np.linalg.norm(centre[1]-centre[0])*2**(8-level)
                 fade=np.clip((native-(.18 if level==5 else .35))/(.55 if level==5 else .4),0,1)
+                if colour_plate:
+                    phase = np.clip((ease - .35) / .55, 0., 1.)
+                    fade = phase * phase * (3 - 2 * phase)
                 if fade<=0:continue
                 matrix=cam@plane@transform
                 overlay=cv2.warpPerspective(image,matrix,(WIDTH,HEIGHT))

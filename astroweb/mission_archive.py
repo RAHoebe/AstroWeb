@@ -201,7 +201,7 @@ def download(store, entry):
 
 
 def registered_cutout(store, record, entry):
-    if entry["provider"]=="noirlab":
+    if entry["provider"] in ("noirlab", "colour-plate"):
         from . import noirlab
         return noirlab.registered_cutout(store,record,entry)
     path = download(store, entry)
@@ -392,9 +392,15 @@ def lookup(store, record, provider):
 
 def cached_options(store, record):
     state = record.get("mission_search") or {}
-    if not state or state.get("field") != archive_search.field_key(store, record):
-        return []
-    return [item for provider in PROVIDERS for item in state.get(provider, {}).get("options", [])]
+    options = []
+    if state and state.get("field") == archive_search.field_key(store, record):
+        options.extend(item for provider in PROVIDERS for item in state.get(provider, {}).get("options", []))
+    # These independently registered photographs use coordinates in the original
+    # raster. Refreshing a telescope catalogue does not invalidate the star fit.
+    digest = (record.get("sha256") or {}).get("final")
+    options.extend(item for item in record.get("colour_plates", [])
+                   if digest and item.get("capture_digest") == digest)
+    return options
 
 
 def discover(store, identifier, force=False):

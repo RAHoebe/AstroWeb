@@ -509,7 +509,7 @@ function hubbleCaption(){
   let archiveIndex=0;
   for(const opt of select.options){
     const obs=hubbleObservations.find(o=>o.id===opt.value);
-    if(obs?.provider){opt.textContent=obs.title;continue;}
+    if(obs?.provider){opt.textContent=obs.names?local(obs.names):obs.title;continue;}
     if(obs?.name){opt.textContent=local(obs.name);continue;}
     const label=obs?.id.startsWith('skymap-')?'NASA Hubble Skymap · '+obs.title:obs?.filter?(['ANY','NONE','PAR','PARALLEL'].includes(obs.target?.toUpperCase())?t('archiveField'):obs.target)+' · '+obs.filter:t('hubble_'+opt.value);
     const field=obs?.full_footprint?' · '+t('archiveRegion')+' '+(++archiveIndex):'';
@@ -519,7 +519,7 @@ function hubbleCaption(){
   const source=$('hubble-source');
   source.href=active?.source||(active?.filter?'https://hla.stsci.edu/hlaview.html#Images|'+encodeURIComponent(active.id):'https://esahubble.org/images/heic2501a/');
   source.textContent=active?.credit?active.credit+' ↗':active?.filter?'NASA/ESA Hubble · '+active.id+' ↗':'NASA, ESA, B. Williams (University of Washington) ↗';
-  $('hubble-description').textContent=active?.provider?t(active.provider==='noirlab'?'archivePhotoMatchNote':active.provider==='panstarrs'?'archiveOpticalNote':'archiveMissionNote')+(active.provider==='jwst'?' '+t('archiveInfrared'):'')+' · '+active.telescope+' · '+active.filter:active?.name?t('solarMissionNote'):active?t('hubble_'+active.relation)+' · '+t(active.id.startsWith('skymap-')?'skymapNote':active.full_footprint?'fullHstNote':active.telescope?'hstPlateNote':active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
+  $('hubble-description').textContent=active?.provider?t(['noirlab','colour-plate'].includes(active.provider)?'archivePhotoMatchNote':active.provider==='panstarrs'?'archiveOpticalNote':'archiveMissionNote')+(active.provider==='jwst'?' '+t('archiveInfrared'):'')+' · '+active.telescope+' · '+active.filter:active?.name?t('solarMissionNote'):active?t('hubble_'+active.relation)+' · '+t(active.id.startsWith('skymap-')?'skymapNote':active.full_footprint?'fullHstNote':active.telescope?'hstPlateNote':active.source?'groundPlateNote':active.filter?'archiveHubbleNote':'hubbleNote'):'';
   const status=state.current?.body?({hubbleLoading:active?.cached===false?'solarPreparing':'solarLoading',hubble_unavailable:'solarDetailUnavailable',hubble_no_field:'solarDetailMissing'}[hubbleState]||hubbleState):hubbleState;
   if(active?.full_footprint)$('hubble-description').textContent+=' RA '+active.ra.toFixed(4)+'° · Dec '+active.dec.toFixed(4)+'°';
   if(active?.alignment==='lunar-map')$('hubble-description').textContent=t('lunarMissionNote');
