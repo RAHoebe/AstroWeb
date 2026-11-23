@@ -209,7 +209,7 @@ def test_curated_colour_plate_survives_archive_refresh_and_checks_capture(tmp_pa
     digest = hashlib.sha256(encoded).hexdigest()
     photo = dict(id="colour-test", provider="colour-plate", capture_digest="test", digest=digest,
                  matrix=np.eye(3).tolist(), focus=[58, 44])
-    path = store.path(f"survey-cache/colour-plates/{digest}.jpg")
+    path = store.path(f"archive-photos/{digest}.jpg")
     path.parent.mkdir(parents=True)
     path.write_bytes(encoded.tobytes())
     record["colour_plates"] = [photo]

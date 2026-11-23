@@ -299,7 +299,7 @@ def registered_cutout(store, record, entry):
         digest = entry["digest"]
         if not re.fullmatch("[0-9a-f]{64}", digest):
             raise ValueError("invalid_archive_product")
-        path = store.path(f"survey-cache/colour-plates/{digest}.jpg")
+        path = store.path(f"archive-photos/{digest}.jpg")
         if not path.is_file():
             raise ValueError("hubble_no_field")
     else:
