@@ -301,7 +301,13 @@ def render(store,record,name,registration_matrix,path,archive=None,tv=False):
         # boundaries so no rectangular tile border is visible during the flight.
         valid=(image.max(axis=2)>3).astype(np.uint8)
         interior=cv2.distanceTransform(valid,cv2.DIST_L2,3)
-        masks[level]=np.uint8(255*np.clip(np.minimum(edge,interior)/min(64,min(h,w)*.05),0,1))
+        if colour_plate:
+            # Broadly feather the plate boundary while keeping small dark knots
+            # and faint sky inside the photograph intact.
+            rim = np.clip(edge / (.18 * min(h, w)), 0, 1)
+            masks[level] = np.uint8(255 * rim * rim * (3 - 2 * rim))
+        else:
+            masks[level]=np.uint8(255*np.clip(np.minimum(edge,interior)/min(64,min(h,w)*.05),0,1))
     def frames():
         for i in range(288):
             t=min(1,max(0,(i/287-.05)/.87))
@@ -374,6 +380,8 @@ def movie(store,record,name,tv=False, cached_only=False, options=None):
         signature=["hst-optical-v6-structure",record["sha256"]["final"],geometry(store,record),name]
         if archive.get("provider"):
             signature.append(["mission-v1", archive])
+            if archive["provider"] == "colour-plate":
+                signature.append("colour-feather-v2")
     signature.append("destination-axes-visible-target-v1")
     if tv:signature.append("tv-destination-frame-v2")
     digest=hashlib.sha256(json.dumps(signature).encode()).hexdigest()[:20]

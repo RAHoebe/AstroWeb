@@ -33,7 +33,7 @@ MAX_BYTES = 96 * 1024**2
 MAX_PIXELS = 24_000_000
 MAX_FIELDS = 3
 VERSION = 1
-PROVIDERS = ("euclid","jwst","panstarrs","noirlab")
+PROVIDERS = ("euclid","jwst","panstarrs","noirlab","colour-search")
 
 
 class TimedConnections:
@@ -355,6 +355,9 @@ def candidates(store, record, provider):
 
 
 def lookup(store, record, provider):
+    if provider == "colour-search":
+        from . import photo_archive
+        return photo_archive.lookup(store, record)
     accepted, footprints, catalogue_footprints, errors = [], [], [], []
     deadline = time.monotonic() + 90
     for entry in candidates(store, record, provider)[:8]:
@@ -417,6 +420,11 @@ def discover(store, identifier, force=False):
             continue
         try:
             options = lookup(store, record, provider)
+            if provider == "colour-search":
+                # Keep verified colour photographs when an archive returns fewer results.
+                combined = {item["id"]:item for item in prior.get("options", [])}
+                combined.update({item["id"]:item for item in options})
+                options = list(combined.values())
             result = dict(options=options, retry=time.time()+7*86400, version=VERSION)
         except Exception:
             # A malformed optional response, including a TAP/FITS parser error,

@@ -68,7 +68,7 @@ def test_independent_provider_failures_preserve_hst_priority_and_cached_success(
     calls=[]
     def lookup(store,record,provider):
         calls.append(provider)
-        if provider in ("panstarrs","noirlab"):
+        if provider in ("panstarrs","noirlab","colour-search"):
             return []
         if provider=="jwst":
             raise requests.ConnectionError("unavailable")
@@ -77,7 +77,7 @@ def test_independent_provider_failures_preserve_hst_priority_and_cached_success(
     missions.discover(store,record["id"])
     missions.discover(store,record["id"])
     saved=store.get("objects",record["id"])
-    assert calls==["euclid","jwst","panstarrs","noirlab"]
+    assert calls==["euclid","jwst","panstarrs","noirlab","colour-search"]
     assert hubble.fields(store,saved,local_only=True)==[preferred,hst,entry()]
     monkeypatch.setattr(missions,"lookup",lambda *args: (_ for _ in ()).throw(requests.ConnectionError("offline")))
     missions.discover(store,record["id"],force=True)
@@ -98,7 +98,7 @@ def test_full_upload_pipeline_still_searches_extra_providers_after_hst_failure(t
         queue.prepare_capture(record["id"])
     finally:
         queue.shutdown()
-    assert calls==["euclid","jwst","panstarrs","noirlab"]
+    assert calls==["euclid","jwst","panstarrs","noirlab","colour-search"]
 
 
 def test_no_network_for_unregistered_solar_or_panorama_uploads(tmp_path,monkeypatch):
@@ -219,3 +219,19 @@ def test_curated_colour_plate_survives_archive_refresh_and_checks_capture(tmp_pa
     assert missions.cached_options(store, record) == []
     with pytest.raises(ValueError):
         missions.registered_cutout(store, record, photo)
+
+
+def test_colour_search_checks_observation_identity_and_ignores_point_sources():
+    from astroweb import photo_archive as photos
+
+    terms = photos.search_terms({"target":"NGC_281","name":{"en":"Pacman Nebula"},"aliases":["NGC281"]})
+    assert terms == ["NGC 281", "Pacman Nebula"]
+    page = '<h1>Pacman Nebula</h1><p>Inside NGC 281</p><div class="credit">Observatory</div><td>Type:</td><td>Observation</td>'
+    assert photos.description(page,terms) == ("Observatory","Colour composite")
+    assert photos.description(page,["NGC 28"]) is None
+    assert photos.description(page.replace("Observation","Illustration"),terms) is None
+    sky = np.zeros((350,350,3),dtype=np.uint8)
+    sky[::24,::22,2] = 255
+    assert not list(photos.gas_crops(sky))
+    cv2.circle(sky,(140,200),65,(50,50,165),-1)
+    assert len(list(photos.gas_crops(sky))) == 2

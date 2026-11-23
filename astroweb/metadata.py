@@ -85,6 +85,42 @@ SEEDS = {
         "sources": [{"label": "NASA · Caldwell 20", "url": NASA_NGC}],
         "aliases": ["NGC 7000", "North America Nebula", "Caldwell 20"],
     },
+    "IC_63": {
+        "target": "IC 63",
+        "aliases": [
+            "IC 63",
+            "Ghost of Cassiopeia",
+            "Ghost Nebula",
+            "Geestnevel",
+            "Geest van Cassiopeia"
+        ],
+        "name": {
+            "nl": "Geestnevel",
+            "en": "Ghost of Cassiopeia"
+        },
+        "type": {
+            "nl": "Emissie- en reflectienevel",
+            "en": "Emission and reflection nebula"
+        },
+        "constellation": {
+            "nl": "Cassiopeia",
+            "en": "Cassiopeia"
+        },
+        "summary": {
+            "nl": "Gamma Cassiopeiae laat het waterstof in IC 63 rood oplichten. Stof in dezelfde wolk verstrooit het blauwe licht van de ster.",
+            "en": "Gamma Cassiopeiae lights up IC 63 twice over. Its blue light scatters off dust, while hydrogen in the cloud glows red."
+        },
+        "description": {
+            "nl": "Langs de heldere rand van de Geestnevel zie je de invloed van Gamma Cassiopeiae. Ultraviolette straling van de ster maakt elektronen los uit waterstofatomen. Bij het opnieuw binden straalt het gas rood licht uit. Stofkorrels verstrooien ook blauw sterlicht. De straling laat de wolk geleidelijk verdampen.",
+            "en": "Look along the bright rim of IC 63, the Ghost of Cassiopeia. Ultraviolet light from nearby Gamma Cassiopeiae strips electrons from hydrogen atoms. As the gas recombines, it gives off the red light that outlines the cloud. Dust grains also scatter blue starlight toward us, so the same cloud is both an emission nebula and a reflection nebula. The radiation gradually erodes the gas and dust that give the Ghost its shape."
+        },
+        "sources": [
+            {
+                "label": "ESA/Hubble · The Ghost Nebula",
+                "url": "https://esahubble.org/images/heic1818a/"
+            }
+        ]
+    },
     "IC_1805": {
         "target":"IC 1805", "aliases":["IC 1805","Hartnevel","Heart Nebula"],
         "name":{"nl":"Hartnevel","en":"Heart Nebula"},
@@ -426,8 +462,11 @@ def refresh_metadata(metadata, force=False, *, store=None):
     wikipedia = None
     if store is not None and not known and (force or not current_dutch):
         wikipedia = wikipedia_description(store, target)
+    if (not force and external and external.get("provider") == "Wikipedia / Wikidata"
+            and current_dutch and not external.get("text", {}).get("en") and not external.get("english_checked")):
+        wikipedia = copy.deepcopy(external)
     found_dutch = wikipedia and wikipedia["text"]["nl"] and not current_dutch
-    if external and not force and not found_dutch and not (known and external.get("provider") == "CDS/SIMBAD"):
+    if external and not force and not found_dutch and wikipedia is None and not (known and external.get("provider") == "CDS/SIMBAD"):
         age = datetime.now(timezone.utc) - datetime.fromisoformat(external["fetched_at"])
         if age.days < 30:
             if external.get("translation") != "failed":
@@ -445,7 +484,7 @@ def refresh_metadata(metadata, force=False, *, store=None):
     if known is SEEDS["NGC_6992"]:
         queries.extend(["Eastern Veil Nebula", "Caldwell 33"])
     external = wikipedia
-    for query in queries if external is None else ():
+    for query in queries if external is None or not external["text"].get("en") else ():
         try:
             response = external_http.get("https://images-api.nasa.gov/search", params={"q": query, "media_type": "image", "page_size": 30}, headers={"User-Agent": "AstroWeb/0.1"}, timeout=(4, 12))
             response.raise_for_status()
@@ -464,15 +503,26 @@ def refresh_metadata(metadata, force=False, *, store=None):
                 matches.append((score, data))
         if matches:
             data = max(matches, key=lambda item: item[0])[1]
-            external = {"provider":"NASA Image and Video Library", "title":clean_text(data.get("title","")),
+            nasa = {"provider":"NASA Image and Video Library", "title":clean_text(data.get("title","")),
                         "text":{"en":clean_text(data["description"])[:3000], "nl":""},
                         "credit":data.get("photographer") or data.get("secondary_creator") or data.get("center","NASA"),
                         "url":"https://images.nasa.gov/details/"+requests.utils.quote(data["nasa_id"],safe="")}
+            if external is None:
+                external = nasa
+            else:
+                external["text"]["en"] = nasa["text"]["en"]
+                external["provider"] = "Wikipedia / Wikidata + NASA"
+                external["credit"] += " · English: " + nasa["credit"]
+                external.setdefault("sources", []).append({"label":"NASA · " + nasa["title"], "url":nasa["url"]})
             break
+    if wikipedia and not wikipedia["text"].get("en"):
+        wikipedia["english_checked"] = True
     if external is None and known:
         # Local, bilingual editorial summary with the relevant primary source.
-        external = {"provider":"NASA Science", "title":known["name"]["en"], "text":copy.deepcopy(known["summary"]),
-                    "credit":"AstroWeb · NASA Science", "url":known["sources"][0]["url"]}
+        reference = known["sources"][0]
+        provider = "ESA/Hubble" if reference["url"].startswith("https://esahubble.org/") else "NASA Science"
+        external = {"provider":provider, "title":known["name"]["en"], "text":copy.deepcopy(known["description"] if provider=="ESA/Hubble" else known["summary"]),
+                    "credit":"AstroWeb · "+provider, "url":reference["url"]}
     if external is None and fact_id(target) in facts()["objects"]:
         catalogue = initial_metadata(target)
         external = {"provider":"OpenNGC","title":catalogue["name"]["en"],"text":catalogue["description"],

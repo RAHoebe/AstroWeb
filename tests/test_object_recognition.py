@@ -182,3 +182,15 @@ def test_fits_target_keywords_have_stable_precedence():
     assert header_target({"OBJECT":" IC 1805 ","TARGNAME":"other"})=="IC 1805"
     assert header_target({"OBJECT":" ", "TARGNAME":"M 31","OBJNAME":"IC 1805"})=="M 31"
     assert header_target({"OBJNAME":"NGC 6946"})=="NGC 6946"
+
+
+def test_dutch_article_and_verified_english_caption_can_be_combined(tmp_path,monkeypatch):
+    from astroweb import metadata as module
+    dutch = {"text":{"nl":"Een Nederlandse beschrijving.","en":""}, "title":"NGC 1788",
+             "provider":"Wikipedia / Wikidata","credit":"Wikipedia contributors","url":"https://nl.wikipedia.org/wiki/NGC_1788"}
+    monkeypatch.setattr(wikimedia,"description",lambda *_:dutch.copy())
+    monkeypatch.setattr(module.external_http,"get",lambda *a,**kw:response({"collection":{"items":[
+        {"data":[{"title":"NGC 1788","description":"A cloud reflects starlight.","nasa_id":"optical","keywords":["NGC 1788"]}]}]}}))
+    result=refresh_metadata(initial_metadata("NGC_1788"),store=Store(tmp_path))
+    assert result["external"]["text"]=={"nl":"Een Nederlandse beschrijving.","en":"A cloud reflects starlight."}
+    assert any(s["url"].endswith("/optical") for s in result["sources"])
