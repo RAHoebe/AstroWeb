@@ -50,8 +50,12 @@
           <button type="button" class="subtle-button" id="discovery-next" data-i18n-aria="nextFeature" aria-label="Volgend onderdeel">→</button>
           <button type="button" class="subtle-button" id="discovery-zoom" data-i18n="zoomFeature">Zoom naar onderdeel</button>
         </div>
-        <p id="discovery-description"></p><p id="discovery-data" class="small muted"></p>
+        <p id="discovery-description"></p><p id="discovery-guide" hidden></p>
+        <div id="discovery-guide-sources" class="discovery-actions" hidden></div>
+        <p id="discovery-guide-status" role="status" hidden></p>
+        <p id="discovery-data" class="small muted"></p>
         <div class="discovery-actions">
+        <button type="button" class="subtle-button" id="discovery-explain" data-i18n="guidePrepare" hidden>Uitleg ophalen</button>
         <a id="discovery-source" target="_blank" rel="noopener" data-i18n="featureSource">Bron ↗</a>
         <a class="subtle-button" id="discovery-journey" data-i18n="featureJourney" hidden>Bekijk detailreis</a>
         <a class="subtle-button" id="discovery-studio" data-i18n="useAsPoint">Gebruik als zoompunt in Studio</a>
@@ -87,7 +91,7 @@
     <section id="hubble-panel" class="viewer-panel" role="tabpanel" hidden>
       <div class="hubble-stage"><video id="hubble-video" controls playsinline muted preload="none" data-i18n-aria="hubbleTitle"></video><p id="hubble-status" role="status"></p></div>
       <div class="atlas-controls"><label><span data-i18n="hubbleField">Bestemming</span> <select id="hubble-field"></select></label><button type="button" class="subtle-button" id="hubble-retry" hidden data-i18n="retry">Opnieuw proberen</button></div>
-      <div class="atlas-notes"><strong data-i18n="hubbleTitle">Van eigen opname naar archiefbeeld</strong><p id="hubble-description" data-i18n="hubbleNote">Van je eigen opname naar een herkenbaar deel van Andromeda.</p><a id="hubble-source" href="https://esahubble.org/images/heic2501a/" target="_blank" rel="noopener">NASA, ESA, B. Williams (University of Washington) ↗</a> <a id="skymap-link" href="https://science.nasa.gov/mission/hubble/multimedia/online-activities/hubble-skymap/" target="_blank" rel="noopener">NASA Hubble Skymap ↗</a></div>
+      <div class="atlas-notes"><strong data-i18n="hubbleTitle">Van eigen opname naar archiefbeeld</strong><p id="hubble-description" data-i18n="hubbleNote">Van je eigen opname naar een herkenbaar deel van Andromeda.</p><p id="hubble-guide" hidden></p><a id="hubble-source" href="https://esahubble.org/images/heic2501a/" target="_blank" rel="noopener">NASA, ESA, B. Williams (University of Washington) ↗</a> <a id="skymap-link" href="https://science.nasa.gov/mission/hubble/multimedia/online-activities/hubble-skymap/" target="_blank" rel="noopener">NASA Hubble Skymap ↗</a></div>
     </section>
     <section id="exploration-panel" class="viewer-panel" role="tabpanel" hidden><iframe id="exploration-frame" title="Verkenning" allow="fullscreen" allowfullscreen></iframe></section><section id="environment-panel" class="viewer-panel" role="tabpanel" hidden>
       <div id="environment-map" data-i18n-aria="environment" role="group"></div>
@@ -131,6 +135,7 @@
           <div class="auto-tools" id="auto-tools" hidden>
           <label><span data-i18n="autoCount">Gewenst aantal kaders</span> <select id="auto-count"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
           <button type="button" class="button secondary" id="auto-zoom" data-i18n="autoZoom">Automatische zoomroute</button>
+          <button type="button" class="button secondary" id="luna-zoom" data-i18n="lunaRoute" hidden>Zoomroute met Luna</button>
           <div id="auto-review" hidden><p id="auto-note" role="status"></p><p id="auto-alignment" class="small muted"></p><ol id="auto-list"></ol><div class="route-actions"><button type="button" id="auto-apply" class="button primary" data-i18n="applyRoute">Gebruik deze route</button><button type="button" id="auto-cancel" class="button secondary" data-i18n="cancelRoute">Annuleren</button></div></div></div>
           <div class="point-controls"><label><span data-i18n="pointCount">Aantal zoompunten</span> <select id="point-count"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
           <div id="point-picker" role="group" data-i18n-aria="editPoint"></div></div>
@@ -179,7 +184,14 @@
             </div>
             <div id="luna-result" aria-live="polite"></div>
             <button type="button" class="button primary" hidden id="luna-apply" data-i18n="lunaApply">Neem dit voorstel over</button>
-          </fieldset></details><details class="editor-details"><summary data-i18n="observationSettings">Opnamegegevens en Skykaart</summary><p class="small muted" data-i18n="observationNote">DATE-OBS komt uit de FITS-header. Integratietijd is geen tijdspanne: het einde van de opnamesessie wordt hieruit niet afgeleid. Vermeld bij handmatige tijden altijd de UTC-offset.</p><form id="observation-form"><div class="form-grid"><label><span data-i18n="dateObs">DATE-OBS · ISO 8601 + tijdzone</span><input name="date_obs" placeholder="2026-11-04T22:55:31+00:00" required></label><label><span data-i18n="timezone">Weergavetijdzone</span><input name="timezone" value="Europe/Amsterdam" required></label><label><span data-i18n="latitude">Breedtegraad</span><input name="latitude" type="number" min="-90" max="90" step="any" required></label><label><span data-i18n="longitude">Lengtegraad · oost positief</span><input name="longitude" type="number" min="-180" max="180" step="any" required></label><label><span>RA · °</span><input name="ra" type="number" min="0" max="360" step="any" required></label><label><span>Dec · °</span><input name="dec" type="number" min="-90" max="90" step="any" required></label></div><label class="checkbox-label"><input name="publish_location" type="checkbox"><span data-i18n="publishLocation">Exacte opnamelocatie openbaar tonen</span></label><button class="button primary" type="submit" data-i18n="saveObservation">Opnamegegevens opslaan</button></form><dl id="fits-details" class="fact-grid"></dl></details></section>
+          </fieldset></details><details class="editor-details" id="archive-order" hidden><summary data-i18n="archiveOrder">Volgorde archiefreizen</summary>
+          <button type="button" class="button secondary" id="archive-preview" data-i18n="archivePreview">Bekijk voorgestelde volgorde</button>
+          <p id="archive-order-status" role="status"></p><ol id="archive-order-list"></ol>
+          <div class="route-actions" id="archive-order-actions" hidden>
+            <button type="button" class="button primary" id="archive-order-apply" data-i18n="archiveApply">Neem volgorde over</button>
+            <button type="button" class="button secondary" id="archive-order-cancel" data-i18n="cancelRoute">Annuleren</button>
+          </div>
+        </details><details class="editor-details"><summary data-i18n="observationSettings">Opnamegegevens en Skykaart</summary><p class="small muted" data-i18n="observationNote">DATE-OBS komt uit de FITS-header. Integratietijd is geen tijdspanne: het einde van de opnamesessie wordt hieruit niet afgeleid. Vermeld bij handmatige tijden altijd de UTC-offset.</p><form id="observation-form"><div class="form-grid"><label><span data-i18n="dateObs">DATE-OBS · ISO 8601 + tijdzone</span><input name="date_obs" placeholder="2026-11-04T22:55:31+00:00" required></label><label><span data-i18n="timezone">Weergavetijdzone</span><input name="timezone" value="Europe/Amsterdam" required></label><label><span data-i18n="latitude">Breedtegraad</span><input name="latitude" type="number" min="-90" max="90" step="any" required></label><label><span data-i18n="longitude">Lengtegraad · oost positief</span><input name="longitude" type="number" min="-180" max="180" step="any" required></label><label><span>RA · °</span><input name="ra" type="number" min="0" max="360" step="any" required></label><label><span>Dec · °</span><input name="dec" type="number" min="-90" max="90" step="any" required></label></div><label class="checkbox-label"><input name="publish_location" type="checkbox"><span data-i18n="publishLocation">Exacte opnamelocatie openbaar tonen</span></label><button class="button primary" type="submit" data-i18n="saveObservation">Opnamegegevens opslaan</button></form><dl id="fits-details" class="fact-grid"></dl></details></section>
     </div></div></div>
   </main>
   <div id="toast" role="status" hidden></div>

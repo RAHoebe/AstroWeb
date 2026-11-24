@@ -103,3 +103,89 @@ def test_web_sources_keep_only_citations_from_allowed_domains(monkeypatch):
     assert [ref["url"] for ref in luna.web_evidence("IC 63")] == [
         "https://esahubble.org/images/heic1818a/"
     ]
+
+
+def test_guide_only_saves_sourced_bilingual_explanations(tmp_path, monkeypatch):
+    from astroweb import luna_guide as guide
+
+    store = Store(tmp_path)
+    point = {
+        "id": "IC 1396A",
+        "name": {"en": "Elephant's Trunk"},
+        "type": {"en": "Nebula"},
+    }
+    source = {
+        "url": "https://science.nasa.gov/nebula/?utm_source=openai",
+        "label": "NASA",
+        "text": "A dense cloud in IC 1396.",
+    }
+    monkeypatch.setattr(luna, "web_evidence", lambda _: [source])
+    monkeypatch.setattr(
+        guide,
+        "structured",
+        lambda *_: {
+            "text": {"nl": "Een dichte wolk.", "en": "A dense cloud."},
+            "sources": [0],
+        },
+    )
+    draft = guide.prepare_explanation(store, point)
+    assert draft["sources"] == [
+        {"url": "https://science.nasa.gov/nebula/", "label": "NASA"}
+    ]
+    guide.attach_explanations(store, [point])
+    assert point["guide"] == draft
+    assert guide.explanation(store, dict(point, id="IC 1396")) is None
+
+
+def test_route_uses_catalogue_coordinates_and_rejects_invented_indexes(
+    tmp_path, monkeypatch
+):
+    from astroweb import autozoom, luna_guide as guide
+
+    store = Store(tmp_path)
+    point = {
+        "id": "M31",
+        "name": {"nl": "Andromeda", "en": "Andromeda"},
+        "type": {"en": "Galaxy"},
+        "x": 0.11,
+        "y": 0.79,
+    }
+    monkeypatch.setattr(
+        autozoom, "discover", lambda *_a, **_kw: {"kind": "wcs", "objects": [point]}
+    )
+    note = {"nl": "De kern.", "en": "The nucleus."}
+    monkeypatch.setattr(
+        guide, "structured", lambda *_: {"stops": [{"index": 1, "note": note}]}
+    )
+    record = {"metadata": {"target": "M31"}}
+    with pytest.raises(ValueError, match="lunaUnavailable"):
+        autozoom.luna_route(store, record, 1)
+    monkeypatch.setattr(
+        guide, "structured", lambda *_: {"stops": [{"index": 0, "note": note}]}
+    )
+    assert autozoom.luna_route(store, record, 1)["points"][0] == {
+        "name": "M31",
+        "label": point["name"],
+        "x": 0.11,
+        "y": 0.79,
+        "zoom": 2.1,
+        "kind": "catalog",
+        "note": note,
+    }
+
+
+def test_archive_rank_keeps_new_fields_and_skymap(tmp_path):
+    from astroweb import luna_guide as guide
+
+    store = Store(tmp_path)
+    record = {"id": "M31", "metadata": {"target": "M31"}, "sha256": {"final": "own"}}
+    fields = [{"id": "skymap-m31"}, {"id": "first"}, {"id": "second"}, {"id": "new"}]
+    note = {"nl": "Een deelgebied.", "en": "A subregion."}
+    store.put(
+        "settings",
+        guide.archive_key(record),
+        {"order": [{"id": "second", "note": note}]},
+    )
+    saved = guide.archive_options(store, record, fields)
+    assert [item["id"] for item in saved] == ["skymap-m31", "second", "first", "new"]
+    assert saved[1]["guide_note"] == note and "guide_note" not in fields[2]

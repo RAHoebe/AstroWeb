@@ -248,9 +248,15 @@ def create_app(data_dir=None, testing=False):
     @app.post("/api/admin/objects/<identifier>/autozoom")
     @admin_required
     def autozoom(identifier):
-        from .autozoom import propose
+        from .autozoom import luna_route, propose
         record = get_object(identifier)
-        route = propose(store, record, json_body().get("count",4))
+        body = json_body()
+        count = body.get("count",4)
+        if body.get("luna") is True:
+            if record.get("body") or record.get("capture_kind"):
+                raise ValueError("lunaNoCandidates")
+            return jsonify(luna_route(store,record,count))
+        route = propose(store, record, count)
         if route["alignment"] == "missing" and not record.get("video") and record["assets"].get("stars"):
             alignment = (record.get("gaia") or {}).get("status")
             if alignment is None:
@@ -284,7 +290,8 @@ def create_app(data_dir=None, testing=False):
         from .hubble import fields, tv_credit
         record=get_object(identifier)
         try:
-            options=fields(store,record)
+            from .luna_guide import archive_options
+            options=archive_options(store,record,fields(store,record))
         except requests.RequestException:
             return jsonify(error="hubble_unavailable"),503
         if request.args.get("view")=="tv":
@@ -316,10 +323,58 @@ def create_app(data_dir=None, testing=False):
         from .discovery import discover
         record = get_object(identifier)
         result = discover(store,record,search=request.args.get("catalogue")=="1")
+        if not record.get("body") and not record.get("capture_kind"):
+            from .luna import configured
+            from .luna_guide import attach_explanations
+            result["can_explain"] = bool(session.get("admin") and configured())
+            attach_explanations(store,result["objects"])
         if record.get("body") and session.get("admin"):
             from .surface_labels import presets
             result["presets"] = presets(record["body"])
         return jsonify(result)
+
+    @app.post("/api/admin/objects/<identifier>/discover/explain")
+    @admin_required
+    def explain_feature(identifier):
+        from .discovery import discover
+        from .luna_guide import prepare_explanation
+        record = get_object(identifier)
+        if record.get("body") or record.get("capture_kind"):
+            raise ValueError("lunaNoCandidates")
+        feature = json_body().get("feature")
+        point = next((p for p in discover(store,record,links=False)["objects"] if p["id"]==feature),None)
+        if point is None:
+            raise ValueError("lunaNoCandidates")
+        return jsonify(explanation=prepare_explanation(store,point))
+
+    @app.post("/api/admin/objects/<identifier>/archive/review")
+    @admin_required
+    def review_archive(identifier):
+        from .hubble import fields
+        from .luna import fingerprint
+        from .luna_guide import archive_key, archive_review
+        record = get_object(identifier)
+        if record.get("body") or record.get("capture_kind"):
+            raise ValueError("lunaNoCandidates")
+        options = fields(store,record,local_only=True)
+        ids = sorted(f["id"] for f in options)
+        key = archive_key(record)
+        pending = key + ":preview"
+        body = json_body()
+        if "token" in body:
+            with store.lock:
+                preview = store.get("settings",pending,{})
+                latest = store.get("objects",identifier)
+                if (not preview or body["token"]!=preview["token"] or not latest
+                    or archive_key(latest)!=key or sorted(f["id"] for f in fields(store,latest,local_only=True))!=preview["ids"]):
+                    return jsonify(error="metadata_changed"),409
+                store.put("settings",key,{"order":preview["order"]})
+            return jsonify(ok=True)
+        order = archive_review(store, record, options)
+        token = fingerprint([key,ids,order])
+        store.put("settings",pending,{"order":order,"token":token,"ids":ids})
+        pinned = [{"id":f["id"],"title":f.get("title") or f["id"]} for f in options if f["id"].startswith("skymap-")]
+        return jsonify(order=order,pinned=pinned,token=token,more=len(options)>len(order)+len(pinned))
 
     @app.put("/api/admin/objects/<identifier>/surface-label")
     @admin_required

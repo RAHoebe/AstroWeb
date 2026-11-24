@@ -36,6 +36,45 @@ def propose(store, record, count, *, image=None):
     return {"points":propose_image(image, count, guide["objects"], target), "alignment":guide.get("alignment_error",guide["kind"])}
 
 
+def luna_route(store, record, count):
+    """Order confirmed labels and fill spare stops with the local image analysis."""
+    from .luna_guide import arrange, explanation
+
+    validate_count(count)
+    guide = discover(store, record, links=False)
+    target = canonical(record["metadata"]["target"])
+    objects = sorted(guide["objects"], key=lambda o: canonical(o["id"]) != target)
+    candidates = []
+    for item in objects:
+        if any(np.hypot(item["x"]-other["x"], item["y"]-other["y"]) < .055 for other in candidates):
+            continue
+        candidates.append(item)
+        if len(candidates) == 10:
+            break
+    if not candidates:
+        raise ValueError("lunaNoCandidates")
+    choices = [{"id":item["id"],"name":item["name"],"type":item["type"],
+                "summary":(explanation(store,item) or {}).get("text") or item.get("summary")}
+               for item in candidates]
+    review = arrange(store, target, choices, count)
+    points = []
+    for entry in review:
+        item = candidates[entry["index"]]
+        points.append({"name":item["id"],"label":item["name"],"x":item["x"],"y":item["y"],
+                       "zoom":2.1 if canonical(item["id"])==target else 3.5,
+                       "kind":"catalog","note":entry["note"]})
+    if len(points) < count:
+        for point in propose(store,record,8)["points"]:
+            if point["kind"] != "structure" or any(
+                np.hypot(point["x"]-other["x"],point["y"]-other["y"]) < .10 for other in points
+            ):
+                continue
+            points.append(point)
+            if len(points) == count:
+                break
+    return {"points": points, "alignment":guide["kind"],"luna":True}
+
+
 def draft(store, preview, image, count, identifier, fits, stars):
     """Use WCS or measured stellar matches to name stops before the real import."""
     from .gaia import solve

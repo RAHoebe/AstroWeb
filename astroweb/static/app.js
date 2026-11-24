@@ -31,7 +31,7 @@ async function api(url,options={}){
 function message(id,text,error=false){const target=$(id);target.textContent=text;target.classList.toggle('error',error);}
 let toastTimer;function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function setBusy(value){state.busy=value;for(const id of ['render-button','preview-button','fetch-nasa'])$(id).disabled=value;}
-function applyLanguage(value){setLanguage(value);$('exploration-frame').contentWindow?.postMessage({type:'astroweb-language',language:value},location.origin);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();renderDraftIdentity();renderUploadProgress();showAutoRoute();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();editorLanguage();updateGaiaDepth();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
+function applyLanguage(value){setLanguage(value);$('exploration-frame').contentWindow?.postMessage({type:'astroweb-language',language:value},location.origin);drawPicker();if(!viewerRoute&&!studioRoute)buildGallery();if(state.current){renderViewerText();journeyCaption();hubbleCaption();layoutOriginal();atlasLanguage();drawPolar();renderDiscovery();comparisonText();}renderLogin();renderAdminList();renderJobs();renderFileList();renderDraftIdentity();renderUploadProgress();showAutoRoute();showArchiveReview();document.querySelectorAll('[data-edit-key]').forEach(el=>el.textContent=t(el.dataset.editKey)+' · '+el.dataset.editLanguage.toUpperCase());if(state.selected){renderChoice();showVersions();editorLanguage();updateGaiaDepth();}if(studioRoute)document.title='AstroWeb · Studio';sky.updateLanguage();}
 document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
 
 async function loadGallery(){try{state.objects=(await api('/api/objects')).objects;buildGallery();}catch(e){$('gallery-grid').replaceChildren(node('div','empty-state',errorText(e)));}}
@@ -125,9 +125,6 @@ function renderViewerText(){
   if(obs.date_obs){const stamp=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{dateStyle:'medium',timeStyle:'short',timeZone:obs.timezone||'UTC'}).format(new Date(obs.date_obs));fact($('viewer-facts'),t(obs.time_source==='filename'?'observedAtFilename':'observedAt'),stamp+' · '+(obs.timezone||'UTC'));}
   $('viewer-sources').replaceChildren();const links=[...(m.sources||[])];if(m.external&&!links.some(link=>link.url===m.external.url))links.push({label:m.external.provider,url:m.external.url});for(const link of links){if(!/^https:\/\//.test(link.url))continue;const a=node('a','',link.label+' ↗');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';$('viewer-sources').append(a);}
   $('external-description').replaceChildren();
-  if(m.luna?.fields?.some(field=>field.endsWith('.'+language))){
-    $('external-description').append(node('p','small muted',t('lunaCredit')+' · '+formatDate(m.luna.generated_at)));
-  }
   if(m.external){const ext=m.external;const details=node('details','external-block');details.append(node('summary','',t('nasaMore')));const text=local(ext.text);details.append(node('p','',text||t('untranslated')));if(language==='nl'&&ext.translation==='machine')details.append(node('p','small',t('machineTranslation')));details.append(node('p','small',ext.credit+' · '+t('fetchedAt')+' '+formatDate(ext.fetched_at)));$('external-description').append(details);}
 }
 function openViewer(object){location.assign('/viewer/'+encodeURIComponent(object.id));}
@@ -349,6 +346,7 @@ function zoomToFeature(){
 function pickFeature(id){
   if(surfaceEdit)return;
   discoveryId=id;
+  $('discovery-guide-status').hidden=true;
   renderDiscovery();
   if(guideZoom)zoomToFeature();
 }
@@ -400,6 +398,16 @@ function renderDiscovery(){
     $('discovery-prev').disabled=$('discovery-next').disabled=objects.length<2;
     $('discovery-zoom').textContent=t(guideZoom?'fitPhoto':'zoomFeature');
     $('discovery-description').textContent=[local(current.type),local(current.summary)].filter(Boolean).join(' · ');
+    $('discovery-guide').textContent=local(current.guide?.text)||'';
+    $('discovery-guide').hidden=!current.guide;
+    const guideSources=$('discovery-guide-sources');
+    guideSources.replaceChildren();guideSources.hidden=!current.guide?.sources.length;
+    for(const source of current.guide?.sources||[]){
+      const link=node('a','',source.label+' ↗');
+      link.href=source.url;link.target='_blank';link.rel='noopener noreferrer';guideSources.append(link);
+    }
+    $('discovery-explain').hidden=!discoveries.can_explain||!!current.guide;
+    $('discovery-explain').disabled=!!guideRequest;
     const details=[];
     if(Number.isFinite(current.ra)&&Number.isFinite(current.dec)){
       details.push('RA '+current.ra.toFixed(4)+'°','Dec '+current.dec.toFixed(4)+'°',...(current.aliases||[]));
@@ -426,6 +434,25 @@ function renderDiscovery(){
   }
   layoutOriginal();
 }
+
+let guideRequest=null;
+$('discovery-explain').addEventListener('click',async()=>{
+  const point=currentFeature();
+  if(!point||guideRequest)return;
+  guideRequest=point.id;
+  const status=$('discovery-guide-status');
+  status.hidden=false;status.textContent=t('working');
+  $('discovery-explain').disabled=true;
+  try{
+    state.session??=await api('/api/session');
+    const url='/api/admin/objects/'+encodeURIComponent(state.current.id)+'/discover/explain';
+    const {explanation}=await api(url,{method:'POST',body:{feature:point.id}});
+    const saved=discoveries?.objects.find(o=>o.id===point.id);
+    if(saved)saved.guide=explanation;
+    if(currentFeature()?.id===point.id){status.hidden=true;renderDiscovery();}
+  }catch(e){if(currentFeature()?.id===point.id){status.hidden=false;status.textContent=errorText(e);}}
+  finally{guideRequest=null;$('discovery-explain').disabled=false;}
+});
 
 function openSurfaceForm(feature){
   const preset=discoveries.presets.find(entry=>entry.id===feature?.id);
@@ -520,6 +547,7 @@ function hubbleCaption(){
     opt.textContent=t('hubble_'+(obs?.relation||'field'))+' · '+label+field;
   }
   const active=hubbleObservations.find(o=>o.id===select.value);
+  $('hubble-guide').textContent=local(active?.guide_note)||'';$('hubble-guide').hidden=!active?.guide_note;
   const source=$('hubble-source');
   source.href=active?.source||(active?.filter?'https://hla.stsci.edu/hlaview.html#Images|'+encodeURIComponent(active.id):'https://esahubble.org/images/heic2501a/');
   source.textContent=active?.credit?active.credit+' ↗':active?.filter?'NASA/ESA Hubble · '+active.id+' ↗':'NASA, ESA, B. Williams (University of Washington) ↗';
@@ -624,6 +652,8 @@ async function refreshAdmin(){
   if(request<lastAdminResponse)return;
   lastAdminResponse=request;
   if(response.luna){
+    state.lunaAvailable=response.luna.available;
+    updateLunaGuideControls();
     $('luna-mode').value=response.luna.mode;
     $('luna-mode').disabled=!response.luna.available && response.luna.mode==='manual';
     $('luna-setup').hidden=response.luna.available;
@@ -859,7 +889,7 @@ $('gaia-retry').addEventListener('click',async()=>{
   catch(e){toast(errorText(e));}
 });
 function selectObject(id){
-  if(state.selected?.id!==id)resetLuna();
+  if(state.selected?.id!==id){resetLuna();resetArchiveReview();}
   const object=state.adminObjects.find(item=>item.id===id);
   if(!object||state.uploading)return;
   clearImportControls();state.selected=object;state.files=[];
@@ -868,7 +898,7 @@ function selectObject(id){
   $('upload-section').hidden=true;$('edit-section').hidden=false;$('studio-editor').hidden=false;
   $('metadata-section').hidden=false;$('preview-button').hidden=false;$('preview-image').hidden=true;
   setFocusImage(object.source_poster||object.poster);showVersions();renderChoice();fillParams(object.params);
-  updateCaptureKind();renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');
+  updateCaptureKind();updateLunaGuideControls();renderAdminList();fillMetadata(object);fillObservation(object);message('studio-message','');
 }
 let pendingLandmark=null;
 const draftKey=id=>'astroweb-discovery-draft-'+id;
@@ -1188,10 +1218,59 @@ $('edit-poster').addEventListener('error',()=>{$('film-orientation').hidden=true
 function clamp(value,low,high){return Math.max(low,Math.min(high,value));}
 
 // Background-plane geometry at peak zoom (Scene.camera/warp at phase 0.5).
+let archiveDraft=null, archiveRequest=0;
+function resetArchiveReview(){
+  archiveRequest++;archiveDraft=null;
+  $('archive-order-list').replaceChildren();$('archive-order-status').textContent='';
+  $('archive-order-actions').hidden=true;$('archive-preview').disabled=false;
+}
+function showArchiveReview(){
+  if(!archiveDraft)return;
+  const list=$('archive-order-list');
+  list.replaceChildren();
+  for(const row of archiveDraft.pinned)list.append(node('li','',row.title+' · '+t('archivePinned')));
+  for(const row of archiveDraft.order){
+    const item=node('li','',row.title);
+    item.append(node('p','small muted',local(row.note)));list.append(item);
+  }
+  if(archiveDraft.more)list.append(node('li','small muted',t('archiveOrderLimit')));
+}
+$('archive-preview').addEventListener('click',async()=>{
+  const id=state.selected?.id;if(!id)return;
+  resetArchiveReview();
+  const request=archiveRequest;
+  $('archive-preview').disabled=true;$('archive-order-status').textContent=t('working');
+  try{
+    const reply=await api('/api/admin/objects/'+encodeURIComponent(id)+'/archive/review',{method:'POST',body:{}});
+    if(request!==archiveRequest)return;
+    archiveDraft=reply;showArchiveReview();
+    $('archive-order-status').textContent='';$('archive-order-actions').hidden=false;
+  }catch(e){if(request===archiveRequest)$('archive-order-status').textContent=errorText(e);}
+  finally{if(request===archiveRequest)$('archive-preview').disabled=false;}
+});
+$('archive-order-cancel').addEventListener('click',resetArchiveReview);
+$('archive-order-apply').addEventListener('click',async()=>{
+  const id=state.selected?.id;if(!archiveDraft||!id)return;
+  const request=archiveRequest,button=$('archive-order-apply');
+  button.disabled=true;
+  try{
+    await api('/api/admin/objects/'+encodeURIComponent(id)+'/archive/review',{method:'POST',body:{token:archiveDraft.token}});
+    if(request===archiveRequest){resetArchiveReview();$('archive-order-status').textContent=t('saved');}
+  }catch(e){if(request===archiveRequest)$('archive-order-status').textContent=errorText(e);}
+  finally{button.disabled=false;}
+});
+
+function updateLunaGuideControls(){
+  const object=state.selected;
+  const enabled=!!(state.lunaAvailable&&object&&!object.body&&!object.capture_kind);
+  $('luna-zoom').hidden=!enabled;
+  $('archive-order').hidden=!enabled;
+}
 let suggestions=[],autoGeneration=0,autoAlignment='';
+
 function resetAutoRoute(){
   autoGeneration++;suggestions=[];autoAlignment='';$('auto-review').hidden=true;
-  $('auto-frames').replaceChildren();$('auto-alignment').textContent='';$('auto-zoom').disabled=false;
+  $('auto-frames').replaceChildren();$('auto-alignment').textContent='';$('auto-zoom').disabled=$('luna-zoom').disabled=false;
 }
 function suggestedPoints(){
   const img=$('edit-poster');
@@ -1210,25 +1289,27 @@ function showAutoRoute(){
     Object.assign(box.style,{left:c.left*100+'%',top:c.top*100+'%',width:c.size*100+'%',height:c.size*100+'%'});
     const item=node('li','',pt.name+' · '+pt.zoom+'×');
     if(suggestions[i].kind==='catalog'&&autoAlignment!=='surface')item.append(node('small',' muted',' · '+t('routeCataloguePoint')));
+    if(suggestions[i].note)item.append(node('p','small muted',local(suggestions[i].note)));
     frames.append(box);$('auto-list').append(item);
   });
 }
-async function findZoomRoute(){
+async function findZoomRoute(luna=false){
   const id=state.selected?.id;
   if(!id)return;
   resetAutoRoute();const generation=autoGeneration;
-  $('auto-zoom').disabled=true;$('auto-review').hidden=false;$('auto-note').textContent=t('routeSearching');
+  $('auto-zoom').disabled=$('luna-zoom').disabled=true;$('auto-review').hidden=false;$('auto-note').textContent=t(luna?'lunaRouteSearching':'routeSearching');
   $('auto-list').replaceChildren();$('auto-apply').hidden=true;
   try{
     const count=Number($('auto-count').value);
-    const reply=await api('/api/admin/objects/'+encodeURIComponent(id)+'/autozoom',{method:'POST',body:{count}});
+    const reply=await api('/api/admin/objects/'+encodeURIComponent(id)+'/autozoom',{method:'POST',body:{count,luna}});
     if(generation!==autoGeneration)return;
     suggestions=reply.points;autoAlignment=reply.alignment||'';
     $('auto-note').textContent=t(suggestions.length?'autoReview':'autoEmpty');$('auto-apply').hidden=!suggestions.length;showAutoRoute();
   }catch(e){if(generation===autoGeneration)$('auto-note').textContent=errorText(e);}
-  finally{if(generation===autoGeneration)$('auto-zoom').disabled=false;}
+  finally{if(generation===autoGeneration)$('auto-zoom').disabled=$('luna-zoom').disabled=false;}
 }
-$('auto-zoom').addEventListener('click',findZoomRoute);
+$('auto-zoom').addEventListener('click',()=>findZoomRoute());
+$('luna-zoom').addEventListener('click',()=>findZoomRoute(true));
 $('auto-cancel').addEventListener('click',resetAutoRoute);
 $('auto-count').addEventListener('change',resetAutoRoute);
 $('auto-apply').addEventListener('click',()=>{
