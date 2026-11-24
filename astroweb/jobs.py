@@ -362,14 +362,14 @@ class JobQueue:
         record = self.store.get("objects", identifier)
         if not record or record["metadata"].get("translation") != "pending" or record["metadata"].get("external"):
             return
-        from .metadata import refresh_metadata
+        from .metadata import refresh_metadata, summary_for
         try:
             metadata = refresh_metadata(record["metadata"], store=self.store)
             external = metadata.get("external", {})
             for language, text in external.get("text", {}).items():
                 if text:
                     metadata["description"][language] = text
-                    metadata["summary"][language] = text.split(". ", 1)[0][:300]
+                    metadata["summary"][language] = summary_for(text, metadata["summary"][language])
             metadata["translation"] = external.get("translation", "partial") if external.get("text", {}).get("nl") else "partial"
             with self.store.lock:
                 current = self.store.get("objects", identifier)
@@ -424,6 +424,15 @@ class JobQueue:
             return
         if first_solar_film:
             self.schedule_details(record["id"])
+        elif not record.get("body") and not record.get("capture_kind") and self.store.get("settings","luna-mode","manual") != "manual":
+            self.executor.submit(self.fill_luna,record["id"])
+
+    def fill_luna(self,identifier):
+        from . import luna
+        try:
+            luna.automatic(self.store,identifier)
+        except ValueError as error:
+            logging.info("Luna description for %s: %s",identifier,error)
 
     def shutdown(self):
         with self.lock:

@@ -6,6 +6,7 @@ from urllib.parse import quote, unquote, urlsplit
 import requests
 
 from . import external_http
+from .prose import excerpt
 from .catalogue import canonical, notation
 
 API = "https://www.wikidata.org/w/api.php"
@@ -140,7 +141,7 @@ def description(store, target):
         try:
             response = external_http.get(f"https://{url.hostname}/w/api.php", headers=CONTACT, timeout=(2,4),
                 params={"action":"query","prop":"extracts|pageprops","ppprop":"wikibase_item","exintro":1,
-                        "explaintext":1,"exchars":800,"format":"json","formatversion":2,
+                        "explaintext":1,"format":"json","formatversion":2,
                         "titles":unquote(url.path.removeprefix("/wiki/"))})
             response.raise_for_status()
             pages = response.json().get("query", {}).get("pages", [])
@@ -149,7 +150,9 @@ def description(store, target):
         except (requests.RequestException, ValueError, TypeError, AttributeError):
             continue
         if isinstance(extract, str) and extract.strip():
-            text[lang] = " ".join(extract.split())[:800]
+            text[lang] = excerpt(extract, 4500)
+            if not text[lang]:
+                continue
             articles.append({**source, "label":source["label"]+" · CC BY-SA 4.0"})
     if not articles:
         return None

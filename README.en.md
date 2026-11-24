@@ -144,3 +144,9 @@ Solar System images below the normal minimum dimensions can be enlarged to 256 p
 Open **Night panorama** above the gallery to explore your published captures in the ESO sky panorama. For your own Milky Way and star-trail photos, open **Night panorama** in Studio, choose a target capture, click its position on your image and save. Enable 360° wrapping for a full horizontal sweep. Visitors can pan, zoom and open the linked photograph. The **Photos** toggle shows your captures in their measured footprints. Select a frame or label to fly into the original. Returning restores your previous view.
 
 On phones and tablets, pinch to zoom in the night panorama, the **Original** view and the sky atlas. Leave one finger on the screen to continue panning.
+
+### Optional object descriptions with Luna
+
+Set `OPENAI_API_KEY` on the server or mount a read-only Docker secret and set `ASTROWEB_OPENAI_KEY_FILE` to its container path. AstroWeb uses the Responses API with `gpt-6-luna`. Offline mode disables the integration.
+
+In Studio, open **Edit object information → Luna** to choose whether to fill missing descriptions after a render. The default is manual. **Preview text** shows the draft and its source links. **Expand the existing description** can add paragraphs on a nebula’s origin, illumination and notable structures when supported by the sources. Web search on selected astronomy sites is optional. Generation and web search may consume API credits. Accepted copy is stored on the server for web and TV. Only object text is sent to the API.

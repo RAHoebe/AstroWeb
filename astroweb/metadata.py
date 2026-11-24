@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 from . import external_http
+from .prose import CUT, excerpt, summary_for
 from .catalogue import facts, fact_id, nasa_pages, TYPES, canonical, catalogue_labels, name_key
 
 from .store import now
@@ -348,9 +349,33 @@ def text_overrides(metadata):
             if not generic_name or not generated_placeholder(field, lang, metadata.get(field, {}).get(lang), target)}
 
 
+def repair_source_endings(metadata):
+    """Repair old auto-generated cuts on read without editing the stored originals."""
+    if not all(isinstance(metadata.get(field, {}),dict) for field in ("summary","description","name")):
+        return metadata
+    edits = text_overrides(metadata)
+    external = (metadata.get("external") or {}).get("text", {})
+    for lang in ("nl", "en"):
+        text = external.get(lang, "")
+        description = metadata.get("description", {}).get(lang, "")
+        summary = metadata.get("summary", {}).get(lang, "")
+        def cut(value):
+            return bool(CUT.search(value)) or (len(value) in (800, 3000, 6000) and value[-1:] not in ".!?")
+        if text and cut(text):
+            external[lang] = excerpt(text, 6000, clipped=True)
+        fallback = metadata.get("name", {}).get(lang) or metadata.get("target", "")
+        if description and cut(description) and f"description.{lang}" not in edits:
+            description = excerpt(description, 5000, clipped=True) or fallback
+            metadata["description"][lang] = description
+        if summary and f"summary.{lang}" not in edits and (cut(summary) or len(summary) == 300
+                or (description.startswith(summary + ".") and not summary.endswith("."))):
+            metadata["summary"][lang] = summary_for(description, fallback)
+    return metadata
+
+
 def use_catalogue_metadata(metadata):
     """Upgrade generated labels without replacing operator-authored text."""
-    result = copy.deepcopy(metadata)
+    result = repair_source_endings(copy.deepcopy(metadata))
     target = result.get("target")
     if not target:
         return result
@@ -358,7 +383,7 @@ def use_catalogue_metadata(metadata):
     label = catalogue_labels().get(canonical(target))
     if not known and not label:
         return result
-    overrides = text_overrides(result)
+    overrides = text_overrides(result) | set(result.get("luna", {}).get("fields", []))
     lookup_only = (result.get("external") or {}).get("provider") == "CDS/SIMBAD"
     refresh_generated = known and (result.get("translation") != "curated" or lookup_only)
     current = initial_metadata(canonical(target))
@@ -390,7 +415,8 @@ def clear_source_information(metadata):
     """Remove the cached external entry and restore catalogue attribution."""
     result = use_catalogue_metadata(metadata)
     result.pop("external", None)
-    result["sources"] = initial_metadata(canonical(result["target"]))["sources"]
+    base_sources = initial_metadata(canonical(result["target"]))["sources"]
+    result["sources"] = list({s["url"]:s for s in base_sources + result.get("luna",{}).get("sources",[])}.values())
     return result
 
 
@@ -406,7 +432,7 @@ def renamed_metadata(identifier, *, store=None):
     for language, text in external["text"].items():
         if text:
             result["description"][language] = text
-            result["summary"][language] = text.split(". ",1)[0][:300]
+            result["summary"][language] = summary_for(text, result["summary"][language])
     result["translation"] = external["translation"]
     return result
 
@@ -499,12 +525,12 @@ def refresh_metadata(metadata, force=False, *, store=None):
             # a named subject in the title or an explicit catalogue keyword.
             score = sum(2*bool(re.search(r"(?<![a-z0-9])"+re.escape(alias).replace(r"\\ ",r"\\s*")+r"(?![a-z0-9])",title,re.I))
                         + (name_key(alias) in keywords) for alias in aliases)
-            if score and data.get("nasa_id") and data.get("description"):
+            if score and data.get("nasa_id") and excerpt(clean_text(data.get("description")), 5000):
                 matches.append((score, data))
         if matches:
             data = max(matches, key=lambda item: item[0])[1]
             nasa = {"provider":"NASA Image and Video Library", "title":clean_text(data.get("title","")),
-                        "text":{"en":clean_text(data["description"])[:3000], "nl":""},
+                        "text":{"en":excerpt(clean_text(data["description"]), 5000), "nl":""},
                         "credit":data.get("photographer") or data.get("secondary_creator") or data.get("center","NASA"),
                         "url":"https://images.nasa.gov/details/"+requests.utils.quote(data["nasa_id"],safe="")}
             if external is None:
@@ -568,7 +594,7 @@ def translate_description(external):
             translated.raise_for_status()
             value = translated.json().get("translatedText", "")
             if isinstance(value, str) and value.strip():
-                external["text"]["nl"] = value.strip()[:6000]
+                external["text"]["nl"] = excerpt(value, 5000)
                 external["translation"] = "machine"
         except (requests.RequestException, ValueError):
             external["translation"] = "failed"

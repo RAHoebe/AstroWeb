@@ -619,6 +619,12 @@ async function refreshAdmin(){
   const response=await api('/api/admin/objects');
   if(request<lastAdminResponse)return;
   lastAdminResponse=request;
+  if(response.luna){
+    $('luna-mode').value=response.luna.mode;
+    $('luna-mode').disabled=!response.luna.available && response.luna.mode==='manual';
+    $('luna-setup').hidden=response.luna.available;
+    $('luna-preview').disabled=lunaWorking||!response.luna.available;$('luna-web').disabled=!response.luna.available;$('luna-expand').disabled=!response.luna.available;
+  }
   state.adminObjects=response.objects;state.jobs=response.jobs;
   if(state.selected){
     const updated=state.adminObjects.find(o=>o.id===state.selected.id);
@@ -849,6 +855,7 @@ $('gaia-retry').addEventListener('click',async()=>{
   catch(e){toast(errorText(e));}
 });
 function selectObject(id){
+  if(state.selected?.id!==id)resetLuna();
   const object=state.adminObjects.find(item=>item.id===id);
   if(!object||state.uploading)return;
   clearImportControls();state.selected=object;state.files=[];
@@ -901,7 +908,7 @@ async function receiveDiscovery(){
 }
 $('replace-point').addEventListener('click',()=>{if(pendingLandmark)applyLandmark(Number($('replace-index').value));});
 
-function fillMetadata(object){for(const key of ['distance_ly','distance_source','redshift','redshift_source'])$('metadata-form').elements[key].value=object.metadata[key]??'';$('rename-form').elements.identifier.value=(object.catalog_id||object.id).replace('_',' ');$('metadata-form').elements.galactic_distance_ly.value=object.metadata.galactic_distance_ly??'';const fields=$('metadata-fields');fields.replaceChildren();$('metadata-form').elements.namedItem('target').value=object.metadata.target;for(const key of ['name','type','constellation','summary','description'])for(const lang of ['nl','en']){const label=node('label');const title=node('span','',t(key)+' · '+lang.toUpperCase());title.dataset.editKey=key;title.dataset.editLanguage=lang;const input=node(['summary','description'].includes(key)?'textarea':'input');input.name=key+'_'+lang;input.maxLength=key==='description'?5000:350;input.value=object.metadata[key]?.[lang]||'';label.append(title,input);fields.append(label);}}
+function fillMetadata(object){$('luna-studio').hidden=!!object.body||!!object.capture_kind;for(const key of ['distance_ly','distance_source','redshift','redshift_source'])$('metadata-form').elements[key].value=object.metadata[key]??'';$('rename-form').elements.identifier.value=(object.catalog_id||object.id).replace('_',' ');$('metadata-form').elements.galactic_distance_ly.value=object.metadata.galactic_distance_ly??'';const fields=$('metadata-fields');fields.replaceChildren();$('metadata-form').elements.namedItem('target').value=object.metadata.target;for(const key of ['name','type','constellation','summary','description'])for(const lang of ['nl','en']){const label=node('label');const title=node('span','',t(key)+' · '+lang.toUpperCase());title.dataset.editKey=key;title.dataset.editLanguage=lang;const input=node(['summary','description'].includes(key)?'textarea':'input');input.name=key+'_'+lang;input.maxLength=key==='description'?5000:350;input.value=object.metadata[key]?.[lang]||'';label.append(title,input);fields.append(label);}}
 function fillObservation(object){
   const fields=$('observation-form').elements;
   for(const k of ['latitude','longitude','ra','dec'])fields[k].required=!object.body;
@@ -1079,6 +1086,49 @@ $('rename-form').addEventListener('submit',async event=>{
   }catch(e){toast(errorText(e));}finally{button.disabled=false;}
 });
 $('metadata-form').addEventListener('submit',async event=>{event.preventDefault();if(!state.selected)return;const form=new FormData(event.target),body={target:form.get('target'),galactic_distance_ly:form.get('galactic_distance_ly')?Number(form.get('galactic_distance_ly')):null};for(const key of ['distance_ly','redshift']){body[key]=form.get(key)?Number(form.get(key)):null;body[key==='distance_ly'?'distance_source':'redshift_source']=form.get(key==='distance_ly'?'distance_source':'redshift_source')||'';}for(const key of ['name','type','constellation','summary','description'])body[key]={nl:form.get(key+'_nl'),en:form.get(key+'_en')};try{await api(`/api/admin/objects/${state.selected.id}/metadata`,{method:'PUT',body});toast(t('saved'));await refreshAdmin();state.selected=state.adminObjects.find(o=>o.id===state.selected.id);}catch(e){toast(errorText(e));}});
+let lunaToken=null,lunaRequest=0,lunaWorking=false;
+function resetLuna(){
+  lunaRequest++;lunaToken=null;$('luna-result').replaceChildren();$('luna-apply').hidden=true;
+}
+$('luna-mode').addEventListener('change',async event=>{
+  try{await api('/api/admin/luna',{method:'PUT',body:{mode:event.target.value}});toast(t('saved'));}
+  catch(error){message('studio-message',errorText(error),true);await refreshAdmin();}
+});
+$('luna-web').addEventListener('change',resetLuna);
+$('luna-expand').addEventListener('change',resetLuna);
+$('metadata-form').addEventListener('input',resetLuna);
+$('luna-preview').addEventListener('click',async()=>{
+  const id=state.selected?.id;if(!id)return;
+  resetLuna();const request=lunaRequest,button=$('luna-preview');lunaWorking=true;button.disabled=true;
+  $('luna-result').textContent=t('working');
+  try{
+    const {draft,token}=await api('/api/admin/objects/'+encodeURIComponent(id)+'/metadata/luna',{method:'POST',body:{web:$('luna-web').checked,expand:$('luna-expand').checked}});
+    if(state.selected?.id!==id||request!==lunaRequest)return;
+    const view=$('luna-result');view.replaceChildren();
+    for(const [lang,fields] of Object.entries(draft.changes)){
+      for(const [field,text] of Object.entries(fields))view.append(node('strong','',t(field)+' · '+lang.toUpperCase()),node('p','',text));
+    }
+    for(const source of draft.sources){
+      const a=node('a','',source.label+' ↗');a.href=source.url;a.target='_blank';a.rel='noopener noreferrer';view.append(a,document.createElement('br'));
+    }
+    lunaToken=token;$('luna-apply').hidden=false;
+  }catch(error){if(state.selected?.id===id&&request===lunaRequest)$('luna-result').textContent=errorText(error);}
+  finally{lunaWorking=false;button.disabled=false;}
+});
+$('luna-apply').addEventListener('click',async()=>{
+  const id=state.selected?.id;if(!lunaToken||!id)return;
+  try{
+    const reply=await api('/api/admin/objects/'+encodeURIComponent(id)+'/metadata/luna',{method:'POST',body:{token:lunaToken}});
+    if(state.selected?.id===id){
+      for(const field of reply.metadata.luna.fields){
+        const [key,lang]=field.split('.'),input=$('metadata-form').elements.namedItem(key+'_'+lang);
+        if(input && input.value===(state.selected.metadata[key]?.[lang]||''))input.value=reply.metadata[key][lang];
+      }
+      resetLuna();
+    }
+    toast(t('saved'));await refreshAdmin();
+  }catch(error){if(state.selected?.id===id)$('luna-result').textContent=errorText(error);}
+});
 $('fetch-nasa').addEventListener('click',async()=>{
   const id=state.selected?.id;
   if(!id||state.busy)return;

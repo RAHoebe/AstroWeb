@@ -153,3 +153,9 @@ Kies in Studio bij **Soort opname** voor **Sterrensporen** of **Melkwegfoto**. E
 Open **Nachtpanorama** boven de galerij om in het ESO-hemelpanorama naar jouw gepubliceerde opnamen te springen. Bij een eigen Melkwegfoto of sterrensporenopname kun je in Studio onder **Nachtpanorama** een opname kiezen, haar positie op de foto aanklikken en opslaan. Zet de 360°-optie aan als het beeld een hele ronde beslaat. Bezoekers kunnen slepen, zoomen en de gekoppelde foto openen. De knop **Foto’s** toont de eigen opnamen in hun gemeten kader. Klik op een kader of objectnaam om naar het origineel te zoomen. Bij terugkeer wordt je kijkpositie hersteld.
 
 Op mobiel en tablet kun je in het nachtpanorama, op **Origineel** en in de hemelatlas met twee vingers zoomen. Houd daarna één vinger op het scherm om verder te slepen.
+
+### Optionele objectteksten met Luna
+
+Stel `OPENAI_API_KEY` in op de server of koppel een alleen-lezen Docker-secret en zet `ASTROWEB_OPENAI_KEY_FILE` op het pad in de container. AstroWeb gebruikt de Responses API met `gpt-6-luna`. In de offlinemodus blijft de koppeling uit.
+
+Kies in Studio bij **Objectinformatie bewerken → Luna** of je ontbrekende teksten na een render wilt aanvullen. De standaardstand is handmatig. Met **Bekijk tekstvoorstel** kun je de tekst en de bronlinks eerst lezen. **Bestaande beschrijving verdiepen** voegt, als de bronnen het toelaten, alinea’s toe over bijvoorbeeld het ontstaan van een nevel, zijn licht en herkenbare structuren. Een aparte keuze laat Luna op astronomische websites zoeken. Generatie en webzoeken kunnen API-tegoed kosten. De NAS bewaart overgenomen tekst voor website en TV. Alleen objecttekst gaat naar de API.

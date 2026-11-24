@@ -428,7 +428,8 @@ def create_app(data_dir=None, testing=False):
     def admin_objects():
         from .collection import capture_groups
         groups = capture_groups(store.all("objects"))
-        return jsonify(objects=[present(record, True) for captures in groups.values() for record in captures],
+        from . import luna
+        return jsonify(luna=dict(available=luna.configured(),mode=store.get("settings","luna-mode","manual")),objects=[present(record, True) for captures in groups.values() for record in captures],
                        jobs=store.all("jobs", limit=50))
 
     @app.post("/api/admin/upload-identity")
@@ -663,6 +664,43 @@ def create_app(data_dir=None, testing=False):
                 queue.executor.submit(queue.discover_skymap, record["id"])
         return jsonify(object=present(record, True))
 
+    @app.put("/api/admin/luna")
+    @admin_required
+    def luna_mode():
+        from . import luna
+        mode = json_body().get("mode")
+        if mode not in luna.MODES:
+            raise ValueError("invalid_metadata")
+        if mode != "manual" and not luna.configured():
+            raise ValueError("lunaDisabled")
+        store.put("settings","luna-mode",mode)
+        return jsonify(ok=True)
+
+    @app.post("/api/admin/objects/<identifier>/metadata/luna")
+    @admin_required
+    def luna_proposal(identifier):
+        from . import luna
+        record = get_object(identifier)
+        if record.get("capture_kind") or record.get("body"):
+            raise ValueError("capture_kind_mismatch")
+        meta = record["metadata"]
+        body = json_body()
+        slot = "luna-preview:" + identifier
+        if "token" in body:
+            pending = store.get("settings",slot,{})
+            if not pending or body["token"] != pending["token"]:
+                return jsonify(error="metadata_changed"),409
+            try:
+                saved = luna.apply(store,identifier,pending["revision"],pending["draft"])
+            except ValueError:
+                return jsonify(error="metadata_changed"),409
+            return jsonify(metadata=saved)
+        draft = luna.proposal(store,meta,web=body.get("web") is True, expand=body.get("expand") is True)
+        revision = luna.fingerprint(meta)
+        token = luna.fingerprint([revision,draft])
+        store.put("settings",slot,dict(revision=revision,draft=draft,token=token))
+        return jsonify(draft=draft,token=token)
+
     @app.put("/api/admin/objects/<identifier>/metadata")
     @admin_required
     def edit_metadata(identifier):
@@ -677,6 +715,8 @@ def create_app(data_dir=None, testing=False):
         value["sources"] = previous.get("sources", []) if same_target else []
         if same_target:
             value["aliases"] = previous.get("aliases", value["aliases"])
+            if "luna" in previous:
+                value["luna"] = previous["luna"]
             if "external" in previous:
                 value["external"] = previous["external"]
         store.update("objects", identifier, metadata=value)
