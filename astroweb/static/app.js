@@ -188,6 +188,7 @@ function watchViewerAlignment(id,attempt=0){
   },5000);
 }
 function selectTab(name){
+  if(!state.current)return;
   const exploration=['mosaic','space','cosmic','solar'].includes(name);
   const activePanel=exploration?'exploration':({'solar-system':'hubble',discover:'original'}[name]||name);
   for(const tab of document.querySelectorAll('[data-view]')){
