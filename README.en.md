@@ -147,6 +147,8 @@ On phones and tablets, pinch to zoom in the night panorama, the **Original** vie
 
 ### Optional object descriptions with Luna
 
+**An OpenAI API key is optional.** AstroWeb can be installed without a key. The gallery, rendering and Studio’s standard source lookup remain available. Configure a key to enable Luna.
+
 Set `OPENAI_API_KEY` on the server or mount a read-only Docker secret and set `ASTROWEB_OPENAI_KEY_FILE` to its container path. AstroWeb uses the Responses API with `gpt-6-luna`. Offline mode disables the integration.
 
 In Studio, open **Edit object information → Luna** to choose whether to fill missing descriptions after a render. The default is manual. **Preview text** shows the draft and its source links. **Expand the existing description** can add paragraphs on a nebula’s origin, illumination and notable structures when supported by the sources. Web search on selected astronomy sites is optional. Generation and web search may consume API credits. Accepted copy is stored on the server for web and TV. Only object text is sent to the API.

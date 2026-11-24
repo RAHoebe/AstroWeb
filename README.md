@@ -156,6 +156,8 @@ Op mobiel en tablet kun je in het nachtpanorama, op **Origineel** en in de hemel
 
 ### Optionele objectteksten met Luna
 
+**Een OpenAI API-key is optioneel.** AstroWeb kan zonder sleutel worden geïnstalleerd. De galerij, het renderen en de gewone bronfunctie in Studio blijven beschikbaar. Stel alleen voor Luna een sleutel in.
+
 Stel `OPENAI_API_KEY` in op de server of koppel een alleen-lezen Docker-secret en zet `ASTROWEB_OPENAI_KEY_FILE` op het pad in de container. AstroWeb gebruikt de Responses API met `gpt-6-luna`. In de offlinemodus blijft de koppeling uit.
 
 Kies in Studio bij **Objectinformatie bewerken → Luna** of je ontbrekende teksten na een render wilt aanvullen. De standaardstand is handmatig. Met **Bekijk tekstvoorstel** kun je de tekst en de bronlinks eerst lezen. **Bestaande beschrijving verdiepen** voegt, als de bronnen het toelaten, alinea’s toe over bijvoorbeeld het ontstaan van een nevel, zijn licht en herkenbare structuren. Een aparte keuze laat Luna op astronomische websites zoeken. Generatie en webzoeken kunnen API-tegoed kosten. De NAS bewaart overgenomen tekst voor website en TV. Alleen objecttekst gaat naar de API.
