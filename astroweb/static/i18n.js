@@ -1,4 +1,5 @@
 export const words = {
+  lunaCredit:["Objecttekst aangevuld met Luna","Object text supplemented with Luna"],
   lunaExpand:["Bestaande beschrijving verdiepen","Expand the existing description"],
   lunaDisabled:["Luna vereist een API-key op de server en internettoegang.","Luna requires a server-side API key and internet access."],
   lunaComplete:["Beide talen hebben al tekst. Handmatige teksten blijven behouden.","Both languages already have text. Manual edits are preserved."],

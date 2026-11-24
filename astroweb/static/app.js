@@ -124,7 +124,11 @@ function renderViewerText(){
   fact($('viewer-facts'),t('constellation'),local(m.constellation));fact($('viewer-facts'),t('catalogTarget'),m.target);fact($('viewer-facts'),t('integration'),duration(obs.integration));fact($('viewer-facts'),t('telescope'),obs.telescope);fact($('viewer-facts'),t('frames'),obs.frames);fact($('viewer-facts'),t('singleExposure'),obs.exposure?obs.exposure+' s':'');fact($('viewer-facts'),t('filter'),obs.filter);
   if(obs.date_obs){const stamp=new Intl.DateTimeFormat(language==='nl'?'nl-NL':'en-GB',{dateStyle:'medium',timeStyle:'short',timeZone:obs.timezone||'UTC'}).format(new Date(obs.date_obs));fact($('viewer-facts'),t(obs.time_source==='filename'?'observedAtFilename':'observedAt'),stamp+' · '+(obs.timezone||'UTC'));}
   $('viewer-sources').replaceChildren();const links=[...(m.sources||[])];if(m.external&&!links.some(link=>link.url===m.external.url))links.push({label:m.external.provider,url:m.external.url});for(const link of links){if(!/^https:\/\//.test(link.url))continue;const a=node('a','',link.label+' ↗');a.href=link.url;a.target='_blank';a.rel='noopener noreferrer';$('viewer-sources').append(a);}
-  $('external-description').replaceChildren();if(m.external){const ext=m.external;const details=node('details','external-block');details.append(node('summary','',t('nasaMore')));const text=local(ext.text);details.append(node('p','',text||t('untranslated')));if(language==='nl'&&ext.translation==='machine')details.append(node('p','small',t('machineTranslation')));details.append(node('p','small',ext.credit+' · '+t('fetchedAt')+' '+formatDate(ext.fetched_at)));$('external-description').append(details);}
+  $('external-description').replaceChildren();
+  if(m.luna?.fields?.some(field=>field.endsWith('.'+language))){
+    $('external-description').append(node('p','small muted',t('lunaCredit')+' · '+formatDate(m.luna.generated_at)));
+  }
+  if(m.external){const ext=m.external;const details=node('details','external-block');details.append(node('summary','',t('nasaMore')));const text=local(ext.text);details.append(node('p','',text||t('untranslated')));if(language==='nl'&&ext.translation==='machine')details.append(node('p','small',t('machineTranslation')));details.append(node('p','small',ext.credit+' · '+t('fetchedAt')+' '+formatDate(ext.fetched_at)));$('external-description').append(details);}
 }
 function openViewer(object){location.assign('/viewer/'+encodeURIComponent(object.id));}
 async function loadViewer(){

@@ -214,6 +214,7 @@ def proposal(store, meta, web, expand=False):
     if not configured():
         raise ValueError("lunaDisabled")
     from .metadata import repair_source_endings
+
     meta = repair_source_endings(copy.deepcopy(meta))
     wanted = needs(meta, expand)
     if not wanted:
@@ -253,10 +254,34 @@ def proposal(store, meta, web, expand=False):
             "(zero-based indexes of evidence actually used). Leave fields empty and sources [] for insufficient evidence. "
             "Preserve numerical units and uncertainty, avoid speculation. Return JSON with nl and en objects."
         )
+        language_properties = {}
+        for lang, fields in wanted.items():
+            properties = {field: {"type": "string"} for field in fields}
+            properties["sources"] = {"type": "array", "items": {"type": "integer"}}
+            language_properties[lang] = {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties),
+                "additionalProperties": False,
+            }
+        schema = {
+            "type": "object",
+            "properties": language_properties,
+            "required": list(language_properties),
+            "additionalProperties": False,
+        }
         parts = response(
-            input=json.dumps(prompt, ensure_ascii=False),
+            input="Write the requested JSON from this evidence:\n"
+            + json.dumps(prompt, ensure_ascii=False),
             instructions=instructions,
-            text={"format": {"type": "json_object"}},
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "object_description",
+                    "strict": True,
+                    "schema": schema,
+                }
+            },
             max_output_tokens=3800,
         )
         try:
