@@ -212,6 +212,32 @@ body.studio-route > :is(.site-header,main:not(#studio),.skip,.site-footer) { dis
 
 #viewer-description, #luna-result p, .external-block p { white-space: pre-line; }
 
+#luna-studio {
+  min-inline-size: 0;
+  margin: 24px 0 0;
+  padding: 14px clamp(12px, 2vw, 24px) 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+#luna-studio legend { padding-inline: 6px; }
+#luna-studio > label { display: block; }
+.luna-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+  margin-top: 14px;
+}
+.luna-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+.luna-controls input { flex: none; margin: 0; }
+#luna-result:not(:empty), #luna-apply { margin-top: 14px; }
+
+
 .pano-page { background:#180f14; }
 .pano-header,.pano-toolbar,.pano-actions,.pano-foot { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .pano-header,.pano-toolbar,.pano-foot { justify-content:space-between; }
