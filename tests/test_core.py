@@ -730,3 +730,88 @@ def test_new_draft_enriches_an_unseeded_catalogue_object_before_render(app,image
     queue.executor.submit(lambda:None).result(timeout=5)
     assert store.get("objects","NGC_1788")["metadata"]["summary"]["nl"]=="Een reflectienevel in Orion."
     assert not store.all("jobs")
+
+
+
+@pytest.mark.parametrize("enabled,key_present", [(True,True),(False,True),(True,False)])
+def test_luna_guides_prepare_after_first_film_and_archive_discovery(tmp_path, images, monkeypatch, enabled, key_present):
+    from astroweb import archive_search, discovery, guide_catalogue, hubble, luna, luna_guide
+    from astroweb import mission_archive, skymap
+
+    store = Store(tmp_path / "guide-data")
+    record = import_object(store, "NGC_7000", list(images.values()))
+    ident = record["id"]
+    monkeypatch.delenv("ASTROWEB_OFFLINE", raising=False)
+    monkeypatch.setattr(luna, "configured", lambda: key_present)
+    store.put("settings", "luna-guides", enabled)
+    events = []
+    fields = [{"id":"skymap-test"}, {"id":"a"}, {"id":"b"}]
+    point = {"id":"NGC 7000","name":{"en":"North America Nebula"},"type":{"en":"Nebula"}}
+    note = {"nl":"Een nevel.", "en":"A nebula."}
+    rank_key = luna_guide.archive_key(record)
+    monkeypatch.setattr(skymap, "discover", lambda *_: None)
+    monkeypatch.setattr(archive_search, "discover", lambda *_: None)
+    monkeypatch.setattr(mission_archive, "discover", lambda *_: events.append("missions"))
+    monkeypatch.setattr(guide_catalogue, "rows", lambda *_a, **_kw: None)
+    monkeypatch.setattr(archive_search, "supplement_guide", lambda *_: events.append("catalogue"))
+    monkeypatch.setattr(JobQueue, "align", lambda *_: None)
+    monkeypatch.setattr(JobQueue, "prepare_journey", lambda *_: None)
+    monkeypatch.setattr(JobQueue, "ensure_preview", lambda *_: None)
+    monkeypatch.setattr(hubble, "fields", lambda *_a, **_kw: fields)
+    monkeypatch.setattr(discovery, "discover", lambda *_a, **_kw: {"objects":[point]})
+
+    def render(paths, path, params, progress):
+        assert not store.get("settings", rank_key) or "render" in events
+        events.append("render")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"film")
+        return {}
+
+    def review(store, capture, available):
+        assert capture["video"] and capture["published"]
+        assert available == fields and events[-2:] == ["missions", "catalogue"]
+        events.append("rank")
+        return [{"id":"b","note":note},{"id":"a","note":note}]
+
+    def explain(store, obj):
+        assert store.get("objects", ident)["published"]
+        events.append("explain")
+        store.put("settings", luna_guide.explain_key(obj), {"text":note})
+
+    monkeypatch.setattr("astroweb.jobs.render_video", render)
+    monkeypatch.setattr(luna_guide, "archive_review", review)
+    monkeypatch.setattr(luna_guide, "prepare_explanation", explain)
+    queue = JobQueue(store, resume=False)
+    try:
+        for _ in range(2):
+            job = queue.submit(ident)
+            queue.futures[job["id"]].result(timeout=10)
+            queue.executor.submit(lambda:None).result(timeout=10)
+            queue.luna_executor.submit(lambda:None).result(timeout=10)
+            assert store.get("jobs", job["id"])["status"] == "completed"
+        if enabled and key_present:
+            assert events.count("rank") == events.count("explain") == 1
+            assert [f["id"] for f in luna_guide.archive_options(store, record, fields)] == ["skymap-test","b","a"]
+            assert luna_guide.explanation(store, point)["text"] == note
+            assert not store.get("objects", ident).get("luna_guides_pending")
+        else:
+            assert "rank" not in events and "explain" not in events
+    finally:
+        queue.shutdown()
+
+
+def test_luna_guide_option_can_be_disabled_without_key(app, monkeypatch):
+    from astroweb import luna
+
+    client = app.test_client()
+    headers = sign_in(client)
+    monkeypatch.setattr(luna, "configured", lambda:False)
+    assert client.get("/api/admin/objects").json["luna"]["guides"] is False
+    put = lambda value: client.put("/api/admin/luna", headers=headers, json={"guides":value})
+    assert put(True).json["error"] == "lunaDisabled"
+    assert put("yes").status_code == 400
+    monkeypatch.setattr(luna, "configured", lambda:True)
+    assert put(True).status_code == 200
+    assert client.get("/api/admin/objects").json["luna"]["guides"] is True
+    monkeypatch.setattr(luna, "configured", lambda:False)
+    assert put(False).status_code == 200

@@ -484,7 +484,8 @@ def create_app(data_dir=None, testing=False):
         from .collection import capture_groups
         groups = capture_groups(store.all("objects"))
         from . import luna
-        return jsonify(luna=dict(available=luna.configured(),mode=store.get("settings","luna-mode","manual")),objects=[present(record, True) for captures in groups.values() for record in captures],
+        return jsonify(luna=dict(available=luna.configured(),mode=store.get("settings","luna-mode","manual"),
+                                  guides=store.get("settings","luna-guides",False)),objects=[present(record, True) for captures in groups.values() for record in captures],
                        jobs=store.all("jobs", limit=50))
 
     @app.post("/api/admin/upload-identity")
@@ -723,12 +724,23 @@ def create_app(data_dir=None, testing=False):
     @admin_required
     def luna_mode():
         from . import luna
-        mode = json_body().get("mode")
-        if mode not in luna.MODES:
+        body = json_body()
+        if set(body) not in ({"mode"}, {"guides"}):
             raise ValueError("invalid_metadata")
-        if mode != "manual" and not luna.configured():
-            raise ValueError("lunaDisabled")
-        store.put("settings","luna-mode",mode)
+        if "guides" in body:
+            guides = body["guides"]
+            if type(guides) is not bool:
+                raise ValueError("invalid_metadata")
+            if guides and not luna.configured():
+                raise ValueError("lunaDisabled")
+            store.put("settings", "luna-guides", guides)
+        else:
+            mode = body["mode"]
+            if mode not in luna.MODES:
+                raise ValueError("invalid_metadata")
+            if mode != "manual" and not luna.configured():
+                raise ValueError("lunaDisabled")
+            store.put("settings", "luna-mode", mode)
         return jsonify(ok=True)
 
     @app.post("/api/admin/objects/<identifier>/metadata/luna")

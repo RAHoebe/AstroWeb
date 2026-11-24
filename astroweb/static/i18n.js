@@ -13,6 +13,7 @@ export const words = {
   lunaComplete:["Beide talen hebben al tekst. Handmatige teksten blijven behouden.","Both languages already have text. Manual edits are preserved."],
   lunaUnavailable:["Luna kon het voorstel niet ophalen. Controleer de API-configuratie of probeer het later opnieuw.","Luna could not retrieve a draft. Check the API configuration or try again later."],
   lunaNoSources:["Onvoldoende broninformatie voor dit object.","Insufficient source information for this object."],
+  lunaGuideAutomatic:["Labeluitleg en archiefvolgorde na de eerste deep-sky-film","Explain labels and rank archives after the first deep-sky film"],
   lunaMode:["Na het renderen · alle objecten","After rendering · all objects"],
   lunaManual:["Alleen op verzoek","On request only"],lunaSources:["Automatisch uit bestaande bronnen","Automatically from existing sources"],
   lunaWebMode:["Automatisch met aanvullende webbronnen","Automatically with additional web sources"],

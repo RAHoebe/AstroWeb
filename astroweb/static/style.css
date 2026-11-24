@@ -228,13 +228,15 @@ body.studio-route > :is(.site-header,main:not(#studio),.skip,.site-footer) { dis
   gap: 10px 24px;
   margin-top: 14px;
 }
-.luna-controls label {
+.luna-controls label,
+.luna-guide-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-height: 36px;
 }
-.luna-controls input { flex: none; margin: 0; }
+.luna-controls input, #luna-guides { flex: none; margin: 0; }
+.studio-sidebar .luna-guide-toggle { margin-top: 12px; font-size: 12px; }
 #luna-result:not(:empty), #luna-apply { margin-top: 14px; }
 
 

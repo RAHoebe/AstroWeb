@@ -1,6 +1,8 @@
 """Sourced explanations and Luna suggestions for already verified destinations."""
 
 import json
+import logging
+import re
 from urllib.parse import urlsplit
 
 from . import luna
@@ -285,3 +287,83 @@ def archive_review(store, record, fields):
         }
         for r in review
     ]
+
+
+def automatic_enabled(store):
+    return store.get("settings", "luna-guides", False) is True and luna.configured()
+
+
+def automatic_archive(store, record):
+    """Rank local destinations after archive discovery, preserving manual orders."""
+    from .hubble import fields
+
+    key = archive_key(record)
+    if store.get("settings", key):
+        return
+    options = fields(store, record, local_only=True)
+    if not any(not field["id"].startswith("skymap-") for field in options):
+        return
+    order = archive_review(store, record, options)
+    with store.lock:
+        latest = store.get("objects", record["id"])
+        if (
+            latest
+            and archive_key(latest) == key
+            and automatic_enabled(store)
+            and not store.get("settings", key)
+        ):
+            store.put("settings", key, {"order": order})
+
+
+def automatic(store, record, stopping):
+    """Prepare the archive order and a selection of verified catalogue labels."""
+    from .discovery import discover
+
+    if stopping.is_set():
+        return False
+    if not automatic_enabled(store):
+        return True
+    target = canonical(record["metadata"]["target"])
+    guide = discover(store, record, links=False)
+    if (
+        guide.get("kind") == "missing"
+        and (record.get("gaia") or {}).get("status") == "unavailable"
+    ):
+        return False
+
+    try:
+        automatic_archive(store, record)
+    except Exception:
+        logging.warning(
+            "Could not prepare an automatic archive order for %s",
+            record["id"],
+            exc_info=True,
+        )
+
+    points = guide["objects"]
+    points.sort(
+        key=lambda point: (
+            canonical(point["id"]) != target,
+            not bool(point.get("summary")),
+        )
+    )
+    remaining = 8
+    for point in points:
+        if not remaining or stopping.is_set() or not automatic_enabled(store):
+            break
+        featured = (
+            point.get("summary")
+            or point.get("label")
+            or point["name"]["en"] != point["id"]
+        )
+        catalogue_object = re.fullmatch(r"(M|NGC|IC)\s*\d+[A-Z]?", point["id"])
+        if not (featured or catalogue_object or canonical(point["id"]) == target):
+            continue
+        if explanation(store, point):
+            continue
+        remaining -= 1
+        try:
+            prepare_explanation(store, point)
+        except ValueError as error:
+            logging.info("Automatic label explanation for %s: %s", point["id"], error)
+    return not stopping.is_set()

@@ -35,6 +35,8 @@ class JobQueue:
             self.worker_lock.close()
             raise RuntimeError("AstroWeb gebruikt deze datamap al / this data directory already has a running AstroWeb worker") from None
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="astro-render")
+        self.luna_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="astro-luna")
+        self.luna_guide_work = set()
         self.lock = threading.RLock()
         self.futures = {}
         self.file_lock = threading.Lock()
@@ -69,6 +71,8 @@ class JobQueue:
                     self.executor.submit(self.ensure_preview, record["video"])
                     if record.get("body"):
                         self.schedule_details(record["id"])
+                    elif record.get("luna_guides_pending"):
+                        self.executor.submit(self.discover_missions, record["id"])
             self.retry_thread = threading.Thread(target=self.retry_loop, name="astro-gaia-retry", daemon=True)
             self.retry_thread.start()
 
@@ -262,6 +266,35 @@ class JobQueue:
             archive_search.supplement_guide(self.store,record)
         except Exception:
             logging.exception("Could not complete feature guide search for %s",identifier)
+        self.schedule_luna_guides(identifier)
+
+    def schedule_luna_guides(self, identifier):
+        record = self.store.get("objects", identifier)
+        if not record or not record.get("video") or not record.get("luna_guides_pending"):
+            return
+        with self.lock:
+            if self.stopping.is_set() or identifier in self.luna_guide_work:
+                return
+            self.luna_guide_work.add(identifier)
+            self.luna_executor.submit(self.prepare_luna_guides, identifier)
+
+    def prepare_luna_guides(self, identifier):
+        from . import luna_guide
+
+        completed = False
+        try:
+            record = self.store.get("objects", identifier)
+            if record and record.get("video") and record.get("luna_guides_pending"):
+                completed = luna_guide.automatic(self.store, record, self.stopping)
+        except Exception:
+            logging.exception("Could not prepare Luna guides for %s", identifier)
+        finally:
+            with self.store.lock:
+                current = self.store.get("objects", identifier)
+                if completed and current and current.get("luna_guides_pending") == record["luna_guides_pending"]:
+                    self.store.update("objects", identifier, luna_guides_pending=False)
+            with self.lock:
+                self.luna_guide_work.discard(identifier)
 
     def align(self, identifier):
         with self.store.lock:
@@ -288,6 +321,13 @@ class JobQueue:
                     result.update(retry_attempts=attempts,retry_after=time.time()+delays[min(attempts-1,len(delays)-1)],
                                   checked_at=result.get("checked_at") or now())
                 self.store.update("objects", identifier, gaia=result)
+                recovered = previous.get("retry_only") and result["status"] == "solved" and latest.get("luna_guides_pending")
+            else:
+                recovered = False
+        if recovered:
+            with self.lock:
+                if not self.stopping.is_set():
+                    self.executor.submit(self.discover_missions, identifier)
 
     def submit(self, identifier, raw_params=None):
         params = Parameters.parse(raw_params)
@@ -407,7 +447,12 @@ class JobQueue:
                 record = self.store.get("objects", record["id"])
                 finished = now()
                 version = {"id": job_id, "video": relative, "params": params.__dict__, "render": stats, "created_at": finished}
+                first_film = not (record.get("video") or record.get("versions"))
                 first_solar_film = bool(record.get("body")) and not record.get("video")
+                if first_film and not (record.get("body") or record.get("capture_kind")):
+                    from .luna_guide import automatic_enabled
+                    if automatic_enabled(self.store):
+                        record["luna_guides_pending"] = job_id
                 record.setdefault("versions", []).append(version)
                 record.update(video=relative, params=params.__dict__, render=stats, published=True)
                 job.update(status="completed", progress=100, error=None, finished_at=finished)
@@ -425,7 +470,9 @@ class JobQueue:
         if first_solar_film:
             self.schedule_details(record["id"])
         elif not record.get("body") and not record.get("capture_kind") and self.store.get("settings","luna-mode","manual") != "manual":
-            self.executor.submit(self.fill_luna,record["id"])
+            with self.lock:
+                if not self.stopping.is_set():
+                    self.luna_executor.submit(self.fill_luna,record["id"])
 
     def fill_luna(self,identifier):
         from . import luna
@@ -440,4 +487,5 @@ class JobQueue:
         if self.retry_thread:
             self.retry_thread.join(timeout=2)
         self.executor.shutdown(wait=True)
+        self.luna_executor.shutdown(wait=True)
         self.worker_lock.close()

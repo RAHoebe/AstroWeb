@@ -658,6 +658,10 @@ async function refreshAdmin(){
     $('luna-mode').value=response.luna.mode;
     $('luna-mode').disabled=!response.luna.available && response.luna.mode==='manual';
     $('luna-setup').hidden=response.luna.available;
+    if(!$('luna-guides').dataset.saving){
+      $('luna-guides').checked=response.luna.guides===true;
+      $('luna-guides').disabled=!response.luna.available&&!response.luna.guides;
+    }
     $('luna-preview').disabled=lunaWorking||!response.luna.available;$('luna-web').disabled=!response.luna.available;$('luna-expand').disabled=!response.luna.available;
   }
   state.adminObjects=response.objects;state.jobs=response.jobs;
@@ -1128,6 +1132,21 @@ function resetLuna(){
 $('luna-mode').addEventListener('change',async event=>{
   try{await api('/api/admin/luna',{method:'PUT',body:{mode:event.target.value}});toast(t('saved'));}
   catch(error){message('studio-message',errorText(error),true);await refreshAdmin();}
+});
+$('luna-guides').addEventListener('change',async event=>{
+  const toggle=event.target,enabled=toggle.checked;
+  toggle.dataset.saving='1';toggle.disabled=true;
+  try{
+    await api('/api/admin/luna',{method:'PUT',body:{guides:enabled}});
+    lastAdminResponse=++adminRequest;
+    toast(t('saved'));
+  }catch(error){
+    toggle.checked=!enabled;
+    toast(errorText(error));
+  }finally{
+    delete toggle.dataset.saving;
+    toggle.disabled=!state.lunaAvailable&&!toggle.checked;
+  }
 });
 $('luna-web').addEventListener('change',resetLuna);
 $('luna-expand').addEventListener('change',resetLuna);
