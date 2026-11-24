@@ -189,3 +189,22 @@ def test_archive_rank_keeps_new_fields_and_skymap(tmp_path):
     saved = guide.archive_options(store, record, fields)
     assert [item["id"] for item in saved] == ["skymap-m31", "second", "first", "new"]
     assert saved[1]["guide_note"] == note and "guide_note" not in fields[2]
+
+
+def test_archive_review_prioritizes_documented_details(tmp_path, monkeypatch):
+    from astroweb import luna_guide as guide
+
+    note = {"nl": "Een deelgebied.", "en": "A subregion."}
+    monkeypatch.setattr(
+        guide,
+        "arrange",
+        lambda *_a, **_kw: [{"index": 1, "note": note}, {"index": 0, "note": note}],
+    )
+    record = {"metadata": {"target": "M 31"}}
+    fields = [
+        {"id": "hst_generic", "target": "M31", "relation": "target"},
+        {"id": "ngc206", "relation": "region"},
+    ]
+    assert [
+        row["id"] for row in guide.archive_review(Store(tmp_path), record, fields)
+    ] == ["ngc206", "hst_generic"]

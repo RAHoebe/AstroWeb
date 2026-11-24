@@ -134,7 +134,7 @@ def arrange(store, subject, choices, count, archive=False):
             return saved
         if archive:
             instructions = (
-                "Rank the verified archive destinations. Put a named view of the main subject first if present, "
+                "Rank the verified archive destinations. Specificity 0 denotes a documented view, 2 a generic field. "
                 "then distinct documented regions, then generic fields. Prefer a good contrast between whole-object "
                 "and feature views. Use only descriptions and metadata supplied, never infer what unnamed fields contain. "
                 "Return every requested index exactly once. In Dutch and English explain what each field shows if documented, "
@@ -224,6 +224,8 @@ WINDOW_NAMES = {
     "ngc206": "NGC 206 · bright star cloud in Andromeda",
     "nucleus": "Andromeda’s nucleus",
     "m32": "M32 · compact companion galaxy",
+    "ic1396a": "IC 1396A · Elephant’s Trunk in Pan-STARRS1",
+    "heic0512d": "Andromeda in visible light · R. Gendler",
 }
 
 
@@ -241,16 +243,26 @@ def archive_review(store, record, fields):
 
     def specificity(field):
         name = naming(field).upper()
-        generic = (
-            name in ("ANY", "NONE", "PAR", "PARALLEL") or name == field["id"].upper()
-        )
-        return generic, field.get("relation") == "field"
+        if (
+            field["id"] in WINDOW_NAMES
+            or field.get("names")
+            or (field.get("provider") and field.get("relation") == "region")
+        ):
+            return 0
+        if (
+            field.get("relation") == "target"
+            or name in ("ANY", "NONE", "PAR", "PARALLEL")
+            or name == field["id"].upper()
+        ):
+            return 2
+        return 1
 
     candidates.sort(key=specificity)
     candidates = candidates[:16]
     choices = [
         {
             "title": naming(f),
+            "specificity": specificity(f),
             **{
                 k: f[k]
                 for k in ("target", "telescope", "provider", "filter", "relation")
@@ -262,6 +274,9 @@ def archive_review(store, record, fields):
     review = arrange(
         store, record["metadata"]["target"], choices, len(choices), archive=True
     )
+    # Preserve named views ahead of target-only fields while retaining Luna's
+    # ordering among candidates with the same level of documentation.
+    review = sorted(review, key=lambda entry: choices[entry["index"]]["specificity"])
     return [
         {
             "id": candidates[r["index"]]["id"],
